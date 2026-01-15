@@ -1,0 +1,694 @@
+import SwiftUI
+import UIKit
+
+/// "At The Store" mode view with aisle-based grouping and progress tracking
+struct AtStoreModeView: View {
+    @Binding var isPresented: Bool
+    @EnvironmentObject var viewModel: ShoppingListViewModel
+    @EnvironmentObject var amplifyService: AmplifyService
+    @ObservedObject private var storeService = StoreService.shared
+    @State private var showDoneShoppingAlert = false
+    @State private var newRequestArrived = false
+    @State private var searchText = ""
+    @State private var selectedItemForDetail: GroceryItem? = nil
+    @State private var showStoreSwitcher = false
+    @State private var showAisleManagement = false
+    @FocusState private var searchFieldFocused: Bool
+
+    // Get the currently selected household store (using shoppingStoreId when in shopping mode)
+    private var selectedHouseholdStore: HouseholdStore? {
+        if let shoppingStoreId = viewModel.shoppingStoreId {
+            return storeService.householdStores.first { $0.id == shoppingStoreId }
+        }
+        return storeService.householdStores.first
+    }
+
+    // Real aisle groups from product mappings (simple productId lookup)
+    // Uses direct productId lookup - LLM handles normalization when adding items
+    private var aisleGroups: [AisleGroup] {
+        guard let store = selectedHouseholdStore else {
+            // Fallback: put all items in "Unknown Aisle"
+            return [AisleGroup(
+                id: "unmapped",
+                displayName: "ALL ITEMS",
+                items: viewModel.shoppingList,
+                displayOrder: 0
+            )]
+        }
+
+        // Group items by aisle using productId lookup
+        var groups: [String: [GroceryItem]] = [:]
+
+        for item in viewModel.shoppingList {
+            // Look up by productId first, then normalizedName
+            if let mapping = storeService.mapping(for: item.productId, normalizedName: item.normalizedName, in: store.id) {
+                let aisleId = mapping.effectiveAisle
+                groups[aisleId, default: []].append(item)
+            }
+            // Items without a match are handled by unmappedItems
+        }
+
+        // Build AisleGroup array directly from the groups dictionary (NOT from store.aisleLayout)
+        // This ensures we show aisles that have mapped items, regardless of aisleLayout
+        let result: [AisleGroup] = groups.map { (aisleId, items) in
+            // Try to find display order from store layout, default to sorting by aisle ID
+            let displayOrder = store.aisleLayout.first(where: { $0.id == aisleId })?.displayOrder ?? 0
+
+            // Format the display name
+            let displayName = formatAisleDisplayName(aisleId, store: store)
+
+            return AisleGroup(
+                id: aisleId,
+                displayName: displayName,
+                items: items,
+                displayOrder: displayOrder
+            )
+        }.sorted { group1, group2 in
+            // Sort by display order first, then by aisle ID (numeric then alpha)
+            if group1.displayOrder != group2.displayOrder {
+                return group1.displayOrder < group2.displayOrder
+            }
+            // Numeric aisles come first
+            let num1 = Int(group1.id)
+            let num2 = Int(group2.id)
+            if let n1 = num1, let n2 = num2 { return n1 < n2 }
+            if num1 != nil { return true }
+            if num2 != nil { return false }
+            return group1.id < group2.id
+        }
+
+        return result
+    }
+
+    /// Format aisle display name from aisle ID
+    private func formatAisleDisplayName(_ aisleId: String, store: HouseholdStore) -> String {
+        // First check if we have a name in store layout
+        if let aisle = store.aisleLayout.first(where: { $0.id == aisleId }) {
+            return aisleHeaderName(aisle)
+        }
+
+        // Otherwise format based on the ID itself
+        if let aisleNum = Int(aisleId) {
+            return "AISLE \(aisleNum)"
+        }
+
+        // Named sections like "Dairy", "Produce", "Deli"
+        return aisleId.uppercased()
+    }
+
+    // Store unmapped items separately for the custom items section
+    // Items are unmapped if they have no mapping for this store (by productId or normalizedName)
+    private var unmappedItems: [GroceryItem] {
+        guard let store = selectedHouseholdStore else {
+            return []
+        }
+
+        // Find items without any aisle mapping
+        return viewModel.shoppingList.filter { item in
+            storeService.mapping(for: item.productId, normalizedName: item.normalizedName, in: store.id) == nil
+        }
+    }
+
+    private var totalItemsCount: Int {
+        viewModel.shoppingList.count + viewModel.inCart.count
+    }
+
+    private var checkedItemsCount: Int {
+        viewModel.inCart.count
+    }
+
+    private var progressPercentage: CGFloat {
+        guard totalItemsCount > 0 else { return 0 }
+        return CGFloat(checkedItemsCount) / CGFloat(totalItemsCount)
+    }
+
+    var body: some View {
+        ZStack {
+            // Background gradient
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
+
+            DesignSystem.Colors.darkMetallicGradient
+                .ignoresSafeArea()
+                .opacity(0.3)
+
+            VStack(spacing: 0) {
+                // Header
+                headerView
+
+                // Progress indicator
+                progressView
+
+                // Search Bar - active shopper can add items directly
+                SearchBar(
+                    text: $searchText,
+                    isFocused: $searchFieldFocused,
+                    onSubmit: addItemFromSearch,
+                    onProductSelected: addProductFromSearch
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+
+                // Store layout list
+                List {
+                    // Items without aisle mapping (unknown location) - shown FIRST for immediate resolution
+                    if !unmappedItems.isEmpty {
+                        Section {
+                            ForEach(unmappedItems) { item in
+                                GroceryItemRow(item: item)
+                                    .environmentObject(viewModel)
+                                    .onLongPressGesture {
+                                        selectedItemForDetail = item
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    }
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                        } header: {
+                            unmappedHeader
+                        }
+                        .listSectionSeparator(.hidden)
+                    }
+
+                    // Aisle groups
+                    ForEach(aisleGroups) { aisleGroup in
+                        Section {
+                            // Items in this aisle
+                            ForEach(aisleGroup.items) { item in
+                                GroceryItemRow(item: item)
+                                    .environmentObject(viewModel)
+                                    .onLongPressGesture {
+                                        selectedItemForDetail = item
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    }
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                        } header: {
+                            aisleHeader(aisleGroup)
+                        }
+                        .listSectionSeparator(.hidden)
+                    }
+
+                    // In Cart section - always visible (even when empty)
+                    Section {
+                        if viewModel.inCart.isEmpty {
+                            emptyInCartPlaceholder
+                                .listRowBackground(inCartSectionBackground)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                        } else {
+                            ForEach(viewModel.inCart) { item in
+                                GroceryItemRow(item: item)
+                                    .environmentObject(viewModel)
+                                    .onLongPressGesture {
+                                        selectedItemForDetail = item
+                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    }
+                            }
+                            .listRowBackground(inCartSectionBackground)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                        }
+                    } header: {
+                        inCartHeader
+                    }
+                    .listSectionSeparator(.hidden)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+
+            // Glowing border overlay to indicate active shopping
+            shoppingActiveBorderOverlay
+
+            // Toast overlay
+            if viewModel.showToast {
+                toastOverlay
+            }
+        }
+        .navigationBarHidden(true)
+        .sheet(isPresented: $viewModel.showInboxSheet) {
+            InboxSheet()
+                .environmentObject(viewModel)
+        }
+        .sheet(item: $selectedItemForDetail) { item in
+            ItemDetailSheet(item: item)
+                .environmentObject(viewModel)
+        }
+        .sheet(isPresented: $showStoreSwitcher) {
+            StoreSwitcherSheet(currentStoreId: selectedHouseholdStore?.id)
+                .environmentObject(viewModel)
+        }
+        .sheet(isPresented: $showAisleManagement) {
+            if let store = selectedHouseholdStore {
+                StoreAisleManagementView(store: store)
+                    .environmentObject(viewModel)
+            }
+        }
+        .sheet(isPresented: $viewModel.showShoppingCompletedSheet) {
+            if let stats = viewModel.shoppingCompletionStats {
+                ShoppingCompletedSheet(stats: stats) {
+                    viewModel.showShoppingCompletedSheet = false
+                    viewModel.shoppingCompletionStats = nil
+                    isPresented = false
+                }
+                .interactiveDismissDisabled()
+            }
+        }
+        .onReceive(SubscriptionService.shared.$lastShoppingRequest.compactMap { $0 }) { request in
+            // Only trigger animation if we're the shopper
+            if viewModel.isCurrentUserShopping {
+                withAnimation {
+                    newRequestArrived = true
+                }
+                // Reset after animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    newRequestArrived = false
+                }
+            }
+        }
+        .alert("Items Not Picked Up", isPresented: $showDoneShoppingAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("I'm Done Shopping", role: .destructive) {
+                Task {
+                    await viewModel.exitShoppingMode(discardUncrossed: true)
+                    // Completion sheet will handle dismissal
+                }
+            }
+        } message: {
+            Text("You still have \(viewModel.shoppingList.count) items on your list. These will be removed if you finish.")
+        }
+    }
+
+    // MARK: - Header View
+
+    private var headerView: some View {
+        HStack(alignment: .top) {
+            // Left side: Store name + action icons
+            VStack(alignment: .leading, spacing: 12) {
+                // Tappable store name - opens store switcher
+                Button(action: {
+                    showStoreSwitcher = true
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }) {
+                    HStack(spacing: 4) {
+                        Text(selectedHouseholdStore?.name ?? "Select Store")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(DesignSystem.Colors.accentGradient)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.neonCyan)
+                    }
+                }
+
+                // Action icons row (gear + inbox)
+                HStack(spacing: 12) {
+                    // Gear icon for aisle management
+                    Button(action: {
+                        showAisleManagement = true
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }) {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(8)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.1))
+                            )
+                    }
+
+                    // Inbox button
+                    Button(action: {
+                        viewModel.showInboxSheet = true
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "tray.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+
+                            if viewModel.pendingRequestCount > 0 {
+                                InboxBadge(count: viewModel.pendingRequestCount)
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                        .padding(8)
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.1))
+                        )
+                    }
+                    .modifier(ShakeEffect(shakes: newRequestArrived ? 3 : 0))
+                    .animation(.default, value: newRequestArrived)
+                }
+            }
+
+            Spacer()
+
+            // Right side: username + Done Shopping button
+            VStack(alignment: .trailing, spacing: 12) {
+                // Logged-in user label
+                if let userId = amplifyService.currentUser?.userId {
+                    Text(UserCache.shared.displayName(for: userId))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                }
+
+                // Done Shopping button - prominent with accent color
+                Button(action: {
+                    if !viewModel.shoppingList.isEmpty {
+                        showDoneShoppingAlert = true
+                    } else {
+                        Task {
+                            await viewModel.exitShoppingMode(discardUncrossed: false)
+                        }
+                    }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("Done")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(DesignSystem.Colors.success.opacity(0.3))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(DesignSystem.Colors.success, lineWidth: 1.5)
+                            )
+                    )
+                    .shadow(color: DesignSystem.Colors.success.opacity(0.3), radius: 8, x: 0, y: 4)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 60)
+        .padding(.bottom, 16)
+    }
+
+    // MARK: - Progress View
+
+    private var progressView: some View {
+        VStack(spacing: 12) {
+            // Progress bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.1))
+                        .frame(height: 8)
+
+                    // Progress fill
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(DesignSystem.Colors.accentGradient)
+                        .frame(
+                            width: geometry.size.width * progressPercentage,
+                            height: 8
+                        )
+                        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: progressPercentage)
+                }
+            }
+            .frame(height: 8)
+
+            // Progress text
+            HStack {
+                Text("\(checkedItemsCount)/\(totalItemsCount) items")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Spacer()
+
+                Text("\(Int(progressPercentage * 100))%")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.neonCyan)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+    }
+
+    // MARK: - Section Headers
+
+    private func aisleHeader(_ aisleGroup: AisleGroup) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.right")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.neonCyan)
+
+            Text(aisleGroup.displayName.uppercased())
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .tracking(1.2)
+
+            Spacer()
+
+            // Item count for this aisle
+            Text("\(aisleGroup.items.count)")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+        }
+        .textCase(nil)
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 8, trailing: 20))
+    }
+
+    private var unmappedHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.neonPink)
+
+                Text("UNKNOWN AISLE")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.neonPink)
+                    .tracking(1.2)
+
+                Spacer()
+
+                Text("\(unmappedItems.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+
+            Text("Long-press items to assign aisle")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+        }
+        .textCase(nil)
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 8, trailing: 20))
+    }
+
+    private var inCartHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.success)
+
+                Text("IN CART")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.success)
+                    .tracking(1.2)
+
+                Spacer()
+
+                Text("\(viewModel.inCart.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+
+            Text("Tap items to restore to list")
+                .font(.system(size: 11, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+        }
+        .textCase(nil)
+        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 8, trailing: 20))
+    }
+
+    private var emptyInCartPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "cart")
+                .font(.system(size: 32, weight: .thin))
+                .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
+
+            Text("No items yet")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+
+            Text("Cross off items as you shop")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.7))
+        }
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Shopping Active Border Overlay
+
+    private var shoppingActiveBorderOverlay: some View {
+        RoundedRectangle(cornerRadius: 0)
+            .stroke(
+                LinearGradient(
+                    colors: [
+                        DesignSystem.Colors.neonCyan.opacity(0.6),
+                        DesignSystem.Colors.neonPurple.opacity(0.4)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                lineWidth: 3
+            )
+            .ignoresSafeArea()
+            .shadow(color: DesignSystem.Colors.neonCyan.opacity(0.5), radius: 10)
+            .allowsHitTesting(false)
+    }
+
+    // MARK: - Toast Overlay
+
+    private var toastOverlay: some View {
+        VStack {
+            ToastView(
+                message: viewModel.toastMessage,
+                userName: viewModel.toastUserName,
+                avatarUrl: nil,
+                type: viewModel.toastType
+            )
+            .padding(.top, 60)
+
+            Spacer()
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.showToast)
+    }
+
+    // MARK: - Search Actions
+
+    /// Add item from typed input - active shopper adds directly
+    private func addItemFromSearch() {
+        let itemName = searchText.trimmingCharacters(in: .whitespaces)
+        guard !itemName.isEmpty else { return }
+        searchText = ""
+        searchFieldFocused = false
+
+        Task {
+            await viewModel.addItem(name: itemName)
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    /// Add item selected from product dropdown
+    private func addProductFromSearch(_ product: Product) {
+        searchText = ""
+        searchFieldFocused = false
+        Task {
+            await viewModel.addItem(name: product.name, productId: product.id)
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    // MARK: - Section Backgrounds
+
+    /// Subtle background for In Cart section
+    private var inCartSectionBackground: some View {
+        DesignSystem.Colors.success.opacity(0.03)
+    }
+
+    // MARK: - Helper Methods
+
+    /// Format aisle header name flexibly - handles numbers, alphanumeric, or words
+    private func aisleHeaderName(_ aisle: StoreAisle) -> String {
+        let number = aisle.number.trimmingCharacters(in: .whitespaces)
+        let name = aisle.name.trimmingCharacters(in: .whitespaces).uppercased()
+
+        // If both are empty, return placeholder
+        if number.isEmpty && name.isEmpty {
+            return "UNKNOWN AISLE"
+        }
+
+        // If only one is provided, return it
+        if number.isEmpty {
+            return name
+        }
+        if name.isEmpty {
+            return number.uppercased()
+        }
+
+        // If number and name are the same (case-insensitive), return just one
+        if number.lowercased() == aisle.name.lowercased() {
+            return name
+        }
+
+        // Otherwise combine them
+        return "\(number.uppercased()) - \(name)"
+    }
+
+    /// Assign an item to a specific aisle in the store
+    private func assignItemToAisle(item: GroceryItem, aisleId: String, store: HouseholdStore) async {
+        do {
+            try await storeService.assignProductToAisle(
+                productId: item.productId,
+                normalizedName: item.normalizedName,
+                storeId: store.id,
+                aisleId: aisleId
+            )
+
+            // Find the aisle name for feedback
+            if let aisle = store.aisleLayout.first(where: { $0.id == aisleId }) {
+                await MainActor.run {
+                    viewModel.toastMessage = "Assigned to Aisle \(aisle.number)"
+                    viewModel.toastType = .success
+                    viewModel.showToast = true
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }
+            }
+        } catch {
+            await MainActor.run {
+                viewModel.toastMessage = "Failed to assign aisle"
+                viewModel.toastType = .error
+                viewModel.showToast = true
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+        }
+    }
+}
+
+// MARK: - Shake Effect Modifier
+
+struct ShakeEffect: GeometryEffect {
+    var shakes: Int
+    var animatableData: CGFloat {
+        get { CGFloat(shakes) }
+        set { shakes = Int(newValue) }
+    }
+
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        let angle = sin(animatableData * .pi * 2) * 0.1
+        return ProjectionTransform(CGAffineTransform(rotationAngle: angle))
+    }
+}
+
+// MARK: - Aisle Group Model
+
+struct AisleGroup: Identifiable {
+    let id: String
+    let displayName: String
+    let items: [GroceryItem]
+    let displayOrder: Int
+}
+
+// MARK: - Preview
+
+#Preview {
+    AtStoreModeView(isPresented: .constant(true))
+        .environmentObject(ShoppingListViewModel())
+        .environmentObject(AmplifyService.shared)
+}

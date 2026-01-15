@@ -1,0 +1,374 @@
+import type { AppSyncResolverHandler } from 'aws-lambda';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import Anthropic from '@anthropic-ai/sdk';
+
+const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+const MAPPING_TABLE = process.env.MAPPING_TABLE_NAME!;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
+
+const MODEL = 'claude-sonnet-4-5';
+
+interface Arguments {
+  storeId: string;
+  productName?: string;      // Single mode (existing) - optional when using batch
+  normalizedName?: string;   // Optional when using batch
+  productId?: string;
+  products?: Array<{         // Batch mode (new)
+    productName: string;
+    normalizedName: string;
+    productId?: string;
+  }>;
+}
+
+interface Response {
+  success: boolean;
+  suggestedAisle?: string;   // Single mode
+  confidence?: number;
+  reasoning?: string;
+  error?: string;
+  results?: Array<{          // Batch mode (new)
+    productName: string;
+    normalizedName: string;
+    productId?: string;
+    suggestedAisle: string;
+    confidence: number;
+    reasoning: string;
+  }>;
+}
+
+interface ExistingMapping {
+  aisleId: string;
+  normalizedName?: string;
+  productId?: string;
+  confidence?: number;
+}
+
+/**
+ * Fetch existing mappings for a store to use as context
+ */
+async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]> {
+  const mappings: ExistingMapping[] = [];
+  let lastEvaluatedKey: Record<string, any> | undefined;
+
+  // Use Scan with filter (GSI may not be available)
+  do {
+    const result = await ddbClient.send(
+      new ScanCommand({
+        TableName: MAPPING_TABLE,
+        FilterExpression: 'storeId = :storeId',
+        ExpressionAttributeValues: {
+          ':storeId': storeId,
+        },
+        ProjectionExpression: 'aisleId, normalizedName, productId, confidence',
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+
+    if (result.Items) {
+      mappings.push(
+        ...result.Items.map((item) => ({
+          aisleId: item.aisleId as string,
+          normalizedName: item.normalizedName as string | undefined,
+          productId: item.productId as string | undefined,
+          confidence: item.confidence as number | undefined,
+        }))
+      );
+    }
+
+    lastEvaluatedKey = result.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  return mappings;
+}
+
+/**
+ * Build aisle context from existing mappings
+ * Groups products by aisle for the LLM to understand store layout
+ */
+function buildAisleContext(mappings: ExistingMapping[]): string {
+  // Group by aisle
+  const aisleGroups: Record<string, string[]> = {};
+
+  for (const mapping of mappings) {
+    const aisle = mapping.aisleId;
+    const name = mapping.normalizedName || mapping.productId || 'unknown';
+
+    if (!aisleGroups[aisle]) {
+      aisleGroups[aisle] = [];
+    }
+    aisleGroups[aisle].push(name);
+  }
+
+  // Format as readable context
+  const lines: string[] = [];
+  const sortedAisles = Object.keys(aisleGroups).sort((a, b) => {
+    const numA = parseInt(a);
+    const numB = parseInt(b);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    if (!isNaN(numA)) return -1;
+    if (!isNaN(numB)) return 1;
+    return a.localeCompare(b);
+  });
+
+  for (const aisle of sortedAisles) {
+    const products = aisleGroups[aisle];
+    // Limit to 20 products per aisle to keep context manageable
+    const displayProducts = products.slice(0, 20);
+    const moreCount = products.length - displayProducts.length;
+
+    let line = `Aisle ${aisle}: ${displayProducts.join(', ')}`;
+    if (moreCount > 0) {
+      line += ` (+${moreCount} more)`;
+    }
+    lines.push(line);
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Call Claude to infer the best aisle for a product
+ */
+async function inferAisle(
+  productName: string,
+  aisleContext: string,
+  anthropic: Anthropic
+): Promise<{ aisle: string; confidence: number; reasoning: string }> {
+  const prompt = `You are helping a shopper find where a product is located in a grocery store.
+
+STORE AISLE LAYOUT (based on existing product mappings):
+${aisleContext}
+
+PRODUCT TO LOCATE: "${productName}"
+
+Based on the store's existing aisle layout above, determine which aisle this product is most likely in.
+
+Think about:
+1. What category is this product? (produce, dairy, meat, canned goods, spices, etc.)
+2. Which aisle has similar products?
+3. If it's a fresh herb like dill/basil, it's likely in Produce
+4. If it's a spice/dried herb, it's likely with spices
+
+Respond with ONLY a JSON object (no other text):
+{
+  "aisle": "the aisle number or name",
+  "confidence": 0.0 to 1.0,
+  "reasoning": "1-2 short sentences max explaining your choice"
+}
+
+Confidence guidelines:
+- 0.9-1.0: Very confident (many similar products in that aisle)
+- 0.7-0.89: Confident (clear category match)
+- 0.5-0.69: Moderate (reasonable guess based on category)
+- 0.3-0.49: Low confidence (weak match)
+- <0.3: Very uncertain`;
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+  });
+
+  const textContent = response.content.find((block) => block.type === 'text');
+  if (!textContent || textContent.type !== 'text') {
+    throw new Error('No text response from Claude');
+  }
+
+  // Parse JSON response
+  const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    console.error('No JSON found in response:', textContent.text);
+    throw new Error('Invalid response format from Claude');
+  }
+
+  const result = JSON.parse(jsonMatch[0]);
+
+  // Post-processing: Clean up aisle value to remove redundant "Aisle" prefix
+  let aisleValue = result.aisle || 'Unknown';
+  const aisleMatch = aisleValue.match(/^aisle\s+(.+)$/i);
+  if (aisleMatch) {
+    const originalAisle = aisleValue;
+    aisleValue = aisleMatch[1].trim();
+    console.log(`[INFER] [CLEANUP] Stripped "Aisle" prefix: "${originalAisle}" -> "${aisleValue}"`);
+  }
+
+  return {
+    aisle: aisleValue,
+    confidence: typeof result.confidence === 'number' ? result.confidence : 0.5,
+    reasoning: result.reasoning || 'No reasoning provided',
+  };
+}
+
+/**
+ * Call Claude to infer aisles for multiple products at once (batch mode)
+ */
+async function inferAisleBatch(
+  products: Array<{ productName: string; normalizedName: string; productId?: string }>,
+  aisleContext: string,
+  anthropic: Anthropic
+): Promise<Array<{ productName: string; aisle: string; confidence: number; reasoning: string }>> {
+  // Build numbered list of products
+  const productList = products.map((p, i) => `${i + 1}. "${p.productName}"`).join('\n');
+
+  const prompt = `You are helping a shopper find where products are located in a grocery store.
+
+STORE AISLE LAYOUT (based on existing product mappings):
+${aisleContext}
+
+PRODUCTS TO LOCATE:
+${productList}
+
+For EACH product, determine which aisle it is most likely in based on the store layout above.
+
+Respond with ONLY a JSON array (no other text):
+[
+  {"productName": "exact product name", "aisle": "aisle number or name", "confidence": 0.0 to 1.0, "reasoning": "1 sentence explanation"},
+  ...
+]
+
+Confidence guidelines:
+- 0.9-1.0: Very confident (many similar products in that aisle)
+- 0.7-0.89: Confident (clear category match)
+- 0.5-0.69: Moderate (reasonable guess)
+- <0.5: Low confidence`;
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 4096,  // Larger for batch
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  // Parse array response
+  const textContent = response.content.find((block) => block.type === 'text');
+  if (!textContent || textContent.type !== 'text') {
+    throw new Error('No text response from Claude');
+  }
+
+  const jsonMatch = textContent.text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    throw new Error('Invalid response format from Claude');
+  }
+
+  const results = JSON.parse(jsonMatch[0]);
+
+  // Post-process to clean up aisle values (same as single mode)
+  return results.map((r: any) => {
+    let aisleValue = r.aisle || 'Unknown';
+    const aisleMatch = aisleValue.match(/^aisle\s+(.+)$/i);
+    if (aisleMatch) {
+      aisleValue = aisleMatch[1].trim();
+    }
+    return {
+      productName: r.productName,
+      aisle: aisleValue,
+      confidence: typeof r.confidence === 'number' ? r.confidence : 0.5,
+      reasoning: r.reasoning || 'No reasoning provided',
+    };
+  });
+}
+
+/**
+ * Main handler
+ */
+export const handler: AppSyncResolverHandler<Arguments, Response> = async (event) => {
+  console.log('[INFER] Received request:', JSON.stringify(event.arguments));
+
+  const { storeId, productName, products } = event.arguments;
+
+  // Validate: need storeId and either productName (single) or products array (batch)
+  const isBatchMode = products && Array.isArray(products) && products.length > 0;
+  const isSingleMode = !!productName;
+
+  if (!storeId) {
+    return {
+      success: false,
+      error: 'Missing required field: storeId',
+    };
+  }
+
+  if (!isBatchMode && !isSingleMode) {
+    return {
+      success: false,
+      error: 'Missing required fields: productName (single mode) or products array (batch mode)',
+    };
+  }
+
+  try {
+    // Fetch existing mappings for context
+    console.log(`[INFER] Fetching existing mappings for store ${storeId}`);
+    const existingMappings = await fetchExistingMappings(storeId);
+
+    if (existingMappings.length === 0) {
+      return {
+        success: false,
+        error: 'No existing aisle data for this store. Please scan a store directory first.',
+      };
+    }
+
+    console.log(`[INFER] Found ${existingMappings.length} existing mappings`);
+
+    // Build context for LLM
+    const aisleContext = buildAisleContext(existingMappings);
+    console.log(`[INFER] Built aisle context (${aisleContext.length} chars)`);
+
+    // Initialize Anthropic client
+    const anthropic = new Anthropic({
+      apiKey: ANTHROPIC_API_KEY,
+    });
+
+    // Check if batch mode
+    if (isBatchMode) {
+      console.log(`[INFER] Batch mode: ${products!.length} products`);
+
+      const batchResults = await inferAisleBatch(
+        products!,
+        aisleContext,
+        anthropic
+      );
+
+      // Map results to include normalizedName and productId from input
+      const resultsWithIds = batchResults.map((r) => {
+        const input = products!.find((p) => p.productName === r.productName);
+        return {
+          productName: r.productName,
+          normalizedName: input?.normalizedName || '',
+          productId: input?.productId,
+          suggestedAisle: r.aisle,
+          confidence: r.confidence,
+          reasoning: r.reasoning,
+        };
+      });
+
+      return {
+        success: true,
+        results: resultsWithIds,
+      };
+    }
+
+    // Single mode (existing behavior)
+    console.log(`[INFER] Calling Claude to infer aisle for "${productName}"`);
+    const result = await inferAisle(productName!, aisleContext, anthropic);
+
+    console.log(`[INFER] Result: aisle=${result.aisle}, confidence=${result.confidence}`);
+
+    return {
+      success: true,
+      suggestedAisle: result.aisle,
+      confidence: result.confidence,
+      reasoning: result.reasoning,
+    };
+  } catch (error: any) {
+    console.error('[INFER] Error:', error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error occurred',
+    };
+  }
+};

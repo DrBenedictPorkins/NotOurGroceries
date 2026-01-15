@@ -1,0 +1,23 @@
+# amplify
+node_modules
+.amplify
+amplify_outputs*
+amplifyconfiguration*
+
+# Local/machine-specific config
+.mcp.json
+.claude/settings.local.json
+HANDOFF.md
+
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+DerivedData/
+*.ipa
+*.dSYM.zip
+*.dSYM
+.build/
+
+# Swift Package Manager
+.swiftpm/
+*.xcworkspace/xcshareddata/swiftpm/Package.resolved

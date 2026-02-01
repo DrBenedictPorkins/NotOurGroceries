@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0] - 2026-02-01
 
+Build 4
+
+## [1.0] - 2026-02-01
+
 Build 3
 
 ## [1.0] - 2026-02-01
@@ -33,5 +37,5 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: https://github.com/DrBenedictPorkins/NotOurGroceries/compare/v1.0-3...HEAD
+[Unreleased]: https://github.com/DrBenedictPorkins/NotOurGroceries/compare/v1.0-4...HEAD
 [1.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0-2[1.0.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0.0

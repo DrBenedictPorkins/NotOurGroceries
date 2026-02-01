@@ -72,8 +72,81 @@ class AisleExtractionService: ObservableObject {
 
     private let storagePrefix = "store-images"
     private let pollIntervalSeconds = 2
+    private var pollingTask: Task<AisleExtractionJob, Error>?
+
+    // MARK: - Persistence Keys
+
+    private let activeJobsKey = "AisleExtractionActiveJobs"  // [storeId: jobId]
 
     private init() {}
+
+    // MARK: - Active Job Persistence
+
+    /// Get active job ID for a store (if any)
+    func activeJobId(for storeId: String) -> String? {
+        let jobs = UserDefaults.standard.dictionary(forKey: activeJobsKey) as? [String: String] ?? [:]
+        return jobs[storeId]
+    }
+
+    /// Save active job ID for a store
+    private func saveActiveJob(storeId: String, jobId: String) {
+        var jobs = UserDefaults.standard.dictionary(forKey: activeJobsKey) as? [String: String] ?? [:]
+        jobs[storeId] = jobId
+        UserDefaults.standard.set(jobs, forKey: activeJobsKey)
+    }
+
+    /// Clear active job for a store
+    private func clearActiveJob(storeId: String) {
+        var jobs = UserDefaults.standard.dictionary(forKey: activeJobsKey) as? [String: String] ?? [:]
+        jobs.removeValue(forKey: storeId)
+        UserDefaults.standard.set(jobs, forKey: activeJobsKey)
+    }
+
+    /// Check if there's an active job for a store and resume polling if so
+    /// Returns the completed job if found and finished, nil if no active job
+    @discardableResult
+    func resumeActiveJob(for storeId: String) async throws -> AisleExtractionJob? {
+        guard let jobId = activeJobId(for: storeId) else {
+            return nil
+        }
+
+        logger.info("[JOB] Found active job \(jobId) for store \(storeId), checking status...")
+
+        // Fetch current job status
+        let job = try await fetchJob(jobId: jobId)
+
+        // If already complete or failed, clear it and return
+        if job.status == "COMPLETE" {
+            clearActiveJob(storeId: storeId)
+            return job
+        } else if job.status == "FAILED" {
+            clearActiveJob(storeId: storeId)
+            let errorMsg = job.lastError ?? "Unknown error"
+            if AisleExtractionError.isApiKeyError(errorMsg) {
+                throw AisleExtractionError.apiKeyNotConfigured
+            }
+            throw AisleExtractionError.processingFailed(errorMsg)
+        }
+
+        // Job is still in progress, resume polling
+        logger.info("[JOB] Resuming polling for job \(jobId)")
+        isProcessing = true
+        currentJob = job
+        processingStatus = job.detail ?? job.phaseLabel ?? "Processing..."
+        currentPhase = job.phase ?? 0
+
+        // Start polling in background
+        pollingTask = Task {
+            try await pollJobUntilComplete(jobId: jobId, storeId: storeId)
+        }
+
+        return try await pollingTask!.value
+    }
+
+    /// Check if currently processing a job for a specific store
+    func isProcessingStore(_ storeId: String) -> Bool {
+        return isProcessing && activeJobId(for: storeId) != nil
+    }
 
     // MARK: - Main Processing (Job-Based)
 
@@ -92,13 +165,6 @@ class AisleExtractionService: ObservableObject {
         lastError = nil
         currentJob = nil
         secondsUntilNextPoll = 0
-
-        defer {
-            isProcessing = false
-            processingStatus = ""
-            currentPhase = 0
-            secondsUntilNextPoll = 0
-        }
 
         do {
             // ========================================
@@ -128,11 +194,14 @@ class AisleExtractionService: ObservableObject {
             let jobId = try await createJob(storeId: storeId, imageKeys: imageKeys)
             logger.info("[JOB] Created job: \(jobId)")
 
+            // Save active job for persistence (can resume if app is closed)
+            saveActiveJob(storeId: storeId, jobId: jobId)
+
             // ========================================
             // POLL: Wait for job completion
             // ========================================
             processingStatus = "Processing..."
-            let completedJob = try await pollJobUntilComplete(jobId: jobId)
+            let completedJob = try await pollJobUntilComplete(jobId: jobId, storeId: storeId)
 
             logger.info("[JOB] Job completed: \(completedJob.entriesExtracted ?? 0) entries, \(completedJob.mappingsCreated ?? 0) mappings")
 
@@ -140,9 +209,20 @@ class AisleExtractionService: ObservableObject {
 
         } catch {
             lastError = error.localizedDescription
+            clearActiveJob(storeId: storeId)
+            resetProcessingState()
             logger.error("[ERROR] Processing failed: \(error.localizedDescription)")
             throw error
         }
+    }
+
+    /// Reset processing state to idle
+    private func resetProcessingState() {
+        isProcessing = false
+        processingStatus = ""
+        currentPhase = 0
+        secondsUntilNextPoll = 0
+        currentJob = nil
     }
 
     // MARK: - Job Management
@@ -191,28 +271,36 @@ class AisleExtractionService: ObservableObject {
     }
 
     /// Poll for job completion with countdown updates for UI
-    private func pollJobUntilComplete(jobId: String) async throws -> AisleExtractionJob {
+    private func pollJobUntilComplete(jobId: String, storeId: String) async throws -> AisleExtractionJob {
         while true {
             // Update countdown for UI
             for i in (1...pollIntervalSeconds).reversed() {
-                await MainActor.run { secondsUntilNextPoll = i }
+                secondsUntilNextPoll = i
                 try await Task.sleep(nanoseconds: 1_000_000_000)
             }
 
             let job = try await fetchJob(jobId: jobId)
-            await MainActor.run {
-                currentJob = job
-                processingStatus = job.detail ?? job.phaseLabel ?? "Processing..."
-                currentPhase = job.phase ?? 0
-            }
+            currentJob = job
+            processingStatus = job.detail ?? job.phaseLabel ?? "Processing..."
+            currentPhase = job.phase ?? 0
 
             logger.info("[POLL] Job \(jobId) status: \(job.status), phase: \(job.phase ?? 0), detail: \(job.detail ?? "none")")
 
             switch job.status {
             case "COMPLETE":
+                // Job finished successfully - clean up
+                clearActiveJob(storeId: storeId)
+                resetProcessingState()
                 return job
             case "FAILED":
-                throw AisleExtractionError.processingFailed(job.lastError ?? "Unknown error")
+                let errorMsg = job.lastError ?? "Unknown error"
+                clearActiveJob(storeId: storeId)
+                resetProcessingState()
+                // Check if this is an API key configuration error
+                if AisleExtractionError.isApiKeyError(errorMsg) {
+                    throw AisleExtractionError.apiKeyNotConfigured
+                }
+                throw AisleExtractionError.processingFailed(errorMsg)
             default:
                 // Continue polling for PENDING, EXTRACTING, MATCHING, APPLYING
                 continue
@@ -762,6 +850,10 @@ class AisleExtractionService: ObservableObject {
                 if case .string(let e) = result["error"] {
                     errorMsg = e
                 }
+                // Check if this is an API key configuration error
+                if AisleExtractionError.isApiKeyError(errorMsg) {
+                    throw AisleExtractionError.apiKeyNotConfigured
+                }
                 throw AisleExtractionError.processingFailed(errorMsg)
             }
 
@@ -877,7 +969,12 @@ class AisleExtractionService: ObservableObject {
             let batchResponse = try JSONDecoder().decode(BatchResponse.self, from: resultData)
 
             guard batchResponse.success, let results = batchResponse.results else {
-                throw AisleExtractionError.processingFailed(batchResponse.error ?? "Batch inference failed")
+                let errorMsg = batchResponse.error ?? "Batch inference failed"
+                // Check if this is an API key configuration error
+                if AisleExtractionError.isApiKeyError(errorMsg) {
+                    throw AisleExtractionError.apiKeyNotConfigured
+                }
+                throw AisleExtractionError.processingFailed(errorMsg)
             }
 
             // Map results back to item IDs
@@ -991,6 +1088,7 @@ enum AisleExtractionError: LocalizedError {
     case processingFailed(String)
     case parseFailed(String)
     case mergeFailed(String)
+    case apiKeyNotConfigured
 
     var errorDescription: String? {
         switch self {
@@ -1002,6 +1100,21 @@ enum AisleExtractionError: LocalizedError {
             return "Parse failed: \(message)"
         case .mergeFailed(let message):
             return "Merge failed: \(message)"
+        case .apiKeyNotConfigured:
+            return "AI features are not available. The API key has not been configured for this environment."
         }
+    }
+
+    /// Check if an error message indicates an API key configuration issue
+    static func isApiKeyError(_ message: String) -> Bool {
+        let lowercased = message.lowercased()
+        return lowercased.contains("api key") ||
+               lowercased.contains("api_key") ||
+               lowercased.contains("apikey") ||
+               lowercased.contains("authentication") ||
+               lowercased.contains("401") ||
+               lowercased.contains("unauthorized") ||
+               lowercased.contains("invalid key") ||
+               lowercased.contains("missing key")
     }
 }

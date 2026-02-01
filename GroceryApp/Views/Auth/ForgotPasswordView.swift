@@ -2,17 +2,18 @@ import SwiftUI
 import Amplify
 import AWSCognitoAuthPlugin
 
-struct AuthGateView: View {
+struct ForgotPasswordView: View {
     @EnvironmentObject var amplifyService: AmplifyService
     @State private var email = ""
-    @State private var password = ""
-    @State private var displayName = ""
     @State private var confirmationCode = ""
-    @State private var isSignUp = false
-    @State private var needsConfirmation = false
+    @State private var newPassword = ""
+    @State private var confirmPassword = ""
+    @State private var isCodeSent = false
     @State private var isLoading = false
     @State private var errorMessage: String?
-    @State private var showForgotPassword = false
+    @State private var successMessage: String?
+
+    var onDismiss: () -> Void
 
     var body: some View {
         ZStack {
@@ -22,24 +23,16 @@ struct AuthGateView: View {
             DesignSystem.Colors.darkMetallicGradient
                 .ignoresSafeArea()
                 .opacity(0.3)
-                .fullScreenCover(isPresented: $showForgotPassword) {
-                    ForgotPasswordView(onDismiss: {
-                        showForgotPassword = false
-                    })
-                    .environmentObject(amplifyService)
-                }
 
             ScrollView {
                 VStack(spacing: 32) {
-                    // Logo and title
-                    logoSection
+                    headerSection
                         .padding(.top, 80)
 
-                    // Form content
-                    if needsConfirmation {
-                        confirmationView
+                    if isCodeSent {
+                        confirmResetView
                     } else {
-                        authFormView
+                        requestCodeView
                     }
 
                     Spacer(minLength: 50)
@@ -49,79 +42,38 @@ struct AuthGateView: View {
         }
     }
 
-    // MARK: - Logo Section
+    // MARK: - Header Section
 
-    private var logoSection: some View {
+    private var headerSection: some View {
         VStack(spacing: 16) {
-            Image(systemName: "cart.fill")
-                .font(.system(size: 70))
+            Image(systemName: "key.fill")
+                .font(.system(size: 60))
                 .foregroundStyle(DesignSystem.Colors.accentGradient)
                 .neonGlow(color: DesignSystem.Colors.neonCyan)
 
-            Text("NotOurGroceries")
-                .font(.system(size: 32, weight: .bold))
+            Text("Reset Password")
+                .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(DesignSystem.Colors.accentGradient)
 
-            Text("Share your shopping list with family")
-                .font(.system(size: 16, weight: .medium))
+            Text(isCodeSent ? "Enter the code sent to your email" : "Enter your email to receive a reset code")
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
+                .multilineTextAlignment(.center)
         }
     }
 
-    // MARK: - Auth Form View
+    // MARK: - Request Code View
 
-    private var authFormView: some View {
+    private var requestCodeView: some View {
         VStack(spacing: 24) {
-            // Toggle between sign in / sign up
-            Picker("Auth Mode", selection: $isSignUp) {
-                Text("Sign In").tag(false)
-                Text("Sign Up").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 4)
+            CustomTextField(
+                placeholder: "Email",
+                text: $email,
+                icon: "envelope.fill",
+                keyboardType: .emailAddress,
+                autocapitalization: .never
+            )
 
-            // Form fields
-            VStack(spacing: 16) {
-                if isSignUp {
-                    CustomTextField(
-                        placeholder: "Display Name",
-                        text: $displayName,
-                        icon: "person.fill"
-                    )
-                }
-
-                CustomTextField(
-                    placeholder: "Email",
-                    text: $email,
-                    icon: "envelope.fill",
-                    keyboardType: .emailAddress,
-                    autocapitalization: .never
-                )
-
-                CustomTextField(
-                    placeholder: "Password",
-                    text: $password,
-                    icon: "lock.fill",
-                    isSecure: true
-                )
-
-                if isSignUp {
-                    Text("Password: 8+ chars, uppercase, lowercase, number, symbol")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                }
-
-                if !isSignUp {
-                    Button("Forgot Password?") {
-                        showForgotPassword = true
-                    }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-            }
-
-            // Error message
             if let error = errorMessage {
                 Text(error)
                     .font(.system(size: 14, weight: .medium))
@@ -129,70 +81,21 @@ struct AuthGateView: View {
                     .multilineTextAlignment(.center)
             }
 
-            // Submit button
-            Button(action: isSignUp ? signUp : signIn) {
-                HStack {
-                    if isLoading {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: isSignUp ? "person.badge.plus" : "arrow.right.circle.fill")
-                        Text(isSignUp ? "Create Account" : "Sign In")
-                    }
-                }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.accentGradient)
-                )
-            }
-            .disabled(isLoading)
-        }
-        .padding(24)
-        .background(glassCard)
-    }
-
-    // MARK: - Confirmation View
-
-    private var confirmationView: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "envelope.badge.fill")
-                .font(.system(size: 50))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
-
-            Text("Check your email")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.textPrimary)
-
-            Text("We sent a confirmation code to\n\(email)")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
-                .multilineTextAlignment(.center)
-
-            CustomTextField(
-                placeholder: "Confirmation Code",
-                text: $confirmationCode,
-                icon: "number",
-                keyboardType: .numberPad
-            )
-
-            if let error = errorMessage {
-                Text(error)
+            if let success = successMessage {
+                Text(success)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.neonPink)
+                    .foregroundColor(DesignSystem.Colors.success)
+                    .multilineTextAlignment(.center)
             }
 
-            Button(action: confirmSignUp) {
+            Button(action: requestResetCode) {
                 HStack {
                     if isLoading {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("Confirm")
+                        Image(systemName: "envelope.badge.fill")
+                        Text("Send Reset Code")
                     }
                 }
                 .font(.system(size: 16, weight: .semibold))
@@ -207,12 +110,96 @@ struct AuthGateView: View {
             .disabled(isLoading)
 
             Button("Back to Sign In") {
-                needsConfirmation = false
-                confirmationCode = ""
-                errorMessage = nil
+                onDismiss()
             }
             .font(.system(size: 14, weight: .medium))
             .foregroundColor(DesignSystem.Colors.neonCyan)
+        }
+        .padding(24)
+        .background(glassCard)
+    }
+
+    // MARK: - Confirm Reset View
+
+    private var confirmResetView: some View {
+        VStack(spacing: 24) {
+            CustomTextField(
+                placeholder: "Confirmation Code",
+                text: $confirmationCode,
+                icon: "number",
+                keyboardType: .numberPad
+            )
+
+            CustomTextField(
+                placeholder: "New Password",
+                text: $newPassword,
+                icon: "lock.fill",
+                isSecure: true
+            )
+
+            CustomTextField(
+                placeholder: "Confirm Password",
+                text: $confirmPassword,
+                icon: "lock.fill",
+                isSecure: true
+            )
+
+            Text("Password: 8+ chars, uppercase, lowercase, number, symbol")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+
+            if let error = errorMessage {
+                Text(error)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.neonPink)
+                    .multilineTextAlignment(.center)
+            }
+
+            if let success = successMessage {
+                Text(success)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.success)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button(action: confirmReset) {
+                HStack {
+                    if isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Reset Password")
+                    }
+                }
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(DesignSystem.Colors.accentGradient)
+                )
+            }
+            .disabled(isLoading)
+
+            HStack(spacing: 16) {
+                Button("Resend Code") {
+                    requestResetCode()
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .disabled(isLoading)
+
+                Text("|")
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+
+                Button("Back to Sign In") {
+                    onDismiss()
+                }
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.neonCyan)
+            }
         }
         .padding(24)
         .background(glassCard)
@@ -231,19 +218,21 @@ struct AuthGateView: View {
 
     // MARK: - Actions
 
-    private func signUp() {
-        guard !email.isEmpty, !password.isEmpty, !displayName.isEmpty else {
-            errorMessage = "Please fill in all fields"
+    private func requestResetCode() {
+        guard !email.isEmpty else {
+            errorMessage = "Please enter your email address"
             return
         }
 
         isLoading = true
         errorMessage = nil
+        successMessage = nil
 
         Task {
             do {
-                try await amplifyService.signUp(email: email, password: password, displayName: displayName)
-                needsConfirmation = true
+                try await amplifyService.resetPassword(for: email)
+                isCodeSent = true
+                successMessage = "Reset code sent to \(email)"
             } catch {
                 errorMessage = parseAuthError(error)
             }
@@ -251,40 +240,38 @@ struct AuthGateView: View {
         }
     }
 
-    private func confirmSignUp() {
+    private func confirmReset() {
         guard !confirmationCode.isEmpty else {
             errorMessage = "Please enter the confirmation code"
             return
         }
 
-        isLoading = true
-        errorMessage = nil
-
-        Task {
-            do {
-                try await amplifyService.confirmSignUp(email: email, code: confirmationCode)
-                // After confirmation, sign in
-                try await amplifyService.signIn(email: email, password: password)
-                needsConfirmation = false
-            } catch {
-                errorMessage = parseAuthError(error)
-            }
-            isLoading = false
+        guard !newPassword.isEmpty else {
+            errorMessage = "Please enter a new password"
+            return
         }
-    }
 
-    private func signIn() {
-        guard !email.isEmpty, !password.isEmpty else {
-            errorMessage = "Please enter email and password"
+        guard newPassword == confirmPassword else {
+            errorMessage = "Passwords do not match"
             return
         }
 
         isLoading = true
         errorMessage = nil
+        successMessage = nil
 
         Task {
             do {
-                try await amplifyService.signIn(email: email, password: password)
+                try await amplifyService.confirmResetPassword(
+                    for: email,
+                    with: newPassword,
+                    confirmationCode: confirmationCode
+                )
+                successMessage = "Password reset successful! Returning to sign in..."
+
+                // Delay then dismiss
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                onDismiss()
             } catch {
                 errorMessage = parseAuthError(error)
             }
@@ -300,7 +287,6 @@ struct AuthGateView: View {
             case .configuration(let description, _, _):
                 return "Configuration error: \(description)"
             case .service(let description, let recovery, let underlyingError):
-                // Check for specific Cognito errors
                 if let cognitoError = underlyingError as? AWSCognitoAuthError {
                     return parseCognitoError(cognitoError)
                 }
@@ -333,9 +319,9 @@ struct AuthGateView: View {
         case .invalidParameter:
             return "Invalid input. Please check your email and password format"
         case .codeExpired:
-            return "Confirmation code has expired. Please request a new one"
+            return "Reset code has expired. Please request a new one"
         case .codeMismatch:
-            return "Invalid confirmation code. Please try again"
+            return "Invalid reset code. Please try again"
         case .userNotConfirmed:
             return "Please confirm your account with the code sent to your email"
         case .limitExceeded:
@@ -345,12 +331,12 @@ struct AuthGateView: View {
         case .resourceNotFound:
             return "Service temporarily unavailable. Please try again"
         default:
-            return "Authentication failed. Please check your credentials"
+            return "Password reset failed. Please try again"
         }
     }
 }
 
 #Preview {
-    AuthGateView()
+    ForgotPasswordView(onDismiss: {})
         .environmentObject(AmplifyService.shared)
 }

@@ -122,6 +122,14 @@ struct AtStoreModeView: View {
         return CGFloat(checkedItemsCount) / CGFloat(totalItemsCount)
     }
 
+    /// Determines if the current toast notification is from another user
+    private var isOtherUserAction: Bool {
+        guard !viewModel.toastUserName.isEmpty else { return false }
+        guard let userId = amplifyService.currentUser?.userId else { return true }
+        let currentUserName = UserCache.shared.displayName(for: userId)
+        return viewModel.toastUserName != currentUserName
+    }
+
     var body: some View {
         ZStack {
             // Background gradient
@@ -223,11 +231,6 @@ struct AtStoreModeView: View {
 
             // Glowing border overlay to indicate active shopping
             shoppingActiveBorderOverlay
-
-            // Toast overlay
-            if viewModel.showToast {
-                toastOverlay
-            }
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $viewModel.showInboxSheet) {
@@ -419,11 +422,16 @@ struct AtStoreModeView: View {
             }
             .frame(height: 8)
 
-            // Progress text
+            // Progress text or notification subtitle
             HStack {
-                Text("\(checkedItemsCount)/\(totalItemsCount) items")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                StatusSubtitleView(
+                    defaultStatus: "\(checkedItemsCount)/\(totalItemsCount) items",
+                    isShowingNotification: viewModel.showToast,
+                    notificationMessage: viewModel.toastMessage,
+                    notificationUserName: viewModel.toastUserName,
+                    notificationType: viewModel.toastType,
+                    isOtherUser: isOtherUserAction
+                )
 
                 Spacer()
 
@@ -550,24 +558,6 @@ struct AtStoreModeView: View {
             .ignoresSafeArea()
             .shadow(color: DesignSystem.Colors.neonCyan.opacity(0.5), radius: 10)
             .allowsHitTesting(false)
-    }
-
-    // MARK: - Toast Overlay
-
-    private var toastOverlay: some View {
-        VStack {
-            ToastView(
-                message: viewModel.toastMessage,
-                userName: viewModel.toastUserName,
-                avatarUrl: nil,
-                type: viewModel.toastType
-            )
-            .padding(.top, 60)
-
-            Spacer()
-        }
-        .transition(.move(edge: .top).combined(with: .opacity))
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.showToast)
     }
 
     // MARK: - Search Actions

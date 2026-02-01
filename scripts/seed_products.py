@@ -3,12 +3,28 @@
 
 import boto3
 import uuid
+import sys
 from datetime import datetime
+
+# Table names for each environment
+TABLES = {
+    'dev': 'Product-nktezw3d6vcl5jbk7n44jku4e4-NONE',
+    'prod': 'Product-vdsfrt2plzgwfdae2ucpxtwzh4-NONE',
+}
+
+# Parse environment argument
+env = sys.argv[1] if len(sys.argv) > 1 else 'dev'
+if env not in TABLES:
+    print(f"Usage: {sys.argv[0]} [dev|prod]")
+    print(f"  dev  - Sandbox environment (default)")
+    print(f"  prod - Production environment")
+    sys.exit(1)
 
 # Initialize DynamoDB client
 session = boto3.Session(profile_name='mine')
 dynamodb = session.resource('dynamodb', region_name='us-east-1')
-table = dynamodb.Table('Product-nktezw3d6vcl5jbk7n44jku4e4-NONE')
+table = dynamodb.Table(TABLES[env])
+print(f"Targeting {env.upper()} environment: {TABLES[env]}")
 
 def normalize_name(name: str) -> str:
     """Normalize product name for matching."""

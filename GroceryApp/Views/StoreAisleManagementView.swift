@@ -238,67 +238,57 @@ struct StoreAisleManagementView: View {
     }
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Background
-                DesignSystem.Colors.background
-                    .ignoresSafeArea()
+        ZStack {
+            // Background
+            DesignSystem.Colors.background
+                .ignoresSafeArea()
 
-                DesignSystem.Colors.darkMetallicGradient
-                    .ignoresSafeArea()
-                    .opacity(0.3)
+            DesignSystem.Colors.darkMetallicGradient
+                .ignoresSafeArea()
+                .opacity(0.3)
 
-                VStack(spacing: 0) {
-                    // Header with store name
-                    headerView
+            VStack(spacing: 0) {
+                // Header with store name
+                headerView
 
-                    // Action buttons
-                    actionButtonsView
+                // Action buttons
+                actionButtonsView
 
-                    // Search bar
-                    searchBarView
+                // Search bar
+                searchBarView
 
-                    // Items list (grouped by aisle)
-                    if allGroceryItems.isEmpty {
-                        emptyStateView
-                    } else {
-                        itemsListView
-                    }
-
-                    // Stats footer
-                    statsFooterView
+                // Items list (grouped by aisle)
+                if allGroceryItems.isEmpty {
+                    emptyStateView
+                } else {
+                    itemsListView
                 }
+
+                // Stats footer
+                statsFooterView
             }
-            .navigationTitle("Aisle Management")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
-                }
-            }
-            .sheet(isPresented: $showAisleScanSheet) {
-                AisleScanSheet(store: store) {
-                    // Refresh mappings after processing complete
-                    Task {
-                        try? await storeService.fetchMappings(storeId: store.id)
-                    }
-                }
-                .environmentObject(viewModel)
-            }
-            .sheet(isPresented: $showEditSheet) {
-                if let mapping = selectedMapping {
-                    MappingEditSheet(mapping: mapping, store: store)
-                        .environmentObject(viewModel)
-                }
-            }
-            .task {
-                // Load mappings if not already loaded
-                if mappings.isEmpty {
+        }
+        .navigationTitle("Aisle Management")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showAisleScanSheet) {
+            AisleScanSheet(store: store) {
+                // Refresh mappings after processing complete
+                Task {
                     try? await storeService.fetchMappings(storeId: store.id)
                 }
+            }
+            .environmentObject(viewModel)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            if let mapping = selectedMapping {
+                MappingEditSheet(mapping: mapping, store: store)
+                    .environmentObject(viewModel)
+            }
+        }
+        .task {
+            // Load mappings if not already loaded
+            if mappings.isEmpty {
+                try? await storeService.fetchMappings(storeId: store.id)
             }
         }
     }

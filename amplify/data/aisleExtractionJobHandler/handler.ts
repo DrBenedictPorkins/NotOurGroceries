@@ -3,7 +3,6 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
   UpdateCommand,
-  QueryCommand,
   PutCommand,
   GetCommand,
   ScanCommand,
@@ -20,6 +19,7 @@ const PRODUCT_TABLE = process.env.PRODUCT_TABLE_NAME!;
 const MAPPING_TABLE = process.env.MAPPING_TABLE_NAME!;
 const BUCKET_NAME = process.env.BUCKET_NAME!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
+const HOUSEHOLD_STORE_TABLE = process.env.HOUSEHOLD_STORE_TABLE_NAME!;
 
 // Constants
 const MAX_RETRIES = 3;
@@ -45,8 +45,6 @@ interface Product {
   name: string;
   normalizedName: string;
 }
-
-type JobStatus = 'PENDING' | 'EXTRACTING' | 'MATCHING' | 'APPLYING' | 'COMPLETE' | 'FAILED';
 
 // =============================================================================
 // STATUS UPDATE HELPER
@@ -351,6 +349,89 @@ async function phase1ExtractAisles(
 }
 
 // =============================================================================
+// PHASE 1.5: Update Store Aisle Layout
+// =============================================================================
+
+/**
+ * StoreAisle structure matching iOS model
+ */
+interface StoreAisle {
+  id: string;
+  number: string;
+  name: string;
+  displayOrder: number;
+}
+
+/**
+ * Extract unique aisles from OCR entries and update the store's aisleLayout
+ * Groups products by aisle to create a descriptive name
+ */
+async function updateStoreAisleLayout(
+  storeId: string,
+  aisleEntries: AisleEntry[]
+): Promise<void> {
+  console.log(`[PHASE 1.5] Updating store aisle layout from ${aisleEntries.length} entries`);
+
+  // Group entries by aisle
+  const aisleGroups = new Map<string, string[]>();
+  for (const entry of aisleEntries) {
+    const aisle = entry.aisle;
+    if (!aisleGroups.has(aisle)) {
+      aisleGroups.set(aisle, []);
+    }
+    aisleGroups.get(aisle)!.push(entry.productName);
+  }
+
+  // Sort aisles: numbered first (sorted numerically), then named sections
+  const aisleKeys = Array.from(aisleGroups.keys());
+  aisleKeys.sort((a, b) => {
+    const aNum = parseInt(a);
+    const bNum = parseInt(b);
+    const aIsNum = !isNaN(aNum);
+    const bIsNum = !isNaN(bNum);
+
+    if (aIsNum && bIsNum) return aNum - bNum;
+    if (aIsNum) return -1; // Numbers before names
+    if (bIsNum) return 1;
+    return a.localeCompare(b); // Alphabetical for named sections
+  });
+
+  // Create StoreAisle objects
+  const aisleLayout: StoreAisle[] = aisleKeys.map((aisleKey, index) => {
+    const products = aisleGroups.get(aisleKey) || [];
+    // Create a name from the first few products
+    const sampleProducts = products.slice(0, 3).join(', ');
+    const suffix = products.length > 3 ? '...' : '';
+
+    return {
+      id: `aisle-${storeId}-${aisleKey.replace(/\s+/g, '-').toLowerCase()}`,
+      number: aisleKey,
+      name: sampleProducts + suffix,
+      displayOrder: index,
+    };
+  });
+
+  console.log(`[PHASE 1.5] Created ${aisleLayout.length} aisles: ${aisleKeys.join(', ')}`);
+
+  // Update the HouseholdStore record
+  const aisleLayoutJson = JSON.stringify(aisleLayout);
+
+  await ddbClient.send(
+    new UpdateCommand({
+      TableName: HOUSEHOLD_STORE_TABLE,
+      Key: { id: storeId },
+      UpdateExpression: 'SET aisleLayout = :aisleLayout, updatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':aisleLayout': aisleLayoutJson,
+        ':updatedAt': new Date().toISOString(),
+      },
+    })
+  );
+
+  console.log(`[PHASE 1.5] Store aisle layout updated successfully`);
+}
+
+// =============================================================================
 // PHASE 2: Match Products to Aisles
 // =============================================================================
 
@@ -516,13 +597,10 @@ async function phase2MatchProducts(
 
     console.log(`[PHASE 2] Processing batch ${batchNum}/${totalBatches} (${batch.length} products)`);
 
-    // Update status for this batch
-    if (i % (BATCH_SIZE * 2) === 0 || i === 0) {
-      // Update every 2 batches
-      await updateJobStatus(jobId, {
-        detail: `Matching products ${i + 1}-${Math.min(i + batch.length, products.length)} of ${products.length}...`,
-      });
-    }
+    // Update status for each batch
+    await updateJobStatus(jobId, {
+      detail: `Matching products ${i + 1}-${Math.min(i + batch.length, products.length)} of ${products.length}...`,
+    });
 
     // Match batch with retry
     const batchMappings = await withRetry(
@@ -755,6 +833,9 @@ async function processJob(record: DynamoDBRecord): Promise<void> {
       });
       return;
     }
+
+    // Phase 1.5: Update store's aisle layout with extracted aisles
+    await updateStoreAisleLayout(storeId, aisleEntries);
 
     // Phase 2: Match products to aisles
     const mappings = await phase2MatchProducts(jobId, aisleEntries, anthropic);

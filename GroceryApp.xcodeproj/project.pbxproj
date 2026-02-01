@@ -12,6 +12,7 @@
 		61C577F31452E1D49F5F8E7E /* ShoppingCompletionStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */; };
 		6F86254645EFD5A78889AB51 /* ReadyToShopSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */; };
 		7117A30606C7459A532CDAD4 /* ShoppingCompletedSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C91CEFFA5AF53A106CA602 /* ShoppingCompletedSheet.swift */; };
+		8AE93CD8079C5629CE9DED63 /* SonarPingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */; };
 		AA0000000000000000000001 /* GroceryAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* GroceryAppApp.swift */; };
 		AA0000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* ContentView.swift */; };
 		AA0000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Assets.xcassets */; };
@@ -52,6 +53,7 @@
 		AA0000000000000000000060 /* UserColorBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000060 /* UserColorBadge.swift */; };
 		AA0000000000000000000061 /* ProfileColorPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000061 /* ProfileColorPickerSheet.swift */; };
 		AA0000000000000000000062 /* InboxSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000062 /* InboxSheet.swift */; };
+		AA0000000000000000000063 /* ForgotPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000063 /* ForgotPasswordView.swift */; };
 		AA0000000000000000000070 /* HouseholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000070 /* HouseholdStore.swift */; };
 		AA0000000000000000000071 /* ProductAisleMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000071 /* ProductAisleMapping.swift */; };
 		AA0000000000000000000072 /* StoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000072 /* StoreService.swift */; };
@@ -62,7 +64,11 @@
 		AA0000000000000000000077 /* AisleExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000077 /* AisleExtractionService.swift */; };
 		AA0000000000000000000078 /* ImagePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000078 /* ImagePicker.swift */; };
 		AA0000000000000000000079 /* FullScreenImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000079 /* FullScreenImageView.swift */; };
-		B411F78D2F0B6F160008B8C9 /* amplify_outputs.json in Resources */ = {isa = PBXBuildFile; fileRef = B411F78C2F0B6F160008B8C9 /* amplify_outputs.json */; };
+		AA0000000000000000000087 /* StatusSubtitleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000087 /* StatusSubtitleView.swift */; };
+		AA0000000000000000000088 /* StoresView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000088 /* StoresView.swift */; };
+		AA0000000000000000000089 /* StoreDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000089 /* StoreDetailView.swift */; };
+		B411F78D2F0B6F160008B8C9 /* amplify_outputs_dev.json in Resources */ = {isa = PBXBuildFile; fileRef = B411F78C2F0B6F160008B8C9 /* amplify_outputs_dev.json */; };
+		B411F78E2F0B6F160008B8CA /* amplify_outputs_prod.json in Resources */ = {isa = PBXBuildFile; fileRef = B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */; };
 		BCE700C7876941359C07CABF /* UserCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15546147AB154BAB9998BE81 /* UserCache.swift */; };
 		CB60F28BFD167CB0B4567A5E /* AisleScanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCFE63ECF05EDADD036FDCC /* AisleScanSheet.swift */; };
 		E8FBCD0EB31D28E134EB0960 /* StoreSwitcherSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */; };
@@ -89,10 +95,12 @@
 		15546147AB154BAB9998BE81 /* UserCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserCache.swift; sourceTree = "<group>"; };
 		1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShoppingCompletionStats.swift; sourceTree = "<group>"; };
 		40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreAisleManagementView.swift; sourceTree = "<group>"; };
+		41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SonarPingView.swift; sourceTree = "<group>"; };
 		66658FDDA7D5B20B9E9E9047 /* BatchAisleMappingSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatchAisleMappingSheet.swift; sourceTree = "<group>"; };
 		7DCFE63ECF05EDADD036FDCC /* AisleScanSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AisleScanSheet.swift; sourceTree = "<group>"; };
 		AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreSwitcherSheet.swift; sourceTree = "<group>"; };
-		B411F78C2F0B6F160008B8C9 /* amplify_outputs.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = amplify_outputs.json; sourceTree = "<group>"; };
+		B411F78C2F0B6F160008B8C9 /* amplify_outputs_dev.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = amplify_outputs_dev.json; sourceTree = "<group>"; };
+		B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = amplify_outputs_prod.json; sourceTree = "<group>"; };
 		BB0000000000000000000001 /* GroceryAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryAppApp.swift; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -128,6 +136,7 @@
 		BB0000000000000000000060 /* UserColorBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserColorBadge.swift; sourceTree = "<group>"; };
 		BB0000000000000000000061 /* ProfileColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileColorPickerSheet.swift; sourceTree = "<group>"; };
 		BB0000000000000000000062 /* InboxSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxSheet.swift; sourceTree = "<group>"; };
+		BB0000000000000000000063 /* ForgotPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPasswordView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000070 /* HouseholdStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseholdStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000071 /* ProductAisleMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductAisleMapping.swift; sourceTree = "<group>"; };
 		BB0000000000000000000072 /* StoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreService.swift; sourceTree = "<group>"; };
@@ -138,6 +147,9 @@
 		BB0000000000000000000077 /* AisleExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleExtractionService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000078 /* ImagePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePicker.swift; sourceTree = "<group>"; };
 		BB0000000000000000000079 /* FullScreenImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullScreenImageView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000087 /* StatusSubtitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusSubtitleView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000088 /* StoresView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoresView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000089 /* StoreDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreDetailView.swift; sourceTree = "<group>"; };
 		DD0000000000000000000001 /* GroceryApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GroceryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadyToShopSheet.swift; sourceTree = "<group>"; };
 		TT0000000000000000000010 /* GroceryAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GroceryAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -175,7 +187,8 @@
 		FF0000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				B411F78C2F0B6F160008B8C9 /* amplify_outputs.json */,
+				B411F78C2F0B6F160008B8C9 /* amplify_outputs_dev.json */,
+				B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */,
 				FF0000000000000000000002 /* GroceryApp */,
 				TT0000000000000000000020 /* GroceryAppTests */,
 				FF0000000000000000000003 /* Products */,
@@ -283,6 +296,8 @@
 				AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */,
 				66658FDDA7D5B20B9E9E9047 /* BatchAisleMappingSheet.swift */,
 				FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */,
+				BB0000000000000000000088 /* StoresView.swift */,
+				BB0000000000000000000089 /* StoreDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -298,10 +313,12 @@
 				BB0000000000000000000057 /* MarqueeText.swift */,
 				BB0000000000000000000032 /* SearchBar.swift */,
 				BB0000000000000000000075 /* ShoppingActiveInfoModal.swift */,
+				BB0000000000000000000087 /* StatusSubtitleView.swift */,
 				BB0000000000000000000033 /* ToastView.swift */,
 				BB0000000000000000000059 /* UserIdentityGradient.swift */,
 				BB0000000000000000000060 /* UserColorBadge.swift */,
 				02C91CEFFA5AF53A106CA602 /* ShoppingCompletedSheet.swift */,
+				41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -310,6 +327,7 @@
 			isa = PBXGroup;
 			children = (
 				BB0000000000000000000051 /* AuthGateView.swift */,
+				BB0000000000000000000063 /* ForgotPasswordView.swift */,
 				BB0000000000000000000052 /* HouseholdSetupView.swift */,
 			);
 			path = Auth;
@@ -421,7 +439,8 @@
 			files = (
 				AA0000000000000000000004 /* Preview Assets.xcassets in Resources */,
 				AA0000000000000000000003 /* Assets.xcassets in Resources */,
-				B411F78D2F0B6F160008B8C9 /* amplify_outputs.json in Resources */,
+				B411F78D2F0B6F160008B8C9 /* amplify_outputs_dev.json in Resources */,
+				B411F78E2F0B6F160008B8CA /* amplify_outputs_prod.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -459,6 +478,9 @@
 				AA0000000000000000000031 /* GroceryItemRow.swift in Sources */,
 				AA0000000000000000000058 /* ItemDetailSheet.swift in Sources */,
 				AA0000000000000000000032 /* SearchBar.swift in Sources */,
+				AA0000000000000000000087 /* StatusSubtitleView.swift in Sources */,
+				AA0000000000000000000088 /* StoresView.swift in Sources */,
+				AA0000000000000000000089 /* StoreDetailView.swift in Sources */,
 				AA0000000000000000000033 /* ToastView.swift in Sources */,
 				AA0000000000000000000057 /* MarqueeText.swift in Sources */,
 				AA0000000000000000000034 /* ShoppingListView.swift in Sources */,
@@ -466,6 +488,7 @@
 				AA0000000000000000000036 /* HouseholdView.swift in Sources */,
 				AA0000000000000000000050 /* RootView.swift in Sources */,
 				AA0000000000000000000051 /* AuthGateView.swift in Sources */,
+				AA0000000000000000000063 /* ForgotPasswordView.swift in Sources */,
 				AA0000000000000000000052 /* HouseholdSetupView.swift in Sources */,
 				AA0000000000000000000053 /* HouseholdInviteView.swift in Sources */,
 				AA0000000000000000000054 /* SubscriptionService.swift in Sources */,
@@ -490,6 +513,7 @@
 				7117A30606C7459A532CDAD4 /* ShoppingCompletedSheet.swift in Sources */,
 				1785903FD63E50BDBCE5B365 /* BatchAisleMappingSheet.swift in Sources */,
 				6F86254645EFD5A78889AB51 /* ReadyToShopSheet.swift in Sources */,
+				8AE93CD8079C5629CE9DED63 /* SonarPingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -639,7 +663,7 @@
 		220000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon-Dev";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -647,6 +671,7 @@
 				DEVELOPMENT_TEAM = NZ2D79298H;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOG (Dev)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan store aisle directories for automatic product mapping.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library to select store aisle directory images.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -659,7 +684,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.byteclub.grocery.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.byteclub.grocery.app.dev;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -678,6 +703,7 @@
 				DEVELOPMENT_TEAM = NZ2D79298H;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = NotOurGroceries;
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan store aisle directories for automatic product mapping.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library to select store aisle directory images.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

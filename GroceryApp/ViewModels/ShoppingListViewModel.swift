@@ -1312,16 +1312,28 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     func applySorting() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            switch currentSort {
-            case .recentFirst:
-                items.sort { $0.addedAt < $1.addedAt }  // Oldest first, newest at bottom
-            case .aToZ:
-                items.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            case .zToA:
-                items.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending }
+        // Compute what the sorted order would be
+        let sortedItems: [GroceryItem]
+        switch currentSort {
+        case .recentFirst:
+            sortedItems = items.sorted { $0.addedAt < $1.addedAt }
+        case .aToZ:
+            sortedItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .zToA:
+            sortedItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending }
+        }
+
+        // Check if order actually changed by comparing IDs
+        let currentIds = items.map(\.id)
+        let sortedIds = sortedItems.map(\.id)
+
+        if currentIds != sortedIds {
+            // Order changed - animate the sort
+            withAnimation(.easeInOut(duration: 0.2)) {
+                items = sortedItems
             }
         }
+        // If order is the same, do nothing (no animation needed)
     }
 
     func sortByAisle() {
@@ -1434,6 +1446,11 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     private func applyRemoteUpdate(_ remoteItem: GroceryItem) {
+        // Check for status change to show toast
+        let localItem = items.first(where: { $0.id == remoteItem.id })
+        let oldStatus = localItem?.status
+        let statusChanged = oldStatus != remoteItem.status
+
         // Update item in the items array
         if let index = items.firstIndex(where: { $0.id == remoteItem.id }) {
             items[index] = remoteItem
@@ -1441,6 +1458,23 @@ class ShoppingListViewModel: ObservableObject {
             // Item doesn't exist locally, add it
             items.append(remoteItem)
             applySorting()
+        }
+
+        // Show toast for remote status changes
+        // Note: We don't have lastModifiedBy, so we can't show who did it
+        // Only show if the item existed locally (to avoid duplicate toasts on initial load)
+        if statusChanged && localItem != nil {
+            switch remoteItem.status {
+            case .active:
+                if oldStatus == .suggestion {
+                    showToast(message: "\(remoteItem.name) added to list")
+                }
+            case .suggestion:
+                showToast(message: "\(remoteItem.name) moved to suggestions")
+            case .inCart:
+                // Handled by handleRemoteItemMovedToCart
+                break
+            }
         }
     }
 

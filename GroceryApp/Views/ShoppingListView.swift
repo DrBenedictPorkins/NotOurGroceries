@@ -358,9 +358,15 @@ struct ShoppingListView: View {
     // MARK: - Status Line (notifications / item count)
 
     private var statusLine: some View {
-        Group {
+        ZStack(alignment: .leading) {
+            // Item count - shown when no toast
+            Text(viewModel.shoppingList.isEmpty ? "No items" : "\(viewModel.shoppingList.count) items")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .opacity(viewModel.showToast ? 0 : 1)
+
+            // Notification message - shown when toast active
             if viewModel.showToast, !viewModel.toastMessage.isEmpty {
-                // Notification message with type-based coloring
                 HStack(spacing: 6) {
                     // Type icon for errors/warnings
                     if viewModel.toastType != .success {
@@ -381,22 +387,13 @@ struct ShoppingListView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .move(edge: .top).combined(with: .opacity)
-                ))
-            } else {
-                // Item count
-                Text(viewModel.shoppingList.isEmpty ? "No items" : "\(viewModel.shoppingList.count) items")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    ))
+                .transition(.opacity)
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.showToast)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.showToast)
+        .onChange(of: viewModel.showToast) { oldValue, newValue in
+            print("STATUS LINE: showToast changed from \(oldValue) to \(newValue), message: '\(viewModel.toastMessage)'")
+        }
     }
 
     /// Color for toast message based on type

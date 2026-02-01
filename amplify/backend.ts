@@ -138,12 +138,16 @@ aisleExtractionJobLambda.addEventSourceMapping('AisleExtractionJobStreamMapping'
   retryAttempts: 0, // We handle retries in the Lambda
 });
 
+// Get the HouseholdStore table for updating aisle layout
+const householdStoreTableForJob = backend.data.resources.tables['HouseholdStore'];
+
 // Add environment variables
 addEnvVars(aisleExtractionJobLambda, {
   JOB_TABLE_NAME: aisleExtractionJobTable.tableName,
   PRODUCT_TABLE_NAME: productTable.tableName,
   MAPPING_TABLE_NAME: backend.data.resources.tables['ProductAisleMapping'].tableName,
   BUCKET_NAME: aisleImagesBucket.bucketName,
+  HOUSEHOLD_STORE_TABLE_NAME: householdStoreTableForJob.tableName,
 });
 
 // Grant permissions
@@ -151,6 +155,7 @@ aisleExtractionJobTable.grantReadWriteData(aisleExtractionJobLambda);
 productTable.grantReadData(aisleExtractionJobLambda);
 backend.data.resources.tables['ProductAisleMapping'].grantReadWriteData(aisleExtractionJobLambda);
 aisleImagesBucket.grantRead(aisleExtractionJobLambda);
+householdStoreTableForJob.grantReadWriteData(aisleExtractionJobLambda);
 
 // ========================================
 // INFER PRODUCT AISLE FUNCTION

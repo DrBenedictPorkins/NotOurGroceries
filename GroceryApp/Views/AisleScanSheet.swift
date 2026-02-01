@@ -7,6 +7,7 @@ struct AisleScanSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @StateObject private var storeService = StoreService.shared
+    @ObservedObject private var extractionService = AisleExtractionService.shared
 
     let store: HouseholdStore
     var onComplete: (() -> Void)?
@@ -17,9 +18,9 @@ struct AisleScanSheet: View {
     @State private var selectedImages: [UIImage] = []
     @State private var isShowingCamera = false
 
-    // Processing state
-    @State private var isProcessing = false
-    @State private var processingStatus: String = ""
+    // Processing state - now driven by extractionService for job polling
+    private var isProcessing: Bool { extractionService.isProcessing }
+    private var processingStatus: String { extractionService.processingStatus }
 
     // Completion state
     @State private var completedJob: AisleExtractionJob?
@@ -63,6 +64,32 @@ struct AisleScanSheet: View {
             }
             .sheet(isPresented: $isShowingCamera) {
                 CameraViewMultiple(images: $selectedImages)
+            }
+            .task {
+                // Check for active job on appear
+                await checkForActiveJob()
+            }
+        }
+    }
+
+    // MARK: - Active Job Check
+
+    /// Check if there's an active extraction job for this store and resume if so
+    private func checkForActiveJob() async {
+        do {
+            if let job = try await extractionService.resumeActiveJob(for: store.id) {
+                // Job was already complete
+                await MainActor.run {
+                    completedJob = job
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+            }
+            // If job is in progress, the service will update its @Published properties
+            // and the view will show processingView automatically
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showError = true
             }
         }
     }
@@ -300,13 +327,11 @@ struct AisleScanSheet: View {
     // MARK: - Processing View
 
     private var processingView: some View {
-        let service = AisleExtractionService.shared
-
-        return VStack(spacing: 24) {
+        VStack(spacing: 20) {
             Spacer()
 
             // Phase indicator
-            if let job = service.currentJob, let phase = job.phase {
+            if let job = extractionService.currentJob, let phase = job.phase {
                 HStack(spacing: 8) {
                     ForEach(1...3, id: \.self) { p in
                         Circle()
@@ -320,21 +345,16 @@ struct AisleScanSheet: View {
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
 
-            // Animated icon
-            ZStack {
-                Circle()
-                    .fill(DesignSystem.Colors.glassBackground)
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: phaseIcon)
-                    .font(.system(size: 40, weight: .thin))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
-                    .symbolEffect(.pulse)
-            }
+            // Sonar ping animation with progress
+            SonarPingView(
+                secondsUntilNextPoll: extractionService.secondsUntilNextPoll,
+                progress: jobProgress
+            )
+            .padding(.vertical, 8)
 
             // Status text
             VStack(spacing: 8) {
-                if let job = service.currentJob {
+                if let job = extractionService.currentJob {
                     Text(job.phaseLabel ?? "Processing...")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
@@ -343,6 +363,8 @@ struct AisleScanSheet: View {
                         Text(detail)
                             .font(.system(size: 14))
                             .foregroundColor(DesignSystem.Colors.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
                     }
 
                     // Retry indicator
@@ -358,20 +380,72 @@ struct AisleScanSheet: View {
                 }
             }
 
-            // Polling countdown
-            if service.secondsUntilNextPoll > 0 {
-                Text("Checking in \(service.secondsUntilNextPoll)s...")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
-            }
-
             Spacer()
         }
     }
 
+    /// Calculate job progress (0.0 to 1.0) based on phase and detail parsing
+    private var jobProgress: Double {
+        guard let job = extractionService.currentJob else { return 0.0 }
+
+        let phase = job.phase ?? 0
+        let baseProgress: Double
+
+        switch phase {
+        case 1: baseProgress = 0.1  // OCR phase
+        case 2: baseProgress = 0.3  // Matching phase
+        case 3: baseProgress = 0.7  // Applying phase
+        default: baseProgress = 0.0
+        }
+
+        // Try to parse progress from detail text (e.g., "Matching products 51-100 of 239...")
+        if let detail = job.detail {
+            // Pattern: "X-Y of Z" or "X of Z"
+            let patterns = [
+                try? NSRegularExpression(pattern: "(\\d+)-(\\d+) of (\\d+)"),
+                try? NSRegularExpression(pattern: "(\\d+) of (\\d+)")
+            ]
+
+            for pattern in patterns.compactMap({ $0 }) {
+                if let match = pattern.firstMatch(in: detail, range: NSRange(detail.startIndex..., in: detail)) {
+                    if pattern.numberOfCaptureGroups == 3 {
+                        // X-Y of Z format
+                        if let endRange = Range(match.range(at: 2), in: detail),
+                           let totalRange = Range(match.range(at: 3), in: detail),
+                           let current = Double(detail[endRange]),
+                           let total = Double(detail[totalRange]), total > 0 {
+                            let phaseProgress = current / total
+                            // Scale within phase range
+                            if phase == 2 {
+                                return 0.3 + (phaseProgress * 0.4) // 30% to 70%
+                            } else if phase == 3 {
+                                return 0.7 + (phaseProgress * 0.25) // 70% to 95%
+                            }
+                        }
+                    } else if pattern.numberOfCaptureGroups == 2 {
+                        // X of Z format
+                        if let currentRange = Range(match.range(at: 1), in: detail),
+                           let totalRange = Range(match.range(at: 2), in: detail),
+                           let current = Double(detail[currentRange]),
+                           let total = Double(detail[totalRange]), total > 0 {
+                            let phaseProgress = current / total
+                            if phase == 2 {
+                                return 0.3 + (phaseProgress * 0.4)
+                            } else if phase == 3 {
+                                return 0.7 + (phaseProgress * 0.25)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return baseProgress
+    }
+
     // Helper for phase-specific icon
     private var phaseIcon: String {
-        guard let phase = AisleExtractionService.shared.currentJob?.phase else {
+        guard let phase = extractionService.currentJob?.phase else {
             return "doc.text.magnifyingglass"
         }
         switch phase {
@@ -394,7 +468,7 @@ struct AisleScanSheet: View {
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(.white)
 
-            if let error = AisleExtractionService.shared.currentJob?.lastError ?? errorMessage {
+            if let error = extractionService.currentJob?.lastError ?? errorMessage {
                 Text(error)
                     .font(.system(size: 14))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
@@ -497,16 +571,17 @@ struct AisleScanSheet: View {
         // Reset error state if retrying
         showError = false
         errorMessage = nil
-        isProcessing = true
-        processingStatus = "Preparing images..."
-
-        let extractionService = AisleExtractionService.shared
 
         do {
             // Convert images to data with size limits for Claude API (max 5MB per image)
+            // Note: extractionService.processingStatus will show upload progress
             var imageDataArray: [Data] = []
             for (index, image) in selectedImages.enumerated() {
-                processingStatus = "Compressing image \(index + 1) of \(selectedImages.count)..."
+                // Update service status for compression phase
+                await MainActor.run {
+                    extractionService.processingStatus = "Compressing image \(index + 1) of \(selectedImages.count)..."
+                    extractionService.isProcessing = true
+                }
                 if let data = compressImageForUpload(image, maxSizeBytes: 4_500_000) {
                     imageDataArray.append(data)
                 }
@@ -515,20 +590,19 @@ struct AisleScanSheet: View {
             // Process with job-based flow
             // Lambda handles all phases: upload -> OCR -> match -> apply mappings
             // Returns completed job with stats
+            // Service updates its @Published properties during polling
             let job = try await extractionService.processStoreAisles(
                 images: imageDataArray,
                 storeId: store.id
             )
 
             await MainActor.run {
-                isProcessing = false
                 completedJob = job
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
 
         } catch {
             await MainActor.run {
-                isProcessing = false
                 errorMessage = error.localizedDescription
                 showError = true
             }

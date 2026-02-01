@@ -21,3 +21,4 @@ DerivedData/
 # Swift Package Manager
 .swiftpm/
 *.xcworkspace/xcshareddata/swiftpm/Package.resolved
+.venv

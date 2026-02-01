@@ -32,10 +32,16 @@ class AmplifyService: ObservableObject {
             try Amplify.add(plugin: AWSCognitoAuthPlugin())
             try Amplify.add(plugin: AWSAPIPlugin(modelRegistration: AmplifyModels()))
             try Amplify.add(plugin: AWSS3StoragePlugin())
-            try Amplify.configure(with: .amplifyOutputs)
+
+            #if DEBUG
+            try Amplify.configure(with: .resource(named: "amplify_outputs_dev"))
+            print("Amplify configured for DEVELOPMENT (sandbox)")
+            #else
+            try Amplify.configure(with: .resource(named: "amplify_outputs_prod"))
+            print("Amplify configured for PRODUCTION")
+            #endif
 
             isConfigured = true
-            print("Amplify configured successfully")
 
             // Check current auth session
             await checkAuthSession()
@@ -99,6 +105,14 @@ class AmplifyService: ObservableObject {
         currentUser = nil
         currentHouseholdId = nil
         UserCache.shared.clear()
+    }
+
+    func resetPassword(for email: String) async throws {
+        _ = try await Amplify.Auth.resetPassword(for: email)
+    }
+
+    func confirmResetPassword(for email: String, with newPassword: String, confirmationCode: String) async throws {
+        try await Amplify.Auth.confirmResetPassword(for: email, with: newPassword, confirmationCode: confirmationCode)
     }
 
     // MARK: - User Profile

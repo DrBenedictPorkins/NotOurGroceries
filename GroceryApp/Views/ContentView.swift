@@ -24,6 +24,11 @@ struct ContentView: View {
                             Label("Shopping List", systemImage: "list.bullet")
                         }
 
+                    StoresView()
+                        .tabItem {
+                            Label("Stores", systemImage: "building.2.fill")
+                        }
+
                     HouseholdView()
                         .tabItem {
                             Label("Household", systemImage: "person.3.fill")

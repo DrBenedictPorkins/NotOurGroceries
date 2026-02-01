@@ -29,8 +29,13 @@ struct StoreDetailView: View {
 
     // MARK: - Computed Properties
 
+    /// Get fresh store data from viewModel (updated after extraction completes)
+    private var currentStore: HouseholdStore {
+        viewModel.householdStores.first { $0.id == store.id } ?? store
+    }
+
     private var aisleCount: Int {
-        store.aisleLayout.count
+        currentStore.aisleLayout.count
     }
 
     private var canSave: Bool {
@@ -88,9 +93,18 @@ struct StoreDetailView: View {
             }
         }
         .sheet(isPresented: $showAisleScanSheet) {
-            AisleScanSheet(store: store) {
-                // Refresh after scan complete
+            AisleScanSheet(store: currentStore) {
+                // Refresh store AND mappings after scan complete
+                // Lambda updates aisleLayout in Phase 1.5, so we need fresh store data
                 Task {
+                    if let householdId = viewModel.householdId {
+                        let stores = try? await storeService.fetchStores(householdId: householdId)
+                        await MainActor.run {
+                            if let stores = stores {
+                                viewModel.householdStores = stores
+                            }
+                        }
+                    }
                     try? await storeService.fetchMappings(storeId: store.id)
                 }
             }
@@ -193,7 +207,7 @@ struct StoreDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             sectionHeader(title: "AISLE LAYOUT", icon: "arrow.triangle.branch")
 
-            NavigationLink(destination: StoreAisleManagementView(store: store).environmentObject(viewModel)) {
+            NavigationLink(destination: StoreAisleManagementView(store: currentStore).environmentObject(viewModel)) {
                 HStack(spacing: 16) {
                     // Aisle icon
                     ZStack {

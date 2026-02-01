@@ -27,6 +27,11 @@ struct StoreAisleManagementView: View {
 
     // MARK: - Computed Properties
 
+    /// Get fresh store data from viewModel (updated after extraction completes)
+    private var currentStore: HouseholdStore {
+        viewModel.householdStores.first { $0.id == store.id } ?? store
+    }
+
     private var orderableAisles: [OrderableAisle] {
         var aisles: [OrderableAisle] = []
 
@@ -36,8 +41,8 @@ struct StoreAisleManagementView: View {
             aisles.append(OrderableAisle(id: "Unknown", displayName: "Unknown Aisle", displayOrder: 0))
         }
 
-        // Add all aisles from store.aisleLayout sorted by displayOrder
-        let storeAisles = store.aisleLayout.sorted { $0.displayOrder < $1.displayOrder }
+        // Add all aisles from currentStore.aisleLayout sorted by displayOrder
+        let storeAisles = currentStore.aisleLayout.sorted { $0.displayOrder < $1.displayOrder }
         for aisle in storeAisles {
             let displayName = aisleDisplayName(aisle)
             aisles.append(OrderableAisle(id: aisle.id, displayName: displayName, displayOrder: aisle.displayOrder))
@@ -271,9 +276,18 @@ struct StoreAisleManagementView: View {
         .navigationTitle("Aisle Management")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAisleScanSheet) {
-            AisleScanSheet(store: store) {
-                // Refresh mappings after processing complete
+            AisleScanSheet(store: currentStore) {
+                // Refresh store AND mappings after processing complete
+                // Lambda updates aisleLayout in Phase 1.5, so we need fresh store data
                 Task {
+                    if let householdId = viewModel.householdId {
+                        let stores = try? await storeService.fetchStores(householdId: householdId)
+                        await MainActor.run {
+                            if let stores = stores {
+                                viewModel.householdStores = stores
+                            }
+                        }
+                    }
                     try? await storeService.fetchMappings(storeId: store.id)
                 }
             }
@@ -281,7 +295,7 @@ struct StoreAisleManagementView: View {
         }
         .sheet(isPresented: $showEditSheet) {
             if let mapping = selectedMapping {
-                MappingEditSheet(mapping: mapping, store: store)
+                MappingEditSheet(mapping: mapping, store: currentStore)
                     .environmentObject(viewModel)
             }
         }
@@ -501,7 +515,7 @@ struct StoreAisleManagementView: View {
         if aisleId == "Unknown" {
             displayName = "Unknown Aisle"
             headerColor = DesignSystem.Colors.neonPink
-        } else if let aisle = store.aisleLayout.first(where: { $0.id == aisleId }) {
+        } else if let aisle = currentStore.aisleLayout.first(where: { $0.id == aisleId }) {
             // Use store's custom aisle name if defined
             displayName = aisleDisplayName(aisle)
             headerColor = DesignSystem.Colors.neonCyan

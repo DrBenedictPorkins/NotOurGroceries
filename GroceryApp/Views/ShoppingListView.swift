@@ -215,14 +215,17 @@ struct ShoppingListView: View {
 
                 Spacer()
 
-                // Right side: username label + At Store button
-                VStack(alignment: .trailing, spacing: 8) {
-                    // Logged-in user label
+                // Right side: username label + version + At Store button
+                VStack(alignment: .trailing, spacing: 4) {
+                    // Logged-in user label + version
                     if let userId = amplifyService.currentUser?.userId {
                         Text(UserCache.shared.displayName(for: userId))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
                     }
+                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
+                        .font(.system(size: 9, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
 
                     // At Store Button
                     Button(action: {

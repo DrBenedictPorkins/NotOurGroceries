@@ -1308,10 +1308,11 @@ class ShoppingListViewModel: ObservableObject {
     // MARK: - Sorting
     func setSort(_ option: SortOption) {
         currentSort = option
-        applySorting()
+        applySorting(animate: true)  // User action - animate the change
     }
 
-    func applySorting() {
+    /// Apply current sort order. Only animates if explicitly requested (user changed sort).
+    func applySorting(animate: Bool = false) {
         // Compute what the sorted order would be
         let sortedItems: [GroceryItem]
         switch currentSort {
@@ -1328,12 +1329,17 @@ class ShoppingListViewModel: ObservableObject {
         let sortedIds = sortedItems.map(\.id)
 
         if currentIds != sortedIds {
-            // Order changed - animate the sort
-            withAnimation(.easeInOut(duration: 0.2)) {
+            if animate {
+                // User explicitly changed sort - animate
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    items = sortedItems
+                }
+            } else {
+                // Data refresh - no animation, just update silently
                 items = sortedItems
             }
         }
-        // If order is the same, do nothing (no animation needed)
+        // If order is the same, do nothing
     }
 
     func sortByAisle() {

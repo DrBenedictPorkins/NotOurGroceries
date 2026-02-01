@@ -21,9 +21,9 @@ const BUCKET_NAME = process.env.BUCKET_NAME!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 const HOUSEHOLD_STORE_TABLE = process.env.HOUSEHOLD_STORE_TABLE_NAME!;
 
-// Constants
+// Constants - Updated 2026-02-01: Haiku 4.5 + parallel batches for speed
 const MAX_RETRIES = 3;
-const MODEL = 'claude-sonnet-4-5';
+const MODEL = 'claude-haiku-4-5-20251001';
 const STATUS_UPDATE_INTERVAL = 5; // Update status every N items
 
 // Type definitions
@@ -523,7 +523,7 @@ IMPORTANT: Map EVERY product - do not skip any. Return ONLY the JSON array.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 16384,
+    max_tokens: 4096, // Reduced for Haiku compatibility (8192 max)
     messages: [
       {
         role: 'user',
@@ -586,31 +586,40 @@ async function phase2MatchProducts(
     detail: `Matching ${products.length} products to aisles...`,
   });
 
-  // Process in batches of 50 products for reasonable LLM context
-  const BATCH_SIZE = 50;
-  const allMappings: ProductMapping[] = [];
+  // Process in batches of 120 products, run batches in PARALLEL for speed
+  // 239 products = 2 batches running concurrently instead of 5 sequential
+  const BATCH_SIZE = 120;
 
+  // Create all batches
+  const batches: { batch: typeof products; batchNum: number }[] = [];
   for (let i = 0; i < products.length; i += BATCH_SIZE) {
-    const batch = products.slice(i, i + BATCH_SIZE);
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(products.length / BATCH_SIZE);
-
-    console.log(`[PHASE 2] Processing batch ${batchNum}/${totalBatches} (${batch.length} products)`);
-
-    // Update status for each batch
-    await updateJobStatus(jobId, {
-      detail: `Matching products ${i + 1}-${Math.min(i + batch.length, products.length)} of ${products.length}...`,
+    batches.push({
+      batch: products.slice(i, i + BATCH_SIZE),
+      batchNum: Math.floor(i / BATCH_SIZE) + 1,
     });
-
-    // Match batch with retry
-    const batchMappings = await withRetry(
-      () => matchProductBatch(batch, aisleEntries, anthropic),
-      `Match batch ${batchNum}`
-    );
-
-    allMappings.push(...batchMappings);
-    console.log(`[PHASE 2] Batch ${batchNum} complete, total mappings: ${allMappings.length}`);
   }
+
+  console.log(`[PHASE 2] Processing ${batches.length} batches in PARALLEL`);
+
+  await updateJobStatus(jobId, {
+    detail: `Matching ${products.length} products in ${batches.length} parallel batches...`,
+  });
+
+  // Run all batches in parallel
+  const batchResults = await Promise.all(
+    batches.map(async ({ batch, batchNum }) => {
+      console.log(`[PHASE 2] Starting batch ${batchNum}/${batches.length} (${batch.length} products)`);
+      const mappings = await withRetry(
+        () => matchProductBatch(batch, aisleEntries, anthropic),
+        `Match batch ${batchNum}`
+      );
+      console.log(`[PHASE 2] Batch ${batchNum} complete: ${mappings.length} mappings`);
+      return mappings;
+    })
+  );
+
+  // Flatten results
+  const allMappings: ProductMapping[] = batchResults.flat();
 
   console.log(`[PHASE 2] Complete. Total mappings: ${allMappings.length}`);
 

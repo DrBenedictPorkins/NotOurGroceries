@@ -423,15 +423,15 @@ async function updateStoreAisleLayout(
   console.log(`[PHASE 1.5] Created ${aisleLayout.length} aisles: ${aisleKeys.join(', ')}`);
 
   // Update the HouseholdStore record
-  // AWSJSON field requires a serialized JSON string, not a native array
-  const aisleLayoutJson = JSON.stringify(aisleLayout);
+  // Store as native DynamoDB List (L type), NOT a JSON string (S type).
+  // AppSync AWSJSON double-encodes S-type values, breaking client parsing.
   await ddbClient.send(
     new UpdateCommand({
       TableName: HOUSEHOLD_STORE_TABLE,
       Key: { id: storeId },
       UpdateExpression: 'SET aisleLayout = :aisleLayout, updatedAt = :updatedAt',
       ExpressionAttributeValues: {
-        ':aisleLayout': aisleLayoutJson,
+        ':aisleLayout': aisleLayout,
         ':updatedAt': new Date().toISOString(),
       },
     })

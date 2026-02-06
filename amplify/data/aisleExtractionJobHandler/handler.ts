@@ -21,10 +21,11 @@ const BUCKET_NAME = process.env.BUCKET_NAME!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 const HOUSEHOLD_STORE_TABLE = process.env.HOUSEHOLD_STORE_TABLE_NAME!;
 
-// Constants - Updated 2026-02-01: Haiku 4.5 + parallel batches for speed
+// Constants - Updated 2026-02-01: Haiku 3.5 + parallel batches for speed
 const MAX_RETRIES = 3;
-const MODEL = 'claude-haiku-4-5-20251001';
+const MODEL = 'claude-3-5-haiku-20241022';
 const STATUS_UPDATE_INTERVAL = 5; // Update status every N items
+const BATCH_SIZE = 40; // Keep small to avoid Haiku 8192 max_tokens truncation
 
 // Type definitions
 interface AisleEntry {
@@ -188,29 +189,18 @@ async function extractFromImage(
 ): Promise<AisleEntry[]> {
   console.log('[PHASE 1] Calling Claude for OCR extraction...');
 
-  const prompt = `You are reading a grocery store aisle directory sign/board.
+  const prompt = `Extract ALL product-to-aisle mappings from this grocery store aisle directory image.
 
-Extract ALL product-to-aisle mappings you can see in this image.
-
-Return a JSON array with this structure:
-[
-  { "productName": "Canned Tomatoes", "aisle": "4" },
-  { "productName": "Pasta", "aisle": "4" },
-  { "productName": "Milk", "aisle": "Dairy" },
-  ...
-]
+Return a JSON array ONLY - no markdown, no code fences, no explanation:
+[{"productName":"Canned Tomatoes","aisle":"4"},{"productName":"Pasta","aisle":"4"}]
 
 Rules:
-- Extract EVERY item you can read from the directory
-- Use the exact product names as written on the sign
-- For aisle values: use ONLY the number or section name, NOT the word "Aisle"
-  - If sign says "Aisle 4" -> use "4"
-  - If sign says "Aisle 12" -> use "12"
-  - If sign says "Dairy" or "Produce" -> use that section name
-- If an aisle has multiple products, list each separately
-- Include section names like "Dairy", "Produce", "Frozen" if used instead of numbers
+- Extract EVERY item visible
+- Use exact product names from the sign
+- For aisle: use ONLY the number (e.g., "4" not "Aisle 4") or section name (e.g., "Dairy")
+- List each product separately
 
-Return ONLY the JSON array, no other text.`;
+IMPORTANT: Return ONLY valid JSON array. No \`\`\` or other text.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
@@ -242,14 +232,33 @@ Return ONLY the JSON array, no other text.`;
   }
 
   console.log(`[PHASE 1] Claude response length: ${textContent.text.length} chars`);
+  console.log(`[PHASE 1] Raw response: ${textContent.text.substring(0, 300)}...`);
 
-  const jsonMatch = textContent.text.match(/\[[\s\S]*\]/);
+  // Extract JSON from response, handling markdown code fences
+  let jsonText = textContent.text;
+
+  // Remove markdown code fences if present
+  const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    console.log('[PHASE 1] Extracted from code block');
+    jsonText = codeBlockMatch[1];
+  }
+
+  const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
     console.error('[PHASE 1] No JSON found in response:', textContent.text.substring(0, 500));
     throw new Error('No valid JSON array found in Claude response');
   }
 
-  const rawEntries: AisleEntry[] = JSON.parse(jsonMatch[0]);
+  // Try to parse, with detailed error logging
+  let rawEntries: AisleEntry[];
+  try {
+    rawEntries = JSON.parse(jsonMatch[0]);
+  } catch (parseError: any) {
+    console.error(`[PHASE 1] JSON parse failed: ${parseError.message}`);
+    console.error(`[PHASE 1] JSON content (last 200 chars): ...${jsonMatch[0].slice(-200)}`);
+    throw parseError;
+  }
   console.log(`[PHASE 1] Extracted ${rawEntries.length} aisle entries from image`);
 
   // Post-processing: Clean up aisle values to remove redundant "Aisle" prefix
@@ -414,21 +423,20 @@ async function updateStoreAisleLayout(
   console.log(`[PHASE 1.5] Created ${aisleLayout.length} aisles: ${aisleKeys.join(', ')}`);
 
   // Update the HouseholdStore record
-  const aisleLayoutJson = JSON.stringify(aisleLayout);
-
+  // Pass the array directly - DynamoDB Document Client handles conversion to List type
   await ddbClient.send(
     new UpdateCommand({
       TableName: HOUSEHOLD_STORE_TABLE,
       Key: { id: storeId },
       UpdateExpression: 'SET aisleLayout = :aisleLayout, updatedAt = :updatedAt',
       ExpressionAttributeValues: {
-        ':aisleLayout': aisleLayoutJson,
+        ':aisleLayout': aisleLayout,
         ':updatedAt': new Date().toISOString(),
       },
     })
   );
 
-  console.log(`[PHASE 1.5] Store aisle layout updated successfully`);
+  console.log(`[PHASE 1.5] Store aisle layout updated with ${aisleLayout.length} aisles`);
 }
 
 // =============================================================================
@@ -510,20 +518,13 @@ Return a JSON array:
   ...
 ]
 
-Confidence guidelines:
-- 1.0 = Exact match (product name matches directory entry exactly)
-- 0.8-0.99 = Strong match (clear category/type match)
-- 0.5-0.79 = Likely match (same general category)
-- 0.3-0.49 = Weak guess (might be in this aisle)
-- <0.3 = Very uncertain
-
-If no reasonable match exists, use aisleId "Unknown" with low confidence.
-
-IMPORTANT: Map EVERY product - do not skip any. Return ONLY the JSON array.`;
+Confidence: 1.0=exact, 0.8-0.99=strong, 0.5-0.79=likely, 0.3-0.49=weak, <0.3=uncertain.
+If no match, use aisleId "Unknown" with low confidence.
+Keep reasoning SHORT (under 10 words). Map EVERY product. Return ONLY the JSON array.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 4096, // Reduced for Haiku compatibility (8192 max)
+    max_tokens: 8192, // Increased to avoid truncation
     messages: [
       {
         role: 'user',
@@ -532,12 +533,27 @@ IMPORTANT: Map EVERY product - do not skip any. Return ONLY the JSON array.`;
     ],
   });
 
+  // Detect truncation from max_tokens limit
+  if (response.stop_reason === 'max_tokens') {
+    console.error(`[PHASE 2] Response truncated by max_tokens (${products.length} products too many for batch)`);
+    throw new Error(`Response truncated: batch of ${products.length} products exceeds token limit`);
+  }
+
   const textContent = response.content.find((block) => block.type === 'text');
   if (!textContent || textContent.type !== 'text') {
     throw new Error('No text response from Claude');
   }
 
-  const jsonMatch = textContent.text.match(/\[[\s\S]*\]/);
+  // Extract JSON from response, handling markdown code fences
+  let jsonText = textContent.text;
+
+  // Remove markdown code fences if present
+  const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonText = codeBlockMatch[1];
+  }
+
+  const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
     console.error('[PHASE 2] No JSON found in response:', textContent.text.substring(0, 500));
     throw new Error('No valid JSON array found in Claude response');
@@ -586,9 +602,7 @@ async function phase2MatchProducts(
     detail: `Matching ${products.length} products to aisles...`,
   });
 
-  // Process in batches of 120 products, run batches in PARALLEL for speed
-  // 239 products = 2 batches running concurrently instead of 5 sequential
-  const BATCH_SIZE = 120;
+  // Use module-level BATCH_SIZE constant
 
   // Create all batches
   const batches: { batch: typeof products; batchNum: number }[] = [];

@@ -18,8 +18,6 @@ class StoreService: ObservableObject {
     /// Create a new store for a household
     func createStore(name: String, chain: String?, householdId: String) async throws -> HouseholdStore {
         let storeId = UUID().uuidString
-        // JSON fields in AppSync require a serialized JSON string
-        let emptyAisleLayoutJSON = "[]"
 
         let document = """
         mutation CreateHouseholdStore($input: CreateHouseholdStoreInput!) {
@@ -34,6 +32,8 @@ class StoreService: ObservableObject {
         }
         """
 
+        // AWSJSON fields must be sent as native JSON values (arrays/objects),
+        // NOT as JSON strings. DynamoDB S-type strings get double-encoded by AppSync.
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: [
@@ -42,7 +42,7 @@ class StoreService: ObservableObject {
                     "householdId": householdId,
                     "name": name,
                     "chain": chain ?? "",
-                    "aisleLayout": emptyAisleLayoutJSON
+                    "aisleLayout": [] as [Any]
                 ]
             ],
             responseType: JSONValue.self
@@ -65,8 +65,6 @@ class StoreService: ObservableObject {
 
     /// Update an existing store
     func updateStore(_ store: HouseholdStore) async throws {
-        let aisleLayoutJSON = try encodeAisleLayout(store.aisleLayout)
-
         let document = """
         mutation UpdateHouseholdStore($input: UpdateHouseholdStoreInput!) {
             updateHouseholdStore(input: $input) {
@@ -80,10 +78,21 @@ class StoreService: ObservableObject {
         }
         """
 
+        // AWSJSON fields must be sent as native JSON values (arrays/objects),
+        // NOT as JSON strings. DynamoDB S-type strings get double-encoded by AppSync.
+        let aisleLayoutNative = store.aisleLayout.map { aisle -> [String: Any] in
+            return [
+                "id": aisle.id,
+                "number": aisle.number,
+                "name": aisle.name,
+                "displayOrder": aisle.displayOrder
+            ]
+        }
+
         var input: [String: Any] = [
             "id": store.id,
             "name": store.name,
-            "aisleLayout": aisleLayoutJSON
+            "aisleLayout": aisleLayoutNative
         ]
 
         // Add optional fields
@@ -607,9 +616,16 @@ class StoreService: ObservableObject {
         var aisleLayout: [StoreAisle] = []
         if case .string(let aisleLayoutString) = obj["aisleLayout"],
            let data = aisleLayoutString.data(using: .utf8) {
-            aisleLayout = (try? JSONDecoder().decode([StoreAisle].self, from: data)) ?? []
+            // Try direct decode (DynamoDB L-type → AppSync single-encoded string)
+            if let decoded = try? JSONDecoder().decode([StoreAisle].self, from: data) {
+                aisleLayout = decoded
+            } else if let innerString = try? JSONDecoder().decode(String.self, from: data),
+                      let innerData = innerString.data(using: .utf8),
+                      let decoded = try? JSONDecoder().decode([StoreAisle].self, from: innerData) {
+                // Handle double-encoded legacy data (DynamoDB S-type → AppSync double-encoded)
+                aisleLayout = decoded
+            }
         } else if case .array(let aisleArray) = obj["aisleLayout"] {
-            // Handle if it comes back as a JSON array
             aisleLayout = aisleArray.compactMap { parseStoreAisle($0) }
         }
 
@@ -717,14 +733,6 @@ class StoreService: ObservableObject {
         )
     }
 
-    private func encodeAisleLayout(_ aisles: [StoreAisle]) throws -> String {
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(aisles)
-        guard let jsonString = String(data: data, encoding: .utf8) else {
-            throw StoreServiceError.encodingFailed("Failed to encode aisle layout")
-        }
-        return jsonString
-    }
 }
 
 // MARK: - Errors
@@ -733,14 +741,12 @@ enum StoreServiceError: LocalizedError {
     case parseFailed(String)
     case invalidMapping(String)
     case mappingNotFound(String)
-    case encodingFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .parseFailed(let message),
              .invalidMapping(let message),
-             .mappingNotFound(let message),
-             .encodingFailed(let message):
+             .mappingNotFound(let message):
             return message
         }
     }

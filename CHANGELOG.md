@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0] - 2026-02-01
 
+Build 7
+
+- Header cleanup: Username and version now on single line ("Mike • v1.0 (7)")
+- Simplified sort bar: Combined A-Z/Z-A into single toggle button
+- Removed non-functional scroll-to-top zone (^^^ chevrons)
+
+## [1.0] - 2026-02-01
+
+Build 6
+
+- Added version/build number display to Stores view header
+- Added foreground refresh to StoresView and StoreDetailView (data refreshes when app returns from background)
+
+## [1.0] - 2026-02-01
+
 Build 5
 
 ## [1.0] - 2026-02-01

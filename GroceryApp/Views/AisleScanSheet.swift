@@ -372,31 +372,50 @@ struct AisleScanSheet: View {
 
     // MARK: - Processing View
 
+    /// Color for current phase - changes to show visual progress
+    private var phaseColor: Color {
+        guard let phase = extractionService.currentJob?.phase else {
+            return DesignSystem.Colors.neonCyan
+        }
+        switch phase {
+        case 1: return DesignSystem.Colors.neonCyan    // OCR - Cyan
+        case 2: return DesignSystem.Colors.neonPurple  // Matching - Purple
+        case 3: return DesignSystem.Colors.success     // Applying - Green
+        default: return DesignSystem.Colors.neonCyan
+        }
+    }
+
     private var processingView: some View {
         VStack(spacing: 20) {
             Spacer()
 
-            // Phase indicator
+            // Phase indicator with color per phase
             if let job = extractionService.currentJob, let phase = job.phase {
                 HStack(spacing: 8) {
                     ForEach(1...3, id: \.self) { p in
                         Circle()
-                            .fill(p <= phase ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.glassBackground)
+                            .fill(p <= phase ? colorForPhase(p) : DesignSystem.Colors.glassBackground)
                             .frame(width: 12, height: 12)
+                            .animation(.easeInOut(duration: 0.3), value: phase)
                     }
                 }
 
                 Text("Phase \(phase) of 3")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .foregroundColor(phaseColor.opacity(0.8))
+                    .animation(.easeInOut(duration: 0.3), value: phase)
             }
 
-            // Sonar ping animation with progress
+            // Sonar ping animation with progress, phase color, and discovered items
             SonarPingView(
                 secondsUntilNextPoll: extractionService.secondsUntilNextPoll,
-                progress: jobProgress
+                progress: jobProgress,
+                accentColor: phaseColor,
+                phase: extractionService.currentJob?.phase ?? 1,
+                itemsFound: extractionService.currentJob?.entriesExtracted ?? 0
             )
             .padding(.vertical, 8)
+            .animation(.easeInOut(duration: 0.5), value: extractionService.currentJob?.phase)
 
             // Status text
             VStack(spacing: 8) {
@@ -499,6 +518,16 @@ struct AisleScanSheet: View {
         case 2: return "arrow.triangle.branch" // Matching
         case 3: return "square.and.arrow.down" // Applying
         default: return "doc.text.magnifyingglass"
+        }
+    }
+
+    /// Returns color for a specific phase number (for dot indicators)
+    private func colorForPhase(_ phase: Int) -> Color {
+        switch phase {
+        case 1: return DesignSystem.Colors.neonCyan
+        case 2: return DesignSystem.Colors.neonPurple
+        case 3: return DesignSystem.Colors.success
+        default: return DesignSystem.Colors.neonCyan
         }
     }
 

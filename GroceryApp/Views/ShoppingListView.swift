@@ -27,24 +27,28 @@ struct ShoppingListView: View {
                 // Custom Header
                 headerView
 
-                // Search Bar
-                SearchBar(
-                    text: $searchText,
-                    isFocused: $searchFieldFocused,
-                    onSubmit: addItemFromSearch,
-                    onProductSelected: addProductFromSearch
-                )
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-
-                // Sort Options
-                sortOptionsBar
+                // Sort Options - only show when list has items
+                if !viewModel.shoppingList.isEmpty {
+                    sortOptionsBar
+                }
 
                 // List content
                 ScrollViewReader { proxy in
                     List {
-                        // Top anchor for scroll-to-top
+                        // Search bar
+                        Section {
+                            SearchBar(
+                                text: $searchText,
+                                isFocused: $searchFieldFocused,
+                                onSubmit: addItemFromSearch,
+                                onProductSelected: addProductFromSearch
+                            )
+                        }
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+
+                        // Top anchor
                         Color.clear
                             .frame(height: 1)
                             .id("listTop")
@@ -215,17 +219,22 @@ struct ShoppingListView: View {
 
                 Spacer()
 
-                // Right side: username label + version + At Store button
+                // Right side: username/version + At Store button
                 VStack(alignment: .trailing, spacing: 4) {
-                    // Logged-in user label + version
-                    if let userId = amplifyService.currentUser?.userId {
-                        Text(UserCache.shared.displayName(for: userId))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                    // Logged-in user label + version on single line
+                    HStack(spacing: 4) {
+                        if let userId = amplifyService.currentUser?.userId {
+                            Text(UserCache.shared.displayName(for: userId))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+                            Text("•")
+                                .font(.system(size: 9, weight: .regular))
+                                .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
+                        }
+                        Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
+                            .font(.system(size: 9, weight: .regular))
+                            .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
                     }
-                    Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
-                        .font(.system(size: 9, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
 
                     // At Store Button
                     Button(action: {
@@ -422,75 +431,81 @@ struct ShoppingListView: View {
 
     private var sortOptionsBar: some View {
         HStack(spacing: 8) {
-            ForEach(SortOption.allCases, id: \.self) { option in
-                Button(action: {
-                    viewModel.setSort(option)
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: option.icon)
-                            .font(.system(size: 11, weight: .semibold))
-                        Text(option.rawValue)
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(viewModel.currentSort == option ? .white : DesignSystem.Colors.textSecondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(viewModel.currentSort == option
-                                  ? DesignSystem.Colors.neonCyan.opacity(0.3)
-                                  : Color.white.opacity(0.05))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(viewModel.currentSort == option
-                                    ? DesignSystem.Colors.neonCyan.opacity(0.5)
-                                    : Color.clear, lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
+            // Recent button
+            sortButton(for: .recentFirst)
 
-            // Double-tap to scroll to top zone
-            scrollToTopZone
+            // Combined A-Z / Z-A toggle button
+            Button(action: {
+                // Toggle between A-Z and Z-A, or activate A-Z if currently on Recent
+                if viewModel.currentSort == .aToZ {
+                    viewModel.setSort(.zToA)
+                } else {
+                    viewModel.setSort(.aToZ)
+                }
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: viewModel.currentSort == .zToA ? "arrow.up" : "arrow.down")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text(viewModel.currentSort == .zToA ? "Z-A" : "A-Z")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(isAlphabeticalSort ? .white : DesignSystem.Colors.textSecondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(isAlphabeticalSort
+                              ? DesignSystem.Colors.neonCyan.opacity(0.3)
+                              : Color.white.opacity(0.05))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(isAlphabeticalSort
+                                ? DesignSystem.Colors.neonCyan.opacity(0.5)
+                                : Color.clear, lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
     }
 
-    // MARK: - Scroll to Top Zone
+    private var isAlphabeticalSort: Bool {
+        viewModel.currentSort == .aToZ || viewModel.currentSort == .zToA
+    }
 
-    private var scrollToTopZone: some View {
-        RoundedRectangle(cornerRadius: 14)
-            .fill(Color.white.opacity(0.03))
-            .overlay(
-                // Subtle chevron pattern
-                HStack(spacing: 3) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 8, weight: .medium))
-                            .foregroundColor(Color.white.opacity(0.15))
-                    }
-                }
+    private func sortButton(for option: SortOption) -> some View {
+        Button(action: {
+            viewModel.setSort(option)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: option.icon)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(option.rawValue)
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(viewModel.currentSort == option ? .white : DesignSystem.Colors.textSecondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(viewModel.currentSort == option
+                          ? DesignSystem.Colors.neonCyan.opacity(0.3)
+                          : Color.white.opacity(0.05))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(viewModel.currentSort == option
+                            ? DesignSystem.Colors.neonCyan.opacity(0.5)
+                            : Color.clear, lineWidth: 1)
             )
-            .frame(maxWidth: .infinity)
-            .frame(height: 28)
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                scrollToTop()
-            }
-    }
-
-    private func scrollToTop() {
-        withAnimation(.easeOut(duration: 0.3)) {
-            scrollProxy?.scrollTo("listTop", anchor: .top)
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        .buttonStyle(.plain)
     }
 
     // MARK: - Section Header

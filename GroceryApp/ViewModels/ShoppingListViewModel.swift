@@ -1684,10 +1684,11 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     /// Create a new store and add it to the household
-    func createStore(name: String, chain: String?, aisles: [StoreAisle]) async {
+    @discardableResult
+    func createStore(name: String, chain: String?, aisles: [StoreAisle]) async -> HouseholdStore? {
         guard let householdId = householdId else {
             showToast(message: "No household selected", type: .error)
-            return
+            return nil
         }
 
         do {
@@ -1703,9 +1704,11 @@ class ShoppingListViewModel: ObservableObject {
             householdStores.append(store)
             showToast(message: "Created \(name)")
             logger.info("Created store: \(name) with \(aisles.count) aisles")
+            return store
         } catch {
             showToast(message: "Failed to create store", type: .error)
             logger.error("Failed to create store: \(error)")
+            return nil
         }
     }
 

@@ -6,6 +6,9 @@ struct CreateStoreSheet: View {
     @State private var storeName = ""
     @State private var chainName = ""
     @State private var aisles: [EditableAisle] = []
+    @State private var showAisleScanSheet = false
+    @State private var createdStore: HouseholdStore?
+    @State private var isSaving = false
     @FocusState private var focusedField: Field?
 
     enum Field: Hashable {
@@ -55,6 +58,14 @@ struct CreateStoreSheet: View {
                     }
                     .foregroundColor(canSave ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textTertiary)
                     .disabled(!canSave)
+                }
+            }
+            .sheet(isPresented: $showAisleScanSheet) {
+                if let store = createdStore {
+                    AisleScanSheet(store: store) {
+                        // Scan complete - dismiss both sheets
+                        dismiss()
+                    }
                 }
             }
         }
@@ -156,7 +167,47 @@ struct CreateStoreSheet: View {
                     }
                 }
             }
+
+            // Scan Aisle Sign button
+            scanAisleButton
         }
+    }
+
+    // MARK: - Scan Aisle Button
+
+    private var scanAisleButton: some View {
+        Button(action: scanAisleSign) {
+            HStack(spacing: 12) {
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 20, weight: .medium))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Scan Aisle Sign")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Take a photo of the store directory")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+            .foregroundColor(DesignSystem.Colors.neonCyan)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    .fill(DesignSystem.Colors.neonCyan.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                            .stroke(DesignSystem.Colors.neonCyan.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .disabled(!canSave || isSaving)
+        .opacity(canSave ? 1.0 : 0.5)
     }
 
     // MARK: - Aisle Row
@@ -305,6 +356,46 @@ struct CreateStoreSheet: View {
         }
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    private func scanAisleSign() {
+        guard canSave else { return }
+
+        isSaving = true
+        let trimmedStoreName = storeName.trimmingCharacters(in: .whitespaces)
+        let trimmedChain = chainName.trimmingCharacters(in: .whitespaces)
+
+        // Convert any manually added aisles
+        let storeAisles = aisles.enumerated().compactMap { index, editableAisle -> StoreAisle? in
+            let trimmedNumber = editableAisle.number.trimmingCharacters(in: .whitespaces)
+            let trimmedName = editableAisle.name.trimmingCharacters(in: .whitespaces)
+            guard !trimmedNumber.isEmpty && !trimmedName.isEmpty else { return nil }
+            return StoreAisle(
+                id: UUID().uuidString,
+                number: trimmedNumber,
+                name: trimmedName,
+                displayOrder: index + 1
+            )
+        }
+
+        Task {
+            // Create the store first
+            let newStore = await viewModel.createStore(
+                name: trimmedStoreName,
+                chain: trimmedChain.isEmpty ? nil : trimmedChain,
+                aisles: storeAisles
+            )
+
+            await MainActor.run {
+                isSaving = false
+                if let store = newStore {
+                    createdStore = store
+                    showAisleScanSheet = true
+                }
+            }
+        }
+
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 }
 

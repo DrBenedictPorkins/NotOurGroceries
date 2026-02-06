@@ -3,6 +3,7 @@ import SwiftUI
 /// Detail view for managing an individual grocery store
 struct StoreDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @StateObject private var storeService = StoreService.shared
     @ObservedObject private var extractionService = AisleExtractionService.shared
@@ -12,7 +13,6 @@ struct StoreDetailView: View {
     // MARK: - State
 
     @State private var storeName: String
-    @State private var chainName: String
     @State private var isSaving = false
     @State private var showAisleScanSheet = false
     @State private var showDeleteConfirmation = false
@@ -24,7 +24,6 @@ struct StoreDetailView: View {
     init(store: HouseholdStore) {
         self.store = store
         _storeName = State(initialValue: store.name)
-        _chainName = State(initialValue: store.chain ?? "")
     }
 
     // MARK: - Computed Properties
@@ -123,8 +122,10 @@ struct StoreDetailView: View {
         .onChange(of: storeName) { _, _ in
             checkForChanges()
         }
-        .onChange(of: chainName) { _, _ in
-            checkForChanges()
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                refreshStoreData()
+            }
         }
         .onDisappear {
             // Auto-save on dismiss if there are changes
@@ -142,52 +143,24 @@ struct StoreDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             sectionHeader(title: "STORE INFORMATION", icon: "storefront")
 
-            VStack(spacing: 12) {
-                // Store Name Field
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Store Name")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
+            // Store Name Field
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Store Name")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
 
-                    TextField("Enter store name", text: $storeName)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(DesignSystem.Colors.glassBackground)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                                )
-                        )
-                }
-
-                // Chain Name Field (Optional)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Text("Chain Name")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                        Text("(optional)")
-                            .font(.system(size: 11, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textTertiary)
-                    }
-
-                    TextField("e.g., Stop & Shop, Trader Joe's", text: $chainName)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(DesignSystem.Colors.glassBackground)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                                )
-                        )
-                }
+                TextField("Enter store name", text: $storeName)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(DesignSystem.Colors.glassBackground)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
+                            )
+                    )
             }
             .padding(16)
             .background(
@@ -399,10 +372,20 @@ struct StoreDetailView: View {
 
     // MARK: - Actions
 
+    private func refreshStoreData() {
+        guard let householdId = viewModel.householdId else { return }
+        Task {
+            let stores = try? await storeService.fetchStores(householdId: householdId)
+            await MainActor.run {
+                if let stores = stores {
+                    viewModel.householdStores = stores
+                }
+            }
+        }
+    }
+
     private func checkForChanges() {
-        let nameChanged = storeName != store.name
-        let chainChanged = (chainName.isEmpty ? nil : chainName) != store.chain
-        hasChanges = nameChanged || chainChanged
+        hasChanges = storeName != store.name
     }
 
     private func saveChanges() async {
@@ -412,13 +395,12 @@ struct StoreDetailView: View {
         defer { isSaving = false }
 
         let trimmedName = storeName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedChain = chainName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let updatedStore = HouseholdStore(
             id: store.id,
             householdId: store.householdId,
             name: trimmedName,
-            chain: trimmedChain.isEmpty ? nil : trimmedChain,
+            chain: store.chain,
             address: store.address,
             aisleLayout: store.aisleLayout
         )

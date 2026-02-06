@@ -2,6 +2,8 @@ import SwiftUI
 
 struct StoresView: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
+    @StateObject private var storeService = StoreService.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showCreateStore = false
 
     var body: some View {
@@ -37,20 +39,49 @@ struct StoresView: View {
                 CreateStoreSheet()
                     .environmentObject(viewModel)
             }
+            .onAppear {
+                refreshStores()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active {
+                    refreshStores()
+                }
+            }
+        }
+    }
+
+    private func refreshStores() {
+        guard let householdId = viewModel.householdId else { return }
+        Task {
+            let stores = try? await storeService.fetchStores(householdId: householdId)
+            await MainActor.run {
+                if let stores = stores {
+                    viewModel.householdStores = stores
+                }
+            }
         }
     }
 
     // MARK: - Header
 
     private var headerView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Stores")
-                .font(.system(size: 32, weight: .bold))
-                .foregroundStyle(DesignSystem.Colors.accentGradient)
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Stores")
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundStyle(DesignSystem.Colors.accentGradient)
 
-            Text("Manage your grocery stores")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                Text("Manage your grocery stores")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+
+            Spacer()
+
+            // Version/Build number
+            Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
+                .font(.system(size: 9, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 60)

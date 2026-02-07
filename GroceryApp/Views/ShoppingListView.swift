@@ -70,7 +70,12 @@ struct ShoppingListView: View {
                                         .listRowBackground(Color.clear)
                                         .listRowSeparator(.hidden)
                                         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                        .transition(.asymmetric(
+                                            insertion: .move(edge: .top).combined(with: .opacity),
+                                            removal: .opacity.combined(with: .scale(scale: 0.95))
+                                        ))
                                 }
+                                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.shoppingList.map(\.id))
                             }
                         }
                         .listSectionSeparator(.hidden)
@@ -113,7 +118,9 @@ struct ShoppingListView: View {
                                                 .listRowBackground(Color.clear)
                                                 .listRowSeparator(.hidden)
                                                 .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
                                         }
+                                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.inCart.map(\.id))
                                     }
                                 }
                             }
@@ -153,7 +160,12 @@ struct ShoppingListView: View {
                                             .listRowBackground(suggestionsSectionBackground)
                                             .listRowSeparator(.hidden)
                                             .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                            .transition(.asymmetric(
+                                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                                removal: .opacity.combined(with: .scale(scale: 0.95))
+                                            ))
                                     }
+                                    .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.suggestions.map(\.id))
                                 }
                             }
                             .listSectionSeparator(.hidden)

@@ -474,7 +474,9 @@ class ShoppingListViewModel: ObservableObject {
             updatedItem.status = .inCart
             updatedItem.version += 1
 
-            items[index] = updatedItem
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                items[index] = updatedItem
+            }
 
             // Debug logging
             logger.info("Added \(item.name) to cart")
@@ -546,8 +548,10 @@ class ShoppingListViewModel: ObservableObject {
             updatedItem.status = .suggestion
             updatedItem.version += 1
 
-            items[index] = updatedItem
-            applySorting()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                items[index] = updatedItem
+                applySorting()
+            }
 
             logger.info("Moved \(item.name) to suggestions")
         }
@@ -628,8 +632,10 @@ class ShoppingListViewModel: ObservableObject {
                 restoredItem.addedAt = now
             }
 
-            items[index] = restoredItem
-            applySorting()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                items[index] = restoredItem
+                applySorting()
+            }
         }
 
         // Haptic feedback
@@ -704,7 +710,9 @@ class ShoppingListViewModel: ObservableObject {
         }
 
         // Optimistic update
-        items.removeAll { $0.id == item.id }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            items.removeAll { $0.id == item.id }
+        }
 
         // Success haptic feedback
         await MainActor.run {
@@ -1458,12 +1466,14 @@ class ShoppingListViewModel: ObservableObject {
         let statusChanged = oldStatus != remoteItem.status
 
         // Update item in the items array
-        if let index = items.firstIndex(where: { $0.id == remoteItem.id }) {
-            items[index] = remoteItem
-        } else {
-            // Item doesn't exist locally, add it
-            items.append(remoteItem)
-            applySorting()
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            if let index = items.firstIndex(where: { $0.id == remoteItem.id }) {
+                items[index] = remoteItem
+            } else {
+                // Item doesn't exist locally, add it
+                items.append(remoteItem)
+                applySorting()
+            }
         }
 
         // Show toast for remote status changes

@@ -128,6 +128,7 @@ IMPORTANT:
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 16384,  // Increased for large directories
+    temperature: 0,
     messages: [
       {
         role: 'user',

@@ -205,6 +205,7 @@ IMPORTANT: Return ONLY valid JSON array. No \`\`\` or other text.`;
   const response = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 8192,
+    temperature: 0,
     messages: [
       {
         role: 'user',
@@ -525,7 +526,8 @@ Keep reasoning SHORT (under 10 words). Map EVERY product. Return ONLY the JSON a
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 8192, // Increased to avoid truncation
+    max_tokens: 8192, // Haiku 3.5 max output cap
+    temperature: 0,
     messages: [
       {
         role: 'user',

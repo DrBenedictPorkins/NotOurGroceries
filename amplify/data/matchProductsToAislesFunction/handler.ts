@@ -137,6 +137,7 @@ IMPORTANT: Map EVERY product - do not skip any. Return ONLY the JSON array.`;
     const response = await anthropic.messages.create({
       model: 'claude-3-5-haiku-20241022',  // Haiku is faster for text matching
       max_tokens: 16384,
+      temperature: 0,
       messages: [
         {
           role: 'user',

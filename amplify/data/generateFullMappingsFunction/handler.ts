@@ -241,7 +241,8 @@ Return ONLY valid JSON array, no other text:
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
+      max_tokens: 8192,
+      temperature: 0,
       messages: [
         {
           role: 'user',

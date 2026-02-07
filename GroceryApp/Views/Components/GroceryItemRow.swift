@@ -11,8 +11,6 @@ struct GroceryItemRow: View {
 
     // Transition animation states
     @State private var isTransitioning = false
-    @State private var transitionScale: CGFloat = 1.0
-    @State private var transitionOpacity: Double = 1.0
     @State private var showTransitionGlow = false
     @State private var transitionDirection: TransitionDirection = .none
     @State private var isPulsing = false
@@ -176,8 +174,6 @@ struct GroceryItemRow: View {
                 }
             }
             .offset(x: shakeOffset)
-            .scaleEffect(transitionScale)
-            .opacity(transitionOpacity)
             .overlay(transitionOverlay)
             .onTapGesture {
                 // Block any action if locked by another user
@@ -680,31 +676,16 @@ struct GroceryItemRow: View {
         isTransitioning = true
         transitionDirection = .toSuggestions
 
-        // Haptic handled by ViewModel.moveToSuggestion() for consistency
-
-        // Flash yellow glow
+        // Brief glow flash as visual cue
         withAnimation(.easeIn(duration: 0.15)) {
             showTransitionGlow = true
         }
 
-        // Scale down and fade
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                transitionScale = 0.95
-                transitionOpacity = 0.5
-            }
-        }
-
-        // Perform the actual move
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        // Perform the move after glow — list .transition() handles departure animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showTransitionGlow = false
             Task {
                 await viewModel.moveToSuggestion(item)
-            }
-            // Reset states
-            withAnimation(.easeOut(duration: 0.1)) {
-                showTransitionGlow = false
-                transitionScale = 1.0
-                transitionOpacity = 1.0
             }
             isTransitioning = false
             transitionDirection = .none
@@ -716,31 +697,16 @@ struct GroceryItemRow: View {
         isTransitioning = true
         transitionDirection = .toCart
 
-        // Haptic handled by ViewModel.moveToCart() for consistency
-
-        // Flash cyan glow (different from yellow for suggestions)
+        // Brief glow flash as visual cue
         withAnimation(.easeIn(duration: 0.15)) {
             showTransitionGlow = true
         }
 
-        // Scale down and fade
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                transitionScale = 0.95
-                transitionOpacity = 0.5
-            }
-        }
-
-        // Perform the actual move
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+        // Perform the move after glow — list .transition() handles departure animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            showTransitionGlow = false
             Task {
                 await viewModel.moveToCart(item)
-            }
-            // Reset states
-            withAnimation(.easeOut(duration: 0.1)) {
-                showTransitionGlow = false
-                transitionScale = 1.0
-                transitionOpacity = 1.0
             }
             isTransitioning = false
             transitionDirection = .none
@@ -752,32 +718,16 @@ struct GroceryItemRow: View {
         isTransitioning = true
         transitionDirection = .toActive
 
-        // Haptic handled by ViewModel.restoreItem() for consistency
-
-        // Flash cyan glow
+        // Brief glow flash as visual cue
         withAnimation(.easeIn(duration: 0.15)) {
             showTransitionGlow = true
         }
 
-        // Scale up slightly then normalize
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            transitionScale = 1.05
-        }
-
+        // Perform the move after glow — list .transition() handles departure animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            withAnimation(.easeOut(duration: 0.15)) {
-                transitionScale = 1.0
-            }
-        }
-
-        // Perform the actual move
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            showTransitionGlow = false
             Task {
                 await viewModel.restoreItem(item)
-            }
-            // Reset states
-            withAnimation(.easeOut(duration: 0.1)) {
-                showTransitionGlow = false
             }
             isTransitioning = false
             transitionDirection = .none

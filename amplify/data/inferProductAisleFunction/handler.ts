@@ -167,7 +167,8 @@ Confidence guidelines:
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 1024,
+    max_tokens: 4096,
+    temperature: 0,
     messages: [
       {
         role: 'user',
@@ -241,7 +242,8 @@ Confidence guidelines:
 
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 4096,  // Larger for batch
+    max_tokens: 8192,  // Larger for batch
+    temperature: 0,
     messages: [{ role: 'user', content: prompt }],
   });
 

@@ -181,6 +181,7 @@ class SubscriptionService: ObservableObject {
                         case .failure(let error):
                             let errorMessage = parseGraphQLError(error)
                             print("SubscriptionService: Create subscription error - \(errorMessage)")
+                            AmplifyService.shared.handleAuthError(error)
                             self.lastError = SubscriptionError(
                                 type: .create,
                                 message: errorMessage,
@@ -193,6 +194,7 @@ class SubscriptionService: ObservableObject {
                 if !Task.isCancelled {
                     let errorMessage = error.localizedDescription
                     print("SubscriptionService: Create subscription fatal error - \(errorMessage)")
+                    AmplifyService.shared.handleAuthError(error)
                     self.lastError = SubscriptionError(
                         type: .create,
                         message: errorMessage,
@@ -242,6 +244,7 @@ class SubscriptionService: ObservableObject {
                         case .failure(let error):
                             let errorMessage = parseGraphQLError(error)
                             print("SubscriptionService: Update subscription error - \(errorMessage)")
+                            AmplifyService.shared.handleAuthError(error)
                             self.lastError = SubscriptionError(
                                 type: .update,
                                 message: errorMessage,
@@ -254,6 +257,7 @@ class SubscriptionService: ObservableObject {
                 if !Task.isCancelled {
                     let errorMessage = error.localizedDescription
                     print("SubscriptionService: Update subscription fatal error - \(errorMessage)")
+                    AmplifyService.shared.handleAuthError(error)
                     self.lastError = SubscriptionError(
                         type: .update,
                         message: errorMessage,
@@ -305,6 +309,7 @@ class SubscriptionService: ObservableObject {
                             // Log the error with details
                             let errorMessage = parseGraphQLError(error)
                             print("SubscriptionService: Delete subscription error - \(errorMessage)")
+                            AmplifyService.shared.handleAuthError(error)
                             self.lastError = SubscriptionError(
                                 type: .delete,
                                 message: errorMessage,
@@ -317,6 +322,7 @@ class SubscriptionService: ObservableObject {
                 if !Task.isCancelled {
                     let errorMessage = error.localizedDescription
                     print("SubscriptionService: Delete subscription fatal error - \(errorMessage)")
+                    AmplifyService.shared.handleAuthError(error)
                     self.lastError = SubscriptionError(
                         type: .delete,
                         message: errorMessage,
@@ -390,6 +396,7 @@ class SubscriptionService: ObservableObject {
                         case .failure(let error):
                             let errorMessage = parseGraphQLError(error)
                             print("SubscriptionService: Household subscription error - \(errorMessage)")
+                            AmplifyService.shared.handleAuthError(error)
                         }
                     }
                 }
@@ -397,6 +404,7 @@ class SubscriptionService: ObservableObject {
                 if !Task.isCancelled {
                     let errorMessage = error.localizedDescription
                     print("SubscriptionService: Household subscription fatal error - \(errorMessage)")
+                    AmplifyService.shared.handleAuthError(error)
                 }
             }
         }
@@ -451,6 +459,7 @@ class SubscriptionService: ObservableObject {
                         case .failure(let error):
                             let errorMessage = parseGraphQLError(error)
                             print("SubscriptionService: ShoppingRequest subscription error - \(errorMessage)")
+                            AmplifyService.shared.handleAuthError(error)
                         }
                     }
                 }
@@ -458,6 +467,7 @@ class SubscriptionService: ObservableObject {
                 if !Task.isCancelled {
                     let errorMessage = error.localizedDescription
                     print("SubscriptionService: ShoppingRequest subscription fatal error - \(errorMessage)")
+                    AmplifyService.shared.handleAuthError(error)
                 }
             }
         }

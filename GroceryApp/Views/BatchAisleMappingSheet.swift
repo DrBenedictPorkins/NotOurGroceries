@@ -154,6 +154,16 @@ struct BatchAisleMappingSheet: View {
                 .shadow(color: DesignSystem.Colors.neonPurple.opacity(0.3), radius: 8)
             }
             .padding(.horizontal, 24)
+
+            // Skip button
+            Button {
+                onComplete()
+                dismiss()
+            } label: {
+                Text("Skip")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
             .padding(.bottom, 32)
         }
     }
@@ -312,6 +322,16 @@ struct BatchAisleMappingSheet: View {
                 )
             }
             .padding(.horizontal, 24)
+
+            // Skip button
+            Button {
+                onComplete()
+                dismiss()
+            } label: {
+                Text("Skip")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
             .padding(.bottom, 32)
         }
     }

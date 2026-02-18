@@ -35,7 +35,9 @@ struct StoresView: View {
                 .padding(.horizontal, 20)
             }
             .navigationBarHidden(true)
-            .sheet(isPresented: $showCreateStore) {
+            .sheet(isPresented: $showCreateStore, onDismiss: {
+                refreshStores()
+            }) {
                 CreateStoreSheet()
                     .environmentObject(viewModel)
             }

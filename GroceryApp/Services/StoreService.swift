@@ -41,8 +41,7 @@ class StoreService: ObservableObject {
                     "id": storeId,
                     "householdId": householdId,
                     "name": name,
-                    "chain": chain ?? "",
-                    "aisleLayout": [] as [Any]
+                    "chain": chain ?? ""
                 ]
             ],
             responseType: JSONValue.self

@@ -4,6 +4,7 @@ import Amplify
 import AWSCognitoAuthPlugin
 import AWSAPIPlugin
 import AWSS3StoragePlugin
+import AWSPluginsCore
 
 @MainActor
 class AmplifyService: ObservableObject {
@@ -55,11 +56,25 @@ class AmplifyService: ObservableObject {
     private func checkAuthSession() async {
         do {
             let session = try await Amplify.Auth.fetchAuthSession()
-            isAuthenticated = session.isSignedIn
 
-            if isAuthenticated {
+            if session.isSignedIn {
+                // Verify tokens are still valid by attempting to get credentials
+                if let cognitoSession = session as? AuthCognitoTokensProvider {
+                    do {
+                        _ = try cognitoSession.getCognitoTokens().get()
+                    } catch {
+                        print("Auth tokens expired or invalid: \(error)")
+                        isAuthenticated = false
+                        try? await signOut()
+                        return
+                    }
+                }
+
+                isAuthenticated = true
                 currentUser = try await Amplify.Auth.getCurrentUser()
                 await fetchOrCreateUserProfile()
+            } else {
+                isAuthenticated = false
             }
         } catch {
             print("Failed to fetch auth session: \(error)")
@@ -90,12 +105,34 @@ class AmplifyService: ObservableObject {
     }
 
     func signIn(email: String, password: String) async throws {
+        // Clear any stale session before attempting sign-in
+        let session = try await Amplify.Auth.fetchAuthSession()
+        if session.isSignedIn {
+            _ = await Amplify.Auth.signOut()
+        }
+
         let result = try await Amplify.Auth.signIn(username: email, password: password)
 
         if result.isSignedIn {
             isAuthenticated = true
             currentUser = try await Amplify.Auth.getCurrentUser()
             await fetchOrCreateUserProfile()
+        } else {
+            // Handle cases where sign-in is not yet complete
+            switch result.nextStep {
+            case .confirmSignInWithNewPassword:
+                throw AmplifyError.unknown("Password reset required. Please use 'Forgot Password' to set a new password.")
+            case .confirmSignInWithSMSMFACode:
+                throw AmplifyError.unknown("MFA verification required but not supported yet.")
+            case .confirmSignInWithCustomChallenge:
+                throw AmplifyError.unknown("Additional verification required.")
+            case .resetPassword:
+                throw AmplifyError.unknown("Password reset required. Please use 'Forgot Password' to set a new password.")
+            case .confirmSignUp:
+                throw AmplifyError.unknown("Account not yet confirmed. Please check your email for a confirmation code.")
+            default:
+                throw AmplifyError.unknown("Sign in incomplete. Please try again.")
+            }
         }
     }
 
@@ -180,11 +217,16 @@ class AmplifyService: ObservableObject {
                 }
             case .failure(let error):
                 print("Failed to fetch user: \(error)")
+                if isAuthError(error) {
+                    try? await signOut()
+                    return
+                }
                 // Fallback to locally stored householdId
                 loadLocalHouseholdId()
             }
         } catch {
             print("Error fetching user profile: \(error)")
+            handleAuthError(error)
             // Fallback to locally stored householdId
             loadLocalHouseholdId()
         }
@@ -243,6 +285,45 @@ class AmplifyService: ObservableObject {
             self.currentHouseholdId = storedHouseholdId
             print("Loaded householdId from UserDefaults: \(storedHouseholdId)")
         }
+    }
+
+    // MARK: - Auth Error Handling
+
+    /// Checks if an error is auth-related (expired/invalid tokens) and forces sign-out if so.
+    func handleAuthError(_ error: Error) {
+        let message = String(describing: error)
+        if message.contains("Unauthorized") || message.contains("Not Authorized") || message.contains("token") || message.contains("Token") {
+            print("Auth error detected, forcing sign-out: \(message)")
+            Task { @MainActor in
+                try? await signOut()
+            }
+        }
+    }
+
+    /// Overload for GraphQLResponseError — checks and forces sign-out if auth-related.
+    func handleAuthError(_ error: GraphQLResponseError<JSONValue>) {
+        if isAuthError(error) {
+            print("GraphQL auth error detected, forcing sign-out")
+            Task { @MainActor in
+                try? await signOut()
+            }
+        }
+    }
+
+    /// Checks if a GraphQLResponseError is auth-related.
+    func isAuthError(_ error: GraphQLResponseError<JSONValue>) -> Bool {
+        let message: String
+        switch error {
+        case .error(let errors):
+            message = errors.map { $0.message }.joined(separator: " ")
+        case .partial(_, let errors):
+            message = errors.map { $0.message }.joined(separator: " ")
+        case .unknown(let msg, _, _):
+            message = msg
+        case .transformationError(_, let underlyingError):
+            message = underlyingError.localizedDescription
+        }
+        return message.contains("Unauthorized") || message.contains("Not Authorized") || message.contains("token") || message.contains("Token")
     }
 
     // MARK: - Household

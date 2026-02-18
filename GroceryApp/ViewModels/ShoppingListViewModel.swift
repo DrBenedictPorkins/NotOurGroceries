@@ -243,11 +243,16 @@ class ShoppingListViewModel: ObservableObject {
             case .failure(let error):
                 logger.error("Failed to fetch items: \(String(describing: error))")
                 self.errorMessage = error.localizedDescription
+                if AmplifyService.shared.isAuthError(error) {
+                    try? await AmplifyService.shared.signOut()
+                    return
+                }
             }
 
         } catch {
             logger.error("Error loading shopping list: \(error)")
             errorMessage = error.localizedDescription
+            AmplifyService.shared.handleAuthError(error)
         }
 
         // Populate caches in parallel

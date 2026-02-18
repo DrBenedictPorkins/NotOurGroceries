@@ -142,6 +142,27 @@ struct SettingsView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: - App Info
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+    }
+
+    private var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+    }
+
+    private var buildDateString: String {
+        guard let url = Bundle.main.executableURL,
+              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let date = attrs[.modificationDate] as? Date else {
+            return "Unknown"
+        }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "MMM d, yyyy 'at' h:mm a"
+        return fmt.string(from: date)
+    }
+
     // MARK: - App Info Section
 
     private var appInfoSection: some View {
@@ -156,8 +177,9 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                settingsRow(title: "Version", value: "1.0.0")
-                settingsRow(title: "Build", value: "1")
+                settingsRow(title: "Version", value: appVersion)
+                settingsRow(title: "Build", value: appBuild)
+                settingsRow(title: "Built", value: buildDateString)
             }
         }
         .padding(20)

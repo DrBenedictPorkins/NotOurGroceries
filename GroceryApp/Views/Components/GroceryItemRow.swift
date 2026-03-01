@@ -49,12 +49,9 @@ struct GroceryItemRow: View {
         return mapping?.effectiveAisle
     }
 
-    /// Display name looked up from cache, shows "-you-" for current user
+    /// Display name of who last added this item to the active list. "-you-" for current user.
     private var addedByDisplayName: String {
-        if item.addedBy == currentUserId {
-            return "-you-"
-        }
-        return userCache.displayName(for: item.addedBy)
+        item.addedBy == currentUserId ? "-you-" : userCache.displayName(for: item.addedBy)
     }
 
     /// Locked by name looked up from cache, shows "-you-" for current user
@@ -143,6 +140,7 @@ struct GroceryItemRow: View {
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
+                    .tint(.red)
                 }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -185,21 +183,7 @@ struct GroceryItemRow: View {
                 }
 
                 if item.status == .suggestion {
-                    // Tap on suggestion adds it back to list
-                    if viewModel.isSomeoneElseShopping {
-                        // Submit request to add this suggestion back
-                        Task {
-                            await viewModel.submitAddRequest(
-                                name: item.name,
-                                quantity: item.quantity,
-                                notes: item.notes,
-                                productId: item.productId
-                            )
-                        }
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    } else {
-                        animateToActive()
-                    }
+                    // Tap does nothing — use long press to add back to list
                 } else if item.status == .active {
                     // During shopping: move to cart. During list building: move to suggestions
                     if viewModel.isCurrentUserShopping {
@@ -210,10 +194,8 @@ struct GroceryItemRow: View {
                             await viewModel.submitRemoveRequest(item: item)
                         }
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    } else {
-                        // Normal list building - move to suggestions
-                        animateToSuggestions()
                     }
+                    // In list-building mode, tap does nothing — use long press to move to suggestions
                 } else if item.status == .inCart {
                     // Tap on in-cart item restores it to active list
                     animateToActive()
@@ -226,7 +208,23 @@ struct GroceryItemRow: View {
             )
             .onLongPressGesture(minimumDuration: 0.5) {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                showDetailSheet = true
+                if item.status == .active && !viewModel.isCurrentUserShopping && !viewModel.isSomeoneElseShopping {
+                    animateToSuggestions()
+                } else if item.status == .suggestion {
+                    if viewModel.isSomeoneElseShopping {
+                        Task {
+                            await viewModel.submitAddRequest(
+                                name: item.name,
+                                quantity: item.quantity,
+                                notes: item.notes,
+                                productId: item.productId
+                            )
+                        }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    } else {
+                        animateToActive()
+                    }
+                }
             }
             .sheet(isPresented: $showDetailSheet) {
                 ItemDetailSheet(item: item)
@@ -289,15 +287,29 @@ struct GroceryItemRow: View {
                         .foregroundColor(DesignSystem.Colors.neonPink)
                 }
             }
+
+            // Detail sheet button
+            Button {
+                showDetailSheet = true
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
     /// Shows who added the item [Username] followed by inline reaction badges
     private var ownerAndReactionsRow: some View {
         HStack(spacing: 6) {
-            Text("[\(addedByDisplayName)]")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(item.status == .suggestion ? DesignSystem.Colors.neonYellow.opacity(0.5) : DesignSystem.Colors.textTertiary)
+            if item.status == .active {
+                Text("[\(addedByDisplayName)]")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
 
             if !groupedReactions.isEmpty {
                 HStack(spacing: 4) {

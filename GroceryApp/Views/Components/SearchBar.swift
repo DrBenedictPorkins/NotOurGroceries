@@ -70,6 +70,7 @@ struct SearchBar: View {
             .padding(.vertical, 14)
             .background(searchBarBackground)
             .cornerRadius(20)
+            .onTapGesture { isFocused = true }
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
                     .stroke(

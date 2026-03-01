@@ -126,7 +126,7 @@ IMPORTANT:
 - If text is partially visible, include it with your best interpretation`;
 
   const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 16384,  // Increased for large directories
     temperature: 0,
     messages: [

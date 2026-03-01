@@ -240,7 +240,7 @@ Return ONLY valid JSON array, no other text:
 [{"normalizedName": "...", "aisleId": "...", "confidence": 0.85, "reasoning": "..."}]`;
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 8192,
       temperature: 0,
       messages: [

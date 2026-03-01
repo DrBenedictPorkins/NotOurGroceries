@@ -547,10 +547,13 @@ class ShoppingListViewModel: ObservableObject {
             return
         }
 
-        // Optimistic update - change status to suggestion
+        let now = Date()
+
+        // Optimistic update - change status to suggestion, refresh addedAt so it sorts to top
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             var updatedItem = item
             updatedItem.status = .suggestion
+            updatedItem.addedAt = now
             updatedItem.version += 1
 
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
@@ -565,10 +568,13 @@ class ShoppingListViewModel: ObservableObject {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 
         do {
+            let iso8601Formatter = ISO8601DateFormatter()
+            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id status version
+                    id status addedAt version
                 }
             }
             """
@@ -576,6 +582,7 @@ class ShoppingListViewModel: ObservableObject {
             let input: [String: Any] = [
                 "id": item.id,
                 "status": "SUGGESTION",
+                "addedAt": iso8601Formatter.string(from: now),
                 "version": item.version + 1
             ]
 
@@ -628,10 +635,11 @@ class ShoppingListViewModel: ObservableObject {
         let shouldUpdateAddedAt = item.status == .suggestion
         let now = Date()
 
-        // Optimistic update - change status to active
+        // Optimistic update - change status to active, update addedBy to whoever restored it
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             var restoredItem = item
             restoredItem.status = .active
+            restoredItem.addedBy = currentUserId
             restoredItem.version += 1
             if shouldUpdateAddedAt {
                 restoredItem.addedAt = now
@@ -653,6 +661,7 @@ class ShoppingListViewModel: ObservableObject {
             var input: [String: Any] = [
                 "id": item.id,
                 "status": "ACTIVE",
+                "addedBy": currentUserId,
                 "version": item.version + 1
             ]
 
@@ -1330,7 +1339,7 @@ class ShoppingListViewModel: ObservableObject {
         let sortedItems: [GroceryItem]
         switch currentSort {
         case .recentFirst:
-            sortedItems = items.sorted { $0.addedAt < $1.addedAt }
+            sortedItems = items.sorted { $0.addedAt > $1.addedAt }
         case .aToZ:
             sortedItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         case .zToA:
@@ -2028,6 +2037,7 @@ class ShoppingListViewModel: ObservableObject {
     /// Update an item's status
     private func updateItemStatus(_ item: GroceryItem, to newStatus: GroceryItem.ItemStatus, updateAddedAt: Bool = false) async {
         let now = Date()
+        let currentUserId = AmplifyService.shared.currentUser?.userId ?? ""
 
         // Optimistic update
         if let index = items.firstIndex(where: { $0.id == item.id }) {
@@ -2036,6 +2046,9 @@ class ShoppingListViewModel: ObservableObject {
             updatedItem.version += 1
             if updateAddedAt {
                 updatedItem.addedAt = now
+            }
+            if newStatus == .active {
+                updatedItem.addedBy = currentUserId
             }
             items[index] = updatedItem
             applySorting()
@@ -2053,6 +2066,9 @@ class ShoppingListViewModel: ObservableObject {
 
             if updateAddedAt {
                 input["addedAt"] = iso8601Formatter.string(from: now)
+            }
+            if newStatus == .active {
+                input["addedBy"] = currentUserId
             }
 
             let document = """

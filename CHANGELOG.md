@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0] - 2026-03-01
+
+Build 12
+
+- Long press (0.5s) to move items on/off the shopping list (prevents accidental removals)
+- 3-dot button on each row opens the item detail sheet
+- New and restored items appear at the top of their list
+- Swipe-to-delete button is now red
+- Search bar focuses keyboard on tap anywhere (not just the magnifying glass icon)
+- "Added by" shows who last put an item on the active list; hidden when item is not active
+- Fix: Aisle scanning now uses current Claude model aliases (prevents API failures)
+- Fix: Shopping list was empty on app restart due to stale field in GraphQL query
+
 ## [1.0] - 2026-02-18
 
 Build 11

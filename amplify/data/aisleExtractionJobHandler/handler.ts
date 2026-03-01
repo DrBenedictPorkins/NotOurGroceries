@@ -23,7 +23,7 @@ const HOUSEHOLD_STORE_TABLE = process.env.HOUSEHOLD_STORE_TABLE_NAME!;
 
 // Constants - Updated 2026-02-01: Haiku 3.5 + parallel batches for speed
 const MAX_RETRIES = 3;
-const MODEL = 'claude-3-5-haiku-20241022';
+const MODEL = 'claude-haiku-4-5';
 const STATUS_UPDATE_INTERVAL = 5; // Update status every N items
 const BATCH_SIZE = 40; // Keep small to avoid Haiku 8192 max_tokens truncation
 

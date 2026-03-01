@@ -91,7 +91,7 @@ Rules:
 Return ONLY the JSON array, no other text.`;
 
   const response = await anthropic.messages.create({
-    model: 'claude-3-5-haiku-20241022',  // Haiku is faster for OCR tasks
+    model: 'claude-haiku-4-5',  // Haiku is faster for OCR tasks
     max_tokens: 8192,
     temperature: 0,
     messages: [

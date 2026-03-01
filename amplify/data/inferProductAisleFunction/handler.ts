@@ -8,7 +8,7 @@ const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const MAPPING_TABLE = process.env.MAPPING_TABLE_NAME!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 
-const MODEL = 'claude-sonnet-4-5';
+const MODEL = 'claude-sonnet-4-6';
 
 interface Arguments {
   storeId: string;

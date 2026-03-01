@@ -165,10 +165,13 @@ struct AtStoreModeView: View {
                             ForEach(unmappedItems) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
-                                    .onLongPressGesture {
-                                        selectedItemForDetail = item
-                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                    }
+                                    .simultaneousGesture(
+                                        LongPressGesture(minimumDuration: 0.5)
+                                            .onEnded { _ in
+                                                selectedItemForDetail = item
+                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                            }
+                                    )
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -186,10 +189,13 @@ struct AtStoreModeView: View {
                             ForEach(aisleGroup.items) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
-                                    .onLongPressGesture {
-                                        selectedItemForDetail = item
-                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                    }
+                                    .simultaneousGesture(
+                                        LongPressGesture(minimumDuration: 0.5)
+                                            .onEnded { _ in
+                                                selectedItemForDetail = item
+                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                            }
+                                    )
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -211,10 +217,13 @@ struct AtStoreModeView: View {
                             ForEach(viewModel.inCart) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
-                                    .onLongPressGesture {
-                                        selectedItemForDetail = item
-                                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                    }
+                                    .simultaneousGesture(
+                                        LongPressGesture(minimumDuration: 0.5)
+                                            .onEnded { _ in
+                                                selectedItemForDetail = item
+                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                            }
+                                    )
                             }
                             .listRowBackground(inCartSectionBackground)
                             .listRowSeparator(.hidden)

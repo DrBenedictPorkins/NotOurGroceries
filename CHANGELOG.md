@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0] - 2026-03-01
 
+Build 13
+
+- Fix: Shopping list was not scrollable due to long press gesture blocking scroll
+
+## [1.0] - 2026-03-01
+
 Build 12
 
 - Long press (0.5s) to move items on/off the shopping list (prevents accidental removals)

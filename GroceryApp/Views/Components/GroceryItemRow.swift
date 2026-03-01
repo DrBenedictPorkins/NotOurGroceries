@@ -206,26 +206,29 @@ struct GroceryItemRow: View {
                     .onChanged { _ in if !isTransitioning { isPressed = true } }
                     .onEnded { _ in isPressed = false }
             )
-            .onLongPressGesture(minimumDuration: 0.5) {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                if item.status == .active && !viewModel.isCurrentUserShopping && !viewModel.isSomeoneElseShopping {
-                    animateToSuggestions()
-                } else if item.status == .suggestion {
-                    if viewModel.isSomeoneElseShopping {
-                        Task {
-                            await viewModel.submitAddRequest(
-                                name: item.name,
-                                quantity: item.quantity,
-                                notes: item.notes,
-                                productId: item.productId
-                            )
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.5)
+                    .onEnded { _ in
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        if item.status == .active && !viewModel.isCurrentUserShopping && !viewModel.isSomeoneElseShopping {
+                            animateToSuggestions()
+                        } else if item.status == .suggestion {
+                            if viewModel.isSomeoneElseShopping {
+                                Task {
+                                    await viewModel.submitAddRequest(
+                                        name: item.name,
+                                        quantity: item.quantity,
+                                        notes: item.notes,
+                                        productId: item.productId
+                                    )
+                                }
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            } else {
+                                animateToActive()
+                            }
                         }
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    } else {
-                        animateToActive()
                     }
-                }
-            }
+            )
             .sheet(isPresented: $showDetailSheet) {
                 ItemDetailSheet(item: item)
                     .environmentObject(viewModel)

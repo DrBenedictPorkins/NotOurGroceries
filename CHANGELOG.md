@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0] - 2026-03-02
 
+Build 18
+
+- Aisle scan now updates the aisle management view progressively as each phase completes, rather than waiting for the full job to finish
+
+## [1.0] - 2026-03-02
+
 Build 17
 
 - Fix: Aisle scan images were not being resized before upload (UIImage.size returns points, not pixels — on a 3x device a 12MP photo appeared already small enough and was sent full-resolution, hitting Claude's 5MB limit)

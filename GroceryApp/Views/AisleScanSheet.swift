@@ -76,6 +76,19 @@ struct AisleScanSheet: View {
                 // Check for active job on appear
                 await checkForActiveJob()
             }
+            // Progressive mapping refresh: update StoreAisleManagementView as each phase lands data
+            .onChange(of: extractionService.currentPhase) { _, newPhase in
+                // Phase 4 starting means Phase 3 (catalog mappings) just finished writing
+                if newPhase == 4 {
+                    Task { try? await storeService.fetchMappings(storeId: store.id) }
+                }
+            }
+            .onChange(of: completedJob?.id) { _, jobId in
+                // Job complete means Phase 4 (LLM inferred mappings) just finished writing
+                if jobId != nil {
+                    Task { try? await storeService.fetchMappings(storeId: store.id) }
+                }
+            }
         }
     }
 

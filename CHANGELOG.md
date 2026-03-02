@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Build 15
 
+
+## [1.0] - 2026-03-01
+
+Build 15
+
 - Tap suggestion items to move them to the active list (same as swipe-right)
 - Undo button moved to sort strip (right-aligned) for consistency with At Store screen
 - Undo strip stays visible even when active list is empty (so undo isn't lost)
@@ -106,5 +111,5 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: https://github.com/DrBenedictPorkins/NotOurGroceries/compare/v1.0-11...HEAD
+[Unreleased]: https://github.com/DrBenedictPorkins/NotOurGroceries/compare/v1.0-15...HEAD
 [1.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0-2[1.0.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0.0

@@ -160,6 +160,19 @@ git push origin main  # Amplify Console auto-deploys on push
 - **Separate databases**: Prod DynamoDB tables are independent from sandbox
 - **Config files are gitignored**: `amplify_outputs*.json` files are in `.gitignore`
 
+## Release Order — CRITICAL
+
+**NEVER commit, bump version, or deploy unless explicitly told to.**
+
+When the user says to release/deploy, do it in this exact order:
+
+1. Bump build number + update CHANGELOG.md
+2. Commit + tag (`v1.0-N`) + `git push origin main --tags`
+3. Tell user to **Archive in Xcode → Distribute to TestFlight**
+4. Done — Amplify backend deploys automatically on push, no need to monitor it
+
+**Never** monitor the Amplify deployment or wait for it — it's automatic and not the priority. The iOS archive is what ships to users.
+
 ## Release Workflow
 
 ### Version Numbers

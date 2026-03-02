@@ -27,8 +27,8 @@ struct ShoppingListView: View {
                 // Custom Header
                 headerView
 
-                // Sort Options - only show when list has items
-                if !viewModel.shoppingList.isEmpty {
+                // Sort Options - show when list has items, or keep visible while undo is pending
+                if !viewModel.shoppingList.isEmpty || viewModel.undoSuggestionItem != nil {
                     sortOptionsBar
                 }
 
@@ -202,6 +202,7 @@ struct ShoppingListView: View {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                viewModel.lockInteractionsOnWakeup()
                 // Only refresh if backgrounded > 30 seconds
                 if let lastTime = lastBackgroundTime,
                    Date().timeIntervalSince(lastTime) > 30 {
@@ -250,46 +251,46 @@ struct ShoppingListView: View {
 
                     // At Store Button
                     Button(action: {
-                    guard !viewModel.isSomeoneElseShopping else { return }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showStoreSelection = true
+                        guard !viewModel.isSomeoneElseShopping else { return }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            showStoreSelection = true
+                        }
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: viewModel.isSomeoneElseShopping ? "cart.fill.badge.questionmark" : "cart.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(viewModel.isSomeoneElseShopping ? "Shopping Active" : "At Store")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(viewModel.isSomeoneElseShopping ? .white.opacity(0.5) : .white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(viewModel.isSomeoneElseShopping
+                                      ? Color.white.opacity(0.05)
+                                      : DesignSystem.Colors.neonCyan.opacity(0.15))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: viewModel.isSomeoneElseShopping
+                                                    ? [Color.white.opacity(0.2)]
+                                                    : [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonCyan.opacity(0.3)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 1.5
+                                        )
+                                )
+                                .shadow(color: viewModel.isSomeoneElseShopping
+                                        ? .clear
+                                        : DesignSystem.Shadows.neonCyanGlow,
+                                        radius: 8, x: 0, y: 4)
+                        )
                     }
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: viewModel.isSomeoneElseShopping ? "cart.fill.badge.questionmark" : "cart.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text(viewModel.isSomeoneElseShopping ? "Shopping Active" : "At Store")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(viewModel.isSomeoneElseShopping ? .white.opacity(0.5) : .white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(viewModel.isSomeoneElseShopping
-                                  ? Color.white.opacity(0.05)
-                                  : DesignSystem.Colors.neonCyan.opacity(0.15))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: viewModel.isSomeoneElseShopping
-                                                ? [Color.white.opacity(0.2)]
-                                                : [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonCyan.opacity(0.3)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1.5
-                                    )
-                            )
-                            .shadow(color: viewModel.isSomeoneElseShopping
-                                    ? .clear
-                                    : DesignSystem.Shadows.neonCyanGlow,
-                                    radius: 8, x: 0, y: 4)
-                    )
-                }
-                .disabled(viewModel.isSomeoneElseShopping)
+                    .disabled(viewModel.isSomeoneElseShopping)
                 }
             }
 
@@ -443,6 +444,31 @@ struct ShoppingListView: View {
 
     private var sortOptionsBar: some View {
         HStack(spacing: 8) {
+            if let undoItem = viewModel.undoSuggestionItem {
+                Spacer()
+                Button {
+                    Task { await viewModel.undoMoveToSuggestion() }
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Undo \(undoItem.name)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(DesignSystem.Colors.neonPink.opacity(0.2))
+                            .overlay(Capsule().stroke(DesignSystem.Colors.neonPink.opacity(0.6), lineWidth: 1.5))
+                    )
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity.combined(with: .scale(scale: 0.9)))
+            } else {
             // Recent button
             sortButton(for: .recentFirst)
 
@@ -481,9 +507,11 @@ struct ShoppingListView: View {
             .buttonStyle(.plain)
 
             Spacer()
+            } // end else (sort buttons)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.undoSuggestionItem?.id)
     }
 
     private var isAlphabeticalSort: Bool {

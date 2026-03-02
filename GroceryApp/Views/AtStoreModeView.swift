@@ -10,7 +10,6 @@ struct AtStoreModeView: View {
     @State private var showDoneShoppingAlert = false
     @State private var newRequestArrived = false
     @State private var searchText = ""
-    @State private var selectedItemForDetail: GroceryItem? = nil
     @State private var showStoreSwitcher = false
     @State private var showAisleManagement = false
     @FocusState private var searchFieldFocused: Bool
@@ -165,13 +164,6 @@ struct AtStoreModeView: View {
                             ForEach(unmappedItems) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
-                                    .simultaneousGesture(
-                                        LongPressGesture(minimumDuration: 0.5)
-                                            .onEnded { _ in
-                                                selectedItemForDetail = item
-                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                            }
-                                    )
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -189,13 +181,6 @@ struct AtStoreModeView: View {
                             ForEach(aisleGroup.items) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
-                                    .simultaneousGesture(
-                                        LongPressGesture(minimumDuration: 0.5)
-                                            .onEnded { _ in
-                                                selectedItemForDetail = item
-                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                            }
-                                    )
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -217,13 +202,6 @@ struct AtStoreModeView: View {
                             ForEach(viewModel.inCart) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
-                                    .simultaneousGesture(
-                                        LongPressGesture(minimumDuration: 0.5)
-                                            .onEnded { _ in
-                                                selectedItemForDetail = item
-                                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                            }
-                                    )
                             }
                             .listRowBackground(inCartSectionBackground)
                             .listRowSeparator(.hidden)
@@ -244,10 +222,6 @@ struct AtStoreModeView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $viewModel.showInboxSheet) {
             InboxSheet()
-                .environmentObject(viewModel)
-        }
-        .sheet(item: $selectedItemForDetail) { item in
-            ItemDetailSheet(item: item)
                 .environmentObject(viewModel)
         }
         .sheet(isPresented: $showStoreSwitcher) {
@@ -444,10 +418,36 @@ struct AtStoreModeView: View {
 
                 Spacer()
 
-                Text("\(Int(progressPercentage * 100))%")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                if let undoItem = viewModel.undoCartItem {
+                    Button {
+                        Task { await viewModel.undoMoveToCart() }
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Undo \(undoItem.name)")
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(DesignSystem.Colors.neonPink.opacity(0.3))
+                                .overlay(Capsule().stroke(DesignSystem.Colors.neonPink.opacity(0.6), lineWidth: 1))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                } else {
+                    Text("\(Int(progressPercentage * 100))%")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                }
             }
+            .animation(.easeInOut(duration: 0.2), value: viewModel.undoCartItem?.id)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 16)

@@ -143,37 +143,40 @@ struct GroceryItemRow: View {
                     .tint(.red)
                 }
             }
-            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                // Lock/Unlock action (only for active items - swipe RIGHT)
-                // Hide during shopping mode - locks don't apply while shopping
-                if item.status == .active && !viewModel.isCurrentUserShopping {
-                    if isLockedByAnotherUser {
-                        // Locked by another user - show error feedback instead of unlock
-                        Button {
-                            triggerShake()
-                            UINotificationFeedbackGenerator().notificationOccurred(.error)
-                            if let lockedBy = item.lockedBy {
-                                viewModel.showLockedItemWarning(lockedBy: lockedBy)
-                            }
-                        } label: {
-                            Label("Unlock", systemImage: "lock.open")
-                        }
-                        .tint(.gray)
-                    } else {
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                // Swipe RIGHT: suggestions → active only
+                if item.status == .suggestion {
+                    if viewModel.isSomeoneElseShopping {
                         Button {
                             Task {
-                                await viewModel.toggleLock(item)
+                                await viewModel.submitAddRequest(
+                                    name: item.name,
+                                    quantity: item.quantity,
+                                    notes: item.notes,
+                                    productId: item.productId
+                                )
                             }
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
                         } label: {
-                            Label(item.lockedBy != nil ? "Unlock" : "Lock", systemImage: item.lockedBy != nil ? "lock.open" : "lock")
+                            Label("Add to List", systemImage: "plus.circle.fill")
                         }
-                        .tint(DesignSystem.Colors.neonPurple)
+                        .tint(DesignSystem.Colors.neonCyan)
+                    } else {
+                        Button {
+                            animateToActive()
+                        } label: {
+                            Label("Add to List", systemImage: "plus.circle.fill")
+                        }
+                        .tint(DesignSystem.Colors.neonCyan)
                     }
                 }
             }
             .offset(x: shakeOffset)
             .overlay(transitionOverlay)
             .onTapGesture {
+                // Block interactions briefly after app wakeup
+                guard !viewModel.isInteractionLocked else { return }
+
                 // Block any action if locked by another user
                 if isLockedByAnotherUser, let lockedBy = item.lockedBy {
                     triggerShake()
@@ -182,22 +185,30 @@ struct GroceryItemRow: View {
                     return
                 }
 
-                if item.status == .suggestion {
-                    // Tap does nothing — use long press to add back to list
-                } else if item.status == .active {
-                    // During shopping: move to cart. During list building: move to suggestions
+                if item.status == .active {
                     if viewModel.isCurrentUserShopping {
                         animateToCart()
                     } else if viewModel.isSomeoneElseShopping {
-                        // Non-shopper can only suggest removal, not directly move
+                        Task { await viewModel.submitRemoveRequest(item: item) }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    } else {
+                        animateToSuggestions()
+                    }
+                } else if item.status == .suggestion {
+                    if viewModel.isSomeoneElseShopping {
                         Task {
-                            await viewModel.submitRemoveRequest(item: item)
+                            await viewModel.submitAddRequest(
+                                name: item.name,
+                                quantity: item.quantity,
+                                notes: item.notes,
+                                productId: item.productId
+                            )
                         }
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    } else {
+                        animateToActive()
                     }
-                    // In list-building mode, tap does nothing — use long press to move to suggestions
                 } else if item.status == .inCart {
-                    // Tap on in-cart item restores it to active list
                     animateToActive()
                 }
             }
@@ -205,29 +216,6 @@ struct GroceryItemRow: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in if !isTransitioning { isPressed = true } }
                     .onEnded { _ in isPressed = false }
-            )
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.5)
-                    .onEnded { _ in
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        if item.status == .active && !viewModel.isCurrentUserShopping && !viewModel.isSomeoneElseShopping {
-                            animateToSuggestions()
-                        } else if item.status == .suggestion {
-                            if viewModel.isSomeoneElseShopping {
-                                Task {
-                                    await viewModel.submitAddRequest(
-                                        name: item.name,
-                                        quantity: item.quantity,
-                                        notes: item.notes,
-                                        productId: item.productId
-                                    )
-                                }
-                                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            } else {
-                                animateToActive()
-                            }
-                        }
-                    }
             )
             .sheet(isPresented: $showDetailSheet) {
                 ItemDetailSheet(item: item)

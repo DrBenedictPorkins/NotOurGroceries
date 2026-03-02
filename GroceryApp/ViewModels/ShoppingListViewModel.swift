@@ -56,6 +56,18 @@ class ShoppingListViewModel: ObservableObject {
     @Published var pendingRequests: [ShoppingRequest] = []
     @Published var showInboxSheet = false
 
+    // MARK: - Undo Cart
+    @Published var undoCartItem: GroceryItem?
+    private var undoCartTask: Task<Void, Never>?
+
+    // MARK: - Undo Suggestion
+    @Published var undoSuggestionItem: GroceryItem?
+    private var undoSuggestionTask: Task<Void, Never>?
+
+    // MARK: - Wakeup Interaction Lock
+    /// Briefly true after app returns from background to prevent accidental taps
+    @Published var isInteractionLocked: Bool = false
+
     // MARK: - Computed Properties for Filtered Views
 
     /// Items on the shopping list (active items to be picked up)
@@ -491,6 +503,16 @@ class ShoppingListViewModel: ObservableObject {
         // Haptic feedback
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 
+        // Set undo state — clears after 5.5 seconds
+        undoCartItem = item
+        undoCartTask?.cancel()
+        undoCartTask = Task {
+            try? await Task.sleep(nanoseconds: 5_500_000_000)
+            if !Task.isCancelled {
+                undoCartItem = nil
+            }
+        }
+
         do {
             // Use native updateGroceryItem mutation
             let document = """
@@ -534,6 +556,31 @@ class ShoppingListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Undo Move to Cart
+    func undoMoveToCart() async {
+        guard let item = undoCartItem else { return }
+        undoCartTask?.cancel()
+        undoCartItem = nil
+        await restoreItem(item)
+    }
+
+    // MARK: - Undo Move to Suggestion
+    func undoMoveToSuggestion() async {
+        guard let item = undoSuggestionItem else { return }
+        undoSuggestionTask?.cancel()
+        undoSuggestionItem = nil
+        await restoreItem(item)
+    }
+
+    // MARK: - Wakeup Interaction Lock
+    func lockInteractionsOnWakeup() {
+        isInteractionLocked = true
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+            isInteractionLocked = false
+        }
+    }
+
     // MARK: - Move to Suggestion
     func moveToSuggestion(_ item: GroceryItem) async {
         // Check if locked by another user
@@ -566,6 +613,16 @@ class ShoppingListViewModel: ObservableObject {
 
         // Haptic feedback
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
+        // Set undo state — clears after 5.5 seconds
+        undoSuggestionItem = item
+        undoSuggestionTask?.cancel()
+        undoSuggestionTask = Task {
+            try? await Task.sleep(nanoseconds: 5_500_000_000)
+            if !Task.isCancelled {
+                undoSuggestionItem = nil
+            }
+        }
 
         do {
             let iso8601Formatter = ISO8601DateFormatter()

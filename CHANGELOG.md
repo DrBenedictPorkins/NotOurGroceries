@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0] - 2026-03-02
+
+Build 16
+
+- Fix: Scrolling blocked on some devices (iPhone 15) — removed conflicting gesture
+- Household page now refreshes when foregrounded or pulled down
+- Aisle scan: image pre-processing now matches Claude's recommended resolution (1568px)
+- Aisle scan: items listed on store sign but not in catalog now get aisle mappings
+- Aisle scan: catalog products not found on sign get AI-inferred aisles automatically
+- Aisle re-scan now always refreshes mappings with latest data (manual overrides preserved)
+
 ## [1.0] - 2026-03-01
 
 Build 15

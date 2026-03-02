@@ -212,11 +212,6 @@ struct GroceryItemRow: View {
                     animateToActive()
                 }
             }
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in if !isTransitioning { isPressed = true } }
-                    .onEnded { _ in isPressed = false }
-            )
             .sheet(isPresented: $showDetailSheet) {
                 ItemDetailSheet(item: item)
                     .environmentObject(viewModel)

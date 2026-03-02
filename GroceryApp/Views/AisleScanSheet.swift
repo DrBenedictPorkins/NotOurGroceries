@@ -886,35 +886,35 @@ struct AisleScanSheet: View {
         }
     }
 
-    /// Compress and resize image to fit within maxSizeBytes
+    /// Resize and compress image for Claude OCR upload.
+    /// 1568px long edge matches Claude's internal processing cap — no benefit going higher.
+    /// JPEG quality 0.9 preserves text stroke detail needed for aisle directory OCR.
     private func compressImageForUpload(_ image: UIImage, maxSizeBytes: Int) -> Data? {
-        var currentImage = image
-        let maxDimension: CGFloat = 2048  // Good quality while keeping size manageable
+        let maxLongEdge: CGFloat = 1568
+        let size = image.size
+        let longEdge = max(size.width, size.height)
 
-        // First, resize if image is too large
-        let size = currentImage.size
-        if size.width > maxDimension || size.height > maxDimension {
-            let scale = min(maxDimension / size.width, maxDimension / size.height)
-            let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-
-            UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-            currentImage.draw(in: CGRect(origin: .zero, size: newSize))
-            if let resizedImage = UIGraphicsGetImageFromCurrentImageContext() {
-                currentImage = resizedImage
+        let targetImage: UIImage
+        if longEdge > maxLongEdge {
+            let scale = maxLongEdge / longEdge
+            let targetSize = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+            let renderer = UIGraphicsImageRenderer(size: targetSize)
+            targetImage = renderer.image { _ in
+                image.draw(in: CGRect(origin: .zero, size: targetSize))
             }
-            UIGraphicsEndImageContext()
+        } else {
+            targetImage = image
         }
 
-        // Try progressive compression until under size limit
-        var compressionQuality: CGFloat = 0.8
-        var imageData = currentImage.jpegData(compressionQuality: compressionQuality)
-
-        while let data = imageData, data.count > maxSizeBytes, compressionQuality > 0.1 {
-            compressionQuality -= 0.1
-            imageData = currentImage.jpegData(compressionQuality: compressionQuality)
+        // Prefer 0.9 quality; step to 0.85 only if needed to fit under the size limit
+        for quality in [CGFloat(0.9), CGFloat(0.85)] {
+            if let data = targetImage.jpegData(compressionQuality: quality), data.count <= maxSizeBytes {
+                return data
+            }
         }
 
-        return imageData
+        // Fallback: 1568px at 0.85 is well under 4.5MB in practice
+        return targetImage.jpegData(compressionQuality: 0.85)
     }
 }
 

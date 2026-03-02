@@ -442,6 +442,112 @@ async function updateStoreAisleLayout(
 }
 
 // =============================================================================
+// PHASE 1.7: Direct OCR → Name-Based Mappings
+// =============================================================================
+
+/**
+ * Normalize a product name — mirrors the normalizeName() function used by the iOS app
+ * so that name lookups match at query time.
+ */
+function normalizeProductName(name: string): string {
+  let normalized = name.toLowerCase().trim();
+  normalized = normalized.replace(/^(a |an |the )/i, '');
+  const exceptions = ['hummus', 'asparagus', 'couscous', 'citrus', 'cheese', 'rice', 'clothes'];
+  if (normalized.endsWith('ies') && normalized.length > 4) {
+    normalized = normalized.slice(0, -3) + 'y';
+  } else if (normalized.endsWith('oes') && normalized.length > 4) {
+    normalized = normalized.slice(0, -2);
+  } else if (normalized.endsWith('ves') && normalized.length > 4) {
+    normalized = normalized.slice(0, -3) + 'f';
+  } else if (normalized.endsWith('es') && normalized.length > 3 && !exceptions.includes(normalized)) {
+    const stem = normalized.slice(0, -2);
+    if (stem.endsWith('s') || stem.endsWith('sh') || stem.endsWith('ch') || stem.endsWith('x') || stem.endsWith('z')) {
+      normalized = stem;
+    } else {
+      normalized = normalized.slice(0, -1);
+    }
+  } else if (normalized.endsWith('s') && normalized.length > 2 && !exceptions.includes(normalized)) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized.trim();
+}
+
+/**
+ * Phase 1.7: Save all OCR entries directly as normalizedName-based mappings.
+ *
+ * This runs BEFORE catalog matching so that items on the store sign that have
+ * no matching catalog product are not silently dropped. Custom user items
+ * (which have no productId) will match these by normalizedName.
+ *
+ * ID format: `${storeId}-name-${normalizedName}` — distinct from the
+ * productId-based format `${storeId}-${productId}` used in Phase 3, so both
+ * coexist without conflict.
+ */
+async function phase1p7DirectOCRMappings(
+  jobId: string,
+  storeId: string,
+  aisleEntries: AisleEntry[],
+  imageKeys: string[]
+): Promise<number> {
+  console.log(`[PHASE 1.7] Creating direct name-based mappings for ${aisleEntries.length} OCR entries`);
+
+  await updateJobStatus(jobId, {
+    detail: `Saving ${aisleEntries.length} direct name mappings from image...`,
+  });
+
+  const now = new Date().toISOString();
+  const seen = new Set<string>();
+  let saved = 0;
+
+  for (const entry of aisleEntries) {
+    const normalizedName = normalizeProductName(entry.productName);
+    if (!normalizedName || seen.has(normalizedName)) continue;
+    seen.add(normalizedName);
+
+    // ID uses "name-" prefix to avoid colliding with productId-based mappings
+    const mappingId = `${storeId}-name-${normalizedName.replace(/\s+/g, '-')}`;
+
+    try {
+      // Never overwrite a user override
+      const existing = await ddbClient.send(
+        new GetCommand({ TableName: MAPPING_TABLE, Key: { id: mappingId } })
+      );
+      if (existing.Item?.userAisleOverride) {
+        console.log(`[PHASE 1.7] Skipping "${normalizedName}": user override exists`);
+        continue;
+      }
+
+      await ddbClient.send(
+        new PutCommand({
+          TableName: MAPPING_TABLE,
+          Item: {
+            id: mappingId,
+            storeId,
+            normalizedName,
+            aisleId: entry.aisle,
+            confidence: 1.0,
+            source: 'IMAGE',
+            reasoning: `Directly listed on store sign: "${entry.productName}"`,
+            sourceImageKeys: imageKeys,
+            mappedAt: now,
+            createdAt: existing.Item?.createdAt ?? now,
+            updatedAt: now,
+          },
+        })
+      );
+
+      saved++;
+    } catch (error: any) {
+      console.error(`[PHASE 1.7] Error saving mapping for "${normalizedName}":`, error.message);
+      // Continue — don't let one failure abort the rest
+    }
+  }
+
+  console.log(`[PHASE 1.7] Saved ${saved} direct name-based mappings`);
+  return saved;
+}
+
+// =============================================================================
 // PHASE 2: Match Products to Aisles
 // =============================================================================
 
@@ -721,9 +827,9 @@ async function phase3ApplyMappings(
 
       if (existing) {
         // Smart merge logic:
-        // 1. Skip if user has override
-        // 2. Skip if existing confidence is higher
-        // 3. Otherwise, update
+        // 1. Skip if user has override — always respected
+        // 2. Always overwrite if new source is IMAGE — a fresh scan beats any previous scan or inference
+        // 3. Otherwise skip (e.g. LLM_INFER trying to overwrite a good IMAGE mapping)
 
         if (existing.userAisleOverride) {
           console.log(
@@ -733,16 +839,8 @@ async function phase3ApplyMappings(
           continue;
         }
 
-        if (
-          existing.confidence &&
-          existing.confidence >= mapping.confidence
-        ) {
-          console.log(
-            `[PHASE 3] Skipping ${mapping.productId}: existing confidence ${existing.confidence} >= new ${mapping.confidence}`
-          );
-          skipped++;
-          continue;
-        }
+        // IMAGE source always wins — trust the latest scan over any previous mapping
+        // (confidence check dropped: a fresh scan is more current than an old confident one)
 
         // Update existing mapping
         await ddbClient.send(
@@ -813,6 +911,253 @@ async function phase3ApplyMappings(
 }
 
 // =============================================================================
+// PHASE 4: AI Inference for Unmapped Products
+// =============================================================================
+
+/**
+ * Fetch products that have no usable mapping for this store.
+ * Treats LLM_INFER mappings as unmapped so they get re-inferred with the
+ * updated store layout context on re-scan. IMAGE mappings and user overrides
+ * are considered final and are skipped.
+ */
+async function fetchUnmappedProducts(
+  storeId: string,
+  products: Product[]
+): Promise<Product[]> {
+  console.log(`[PHASE 4] Checking ${products.length} products for existing mappings...`);
+
+  const unmapped: Product[] = [];
+
+  for (const product of products) {
+    const existing = await getExistingMapping(storeId, product.id);
+    if (!existing || existing.source === 'LLM_INFER') {
+      // No mapping, or only an inference — eligible for re-inference with fresh store context
+      // (user overrides are stored in userAisleOverride field, not source, so this is safe)
+      if (existing?.userAisleOverride) continue;
+      unmapped.push(product);
+    }
+  }
+
+  console.log(`[PHASE 4] Found ${unmapped.length} products needing inference for store ${storeId}`);
+  return unmapped;
+}
+
+/**
+ * Infer aisles for a batch of unmapped products using the store's aisle directory.
+ * Returns mappings with source LLM_INFER.
+ */
+async function inferUnmappedBatch(
+  products: Product[],
+  aisleEntries: AisleEntry[],
+  anthropic: Anthropic
+): Promise<ProductMapping[]> {
+  const aisleDirectory = aisleEntries
+    .map((e) => `- "${e.productName}" -> Aisle ${e.aisle}`)
+    .join('\n');
+
+  const productList = JSON.stringify(
+    products.map((p) => ({ id: p.id, name: p.name })),
+    null,
+    2
+  );
+
+  const prompt = `You are assigning grocery products to store aisles based on general grocery store knowledge.
+
+STORE AISLE DIRECTORY (what this store stocks in each aisle):
+${aisleDirectory}
+
+PRODUCTS TO ASSIGN (not found in store scan — use your best judgment):
+${productList}
+
+For EACH product, pick the most likely aisle from the directory above where it would be stocked.
+If there is genuinely no reasonable aisle (very unusual item), use "Unknown".
+
+Return a JSON array:
+[
+  {
+    "productId": "the-product-id",
+    "aisleId": "4",
+    "confidence": 0.65,
+    "reasoning": "Likely near similar items in aisle 4"
+  },
+  ...
+]
+
+Confidence: 0.5-0.69=reasonable guess, 0.3-0.49=weak guess, <0.3=very uncertain.
+Do NOT use confidence above 0.7 — these are inferences, not confirmed mappings.
+Map EVERY product. Return ONLY the JSON array.`;
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 8192,
+    temperature: 0,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  if (response.stop_reason === 'max_tokens') {
+    console.error(`[PHASE 4] Response truncated (${products.length} products)`);
+    throw new Error(`Response truncated: batch of ${products.length} products exceeds token limit`);
+  }
+
+  const textContent = response.content.find((block) => block.type === 'text');
+  if (!textContent || textContent.type !== 'text') {
+    throw new Error('No text response from Claude');
+  }
+
+  let jsonText = textContent.text;
+  const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonText = codeBlockMatch[1];
+  }
+
+  const jsonMatch = jsonText.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) {
+    console.error('[PHASE 4] No JSON found in response:', textContent.text.substring(0, 500));
+    throw new Error('No valid JSON array found in Claude response');
+  }
+
+  const mappings: ProductMapping[] = JSON.parse(jsonMatch[0]);
+
+  const productMap = new Map(products.map((p) => [p.id, p]));
+  for (const mapping of mappings) {
+    const product = productMap.get(mapping.productId);
+    if (product) {
+      mapping.normalizedName = product.normalizedName;
+    }
+  }
+
+  return mappings;
+}
+
+/**
+ * Phase 4: Infer aisles for all catalog products still unmapped after Phases 1-3.
+ * Saves results as LLM_INFER mappings — never overwrites existing mappings.
+ */
+async function phase4InferUnmappedProducts(
+  jobId: string,
+  storeId: string,
+  aisleEntries: AisleEntry[],
+  anthropic: Anthropic
+): Promise<number> {
+  console.log('[PHASE 4] Starting AI inference for unmapped products...');
+
+  await updateJobStatus(jobId, {
+    phase: 4,
+    phaseLabel: 'Inferring unmapped products',
+    detail: 'Checking for unmapped products...',
+  });
+
+  const allProducts = await fetchAllProducts();
+
+  if (allProducts.length === 0) {
+    console.log('[PHASE 4] No products in catalog, skipping');
+    return 0;
+  }
+
+  const unmapped = await fetchUnmappedProducts(storeId, allProducts);
+
+  if (unmapped.length === 0) {
+    console.log('[PHASE 4] All products already mapped, skipping');
+    return 0;
+  }
+
+  await updateJobStatus(jobId, {
+    detail: `Inferring aisles for ${unmapped.length} unmapped products...`,
+  });
+
+  // Batch inference in parallel (same batch size as Phase 2)
+  const batches: { batch: typeof unmapped; batchNum: number }[] = [];
+  for (let i = 0; i < unmapped.length; i += BATCH_SIZE) {
+    batches.push({
+      batch: unmapped.slice(i, i + BATCH_SIZE),
+      batchNum: Math.floor(i / BATCH_SIZE) + 1,
+    });
+  }
+
+  console.log(`[PHASE 4] Running ${batches.length} inference batches in parallel`);
+
+  const batchResults = await Promise.all(
+    batches.map(async ({ batch, batchNum }) => {
+      console.log(`[PHASE 4] Starting batch ${batchNum}/${batches.length} (${batch.length} products)`);
+      const mappings = await withRetry(
+        () => inferUnmappedBatch(batch, aisleEntries, anthropic),
+        `Infer batch ${batchNum}`
+      );
+      console.log(`[PHASE 4] Batch ${batchNum} complete: ${mappings.length} mappings`);
+      return mappings;
+    })
+  );
+
+  const allMappings = batchResults.flat();
+
+  // Save inferred mappings — skip Unknown; skip if an IMAGE mapping appeared during inference
+  let saved = 0;
+  const now = new Date().toISOString();
+
+  for (const mapping of allMappings) {
+    if (mapping.aisleId === 'Unknown') continue;
+
+    try {
+      // Re-check: an IMAGE mapping may have been written by Phase 3 during our parallel run
+      const existing = await getExistingMapping(storeId, mapping.productId);
+      if (existing && existing.source !== 'LLM_INFER') {
+        console.log(`[PHASE 4] Skipping ${mapping.productId}: IMAGE mapping appeared during inference`);
+        continue;
+      }
+
+      const mappingId = `${storeId}-${mapping.productId}`;
+      const cappedConfidence = Math.min(mapping.confidence, 0.7);
+
+      if (existing?.source === 'LLM_INFER') {
+        // Update the existing LLM_INFER record with fresh inference from new store layout
+        await ddbClient.send(
+          new UpdateCommand({
+            TableName: MAPPING_TABLE,
+            Key: { id: mappingId },
+            UpdateExpression:
+              'SET aisleId = :aisleId, confidence = :confidence, reasoning = :reasoning, mappedAt = :mappedAt, updatedAt = :updatedAt',
+            ExpressionAttributeValues: {
+              ':aisleId': mapping.aisleId,
+              ':confidence': cappedConfidence,
+              ':reasoning': mapping.reasoning,
+              ':mappedAt': now,
+              ':updatedAt': now,
+            },
+          })
+        );
+      } else {
+        // Create new LLM_INFER mapping
+        await ddbClient.send(
+          new PutCommand({
+            TableName: MAPPING_TABLE,
+            Item: {
+              id: mappingId,
+              storeId: storeId,
+              productId: mapping.productId,
+              normalizedName: mapping.normalizedName,
+              aisleId: mapping.aisleId,
+              confidence: cappedConfidence,
+              source: 'LLM_INFER',
+              reasoning: mapping.reasoning,
+              mappedAt: now,
+              createdAt: now,
+              updatedAt: now,
+            },
+          })
+        );
+      }
+
+      saved++;
+    } catch (error: any) {
+      console.error(`[PHASE 4] Error saving mapping for ${mapping.productId}:`, error.message);
+    }
+  }
+
+  console.log(`[PHASE 4] Complete. Inferred and saved ${saved} mappings`);
+  return saved;
+}
+
+// =============================================================================
 // MAIN HANDLER
 // =============================================================================
 
@@ -863,6 +1208,11 @@ async function processJob(record: DynamoDBRecord): Promise<void> {
     // Phase 1.5: Update store's aisle layout with extracted aisles
     await updateStoreAisleLayout(storeId, aisleEntries);
 
+    // Phase 1.7: Save all OCR entries as direct name-based mappings
+    // This preserves items not in the catalog (e.g. "Beer" → "Beer Garden")
+    // and enables aisle lookup for custom user-added items
+    const directMappings = await phase1p7DirectOCRMappings(jobId, storeId, aisleEntries, imageKeys);
+
     // Phase 2: Match products to aisles
     const mappings = await phase2MatchProducts(jobId, aisleEntries, anthropic);
 
@@ -884,15 +1234,18 @@ async function processJob(record: DynamoDBRecord): Promise<void> {
       imageKeys
     );
 
+    // Phase 4: AI inference for catalog products still unmapped after Phases 1-3
+    const inferred = await phase4InferUnmappedProducts(jobId, storeId, aisleEntries, anthropic);
+
     // Mark job complete
     await updateJobStatus(jobId, {
       status: 'COMPLETE',
-      detail: `Complete! Applied ${applied} mappings, skipped ${skipped}`,
-      mappingsCreated: applied,
+      detail: `Complete! ${directMappings} direct + ${applied} catalog + ${inferred} inferred mappings, ${skipped} skipped`,
+      mappingsCreated: directMappings + applied + inferred,
       completedAt: new Date().toISOString(),
     });
 
-    console.log(`[HANDLER] Job ${jobId} complete. Applied: ${applied}, Skipped: ${skipped}`);
+    console.log(`[HANDLER] Job ${jobId} complete. Applied: ${applied}, Inferred: ${inferred}, Skipped: ${skipped}`);
   } catch (error: any) {
     console.error(`[HANDLER] Job ${jobId} failed:`, error);
 

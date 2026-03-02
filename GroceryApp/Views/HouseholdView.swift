@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HouseholdView: View {
     @EnvironmentObject var amplifyService: AmplifyService
+    @Environment(\.scenePhase) private var scenePhase
     @State private var householdName = ""
     @State private var inviteCode = ""
     @State private var isCreating = true
@@ -36,6 +37,9 @@ struct HouseholdView: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
+            .refreshable {
+                await loadHouseholdDetails()
+            }
         }
         .navigationBarHidden(true)
         .sheet(isPresented: $showInviteSheet) {
@@ -54,6 +58,11 @@ struct HouseholdView: View {
         }
         .task {
             await loadHouseholdDetails()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await loadHouseholdDetails() }
+            }
         }
     }
 

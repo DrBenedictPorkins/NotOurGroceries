@@ -889,16 +889,26 @@ struct AisleScanSheet: View {
     /// Resize and compress image for Claude OCR upload.
     /// 1568px long edge matches Claude's internal processing cap — no benefit going higher.
     /// JPEG quality 0.9 preserves text stroke detail needed for aisle directory OCR.
+    ///
+    /// IMPORTANT: UIImage.size is in logical points, not pixels. On a 3x device a 4032px photo
+    /// has size.width = 1344 pts. Always multiply by image.scale to get actual pixel dimensions,
+    /// and use format.scale = 1.0 so the renderer output is 1 point = 1 pixel.
     private func compressImageForUpload(_ image: UIImage, maxSizeBytes: Int) -> Data? {
         let maxLongEdge: CGFloat = 1568
-        let size = image.size
-        let longEdge = max(size.width, size.height)
+
+        // Use actual pixel dimensions (size is in points; scale corrects for Retina)
+        let pixelWidth = image.size.width * image.scale
+        let pixelHeight = image.size.height * image.scale
+        let longEdgePx = max(pixelWidth, pixelHeight)
 
         let targetImage: UIImage
-        if longEdge > maxLongEdge {
-            let scale = maxLongEdge / longEdge
-            let targetSize = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
-            let renderer = UIGraphicsImageRenderer(size: targetSize)
+        if longEdgePx > maxLongEdge {
+            let scaleFactor = maxLongEdge / longEdgePx
+            let targetSize = CGSize(width: (pixelWidth * scaleFactor).rounded(), height: (pixelHeight * scaleFactor).rounded())
+            // scale = 1.0 → output image is exactly targetSize pixels (1 point = 1 pixel)
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = 1.0
+            let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
             targetImage = renderer.image { _ in
                 image.draw(in: CGRect(origin: .zero, size: targetSize))
             }
@@ -906,15 +916,24 @@ struct AisleScanSheet: View {
             targetImage = image
         }
 
-        // Prefer 0.9 quality; step to 0.85 only if needed to fit under the size limit
-        for quality in [CGFloat(0.9), CGFloat(0.85)] {
+        // Step down quality until under the size limit
+        for quality in [CGFloat(0.9), CGFloat(0.85), CGFloat(0.75), CGFloat(0.6), CGFloat(0.5)] {
             if let data = targetImage.jpegData(compressionQuality: quality), data.count <= maxSizeBytes {
                 return data
             }
         }
 
-        // Fallback: 1568px at 0.85 is well under 4.5MB in practice
-        return targetImage.jpegData(compressionQuality: 0.85)
+        // Last resort: halve the resolution and try at 0.85
+        let fallbackPixelWidth = targetImage.size.width * targetImage.scale
+        let fallbackPixelHeight = targetImage.size.height * targetImage.scale
+        let fallbackSize = CGSize(width: (fallbackPixelWidth * 0.5).rounded(), height: (fallbackPixelHeight * 0.5).rounded())
+        let fallbackFormat = UIGraphicsImageRendererFormat()
+        fallbackFormat.scale = 1.0
+        let fallbackRenderer = UIGraphicsImageRenderer(size: fallbackSize, format: fallbackFormat)
+        let fallbackImage = fallbackRenderer.image { _ in
+            targetImage.draw(in: CGRect(origin: .zero, size: fallbackSize))
+        }
+        return fallbackImage.jpegData(compressionQuality: 0.85)
     }
 }
 

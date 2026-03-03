@@ -171,7 +171,7 @@ class AmplifyService: ObservableObject {
             let session = try await Amplify.Auth.fetchAuthSession()
             if let cognitoSession = session as? AuthCognitoTokensProvider {
                 let tokens = try cognitoSession.getCognitoTokens().get()
-                let idTokenSuffix = String(tokens.idToken.tokenString.suffix(8))
+                let idTokenSuffix = String(tokens.idToken.suffix(8))
                 print("[AUTH-DIAG] tokens OK idToken=***\(idTokenSuffix)")
             }
         } catch {

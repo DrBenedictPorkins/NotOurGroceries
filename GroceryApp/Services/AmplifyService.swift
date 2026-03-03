@@ -164,6 +164,20 @@ class AmplifyService: ObservableObject {
     private func fetchOrCreateUserProfile() async {
         guard let user = currentUser else { return }
 
+        print("[AUTH-DIAG] fetchOrCreateUserProfile userId=\(user.userId)")
+
+        // Verify tokens are accessible before attempting API call
+        do {
+            let session = try await Amplify.Auth.fetchAuthSession()
+            if let cognitoSession = session as? AuthCognitoTokensProvider {
+                let tokens = try cognitoSession.getCognitoTokens().get()
+                let idTokenSuffix = String(tokens.idToken.tokenString.suffix(8))
+                print("[AUTH-DIAG] tokens OK idToken=***\(idTokenSuffix)")
+            }
+        } catch {
+            print("[AUTH-DIAG] token fetch failed: \(error)")
+        }
+
         do {
             let document = """
             query GetUser($id: ID!) {
@@ -185,7 +199,9 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
+            print("[AUTH-DIAG] sending getUser request")
             let response = try await Amplify.API.query(request: request)
+            print("[AUTH-DIAG] getUser response received: \(response)")
 
             switch response {
             case .success(let json):
@@ -224,13 +240,13 @@ class AmplifyService: ObservableObject {
                     loadLocalHouseholdId()
                 }
             case .failure(let error):
-                print("Failed to fetch user: \(error)")
+                print("[AUTH-DIAG] getUser .failure: \(error)")
                 // Fallback to locally stored householdId — do NOT sign out here;
                 // a fresh login should never be invalidated by a failing profile fetch.
                 loadLocalHouseholdId()
             }
         } catch {
-            print("Error fetching user profile: \(error)")
+            print("[AUTH-DIAG] getUser threw: \(error)")
             // Fallback to locally stored householdId
             loadLocalHouseholdId()
         }

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0] - 2026-03-03
 
+Build 22
+
+- Fix: Remove stale API key from prod config — invalid api_key in amplify_outputs_prod.json caused Amplify SDK to register a broken auth interceptor, silently corrupting all GraphQL auth before requests left the device
+- Add diagnostic logging to profile fetch for auth troubleshooting
+
+## [1.0] - 2026-03-03
+
 Build 21
 
 - Fix: App showed "create/join household" after login — Amplify API plugin was silently falling back to API key auth after signOut+signIn, causing all GraphQL requests to fail the "authenticated user" check. All API calls now explicitly specify Cognito User Pool auth mode.

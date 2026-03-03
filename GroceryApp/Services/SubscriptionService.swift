@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import Amplify
+import AWSPluginsCore
 
 @MainActor
 class SubscriptionService: ObservableObject {

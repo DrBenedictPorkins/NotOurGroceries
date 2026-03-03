@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Amplify
+import AWSPluginsCore
 
 // MARK: - Service
 

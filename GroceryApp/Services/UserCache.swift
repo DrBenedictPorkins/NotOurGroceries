@@ -1,5 +1,6 @@
 import Foundation
 import Amplify
+import AWSPluginsCore
 
 /// Cached user information for display purposes
 struct CachedUser {

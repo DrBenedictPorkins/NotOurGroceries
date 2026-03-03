@@ -1,5 +1,6 @@
 import Foundation
 import Amplify
+import AWSPluginsCore
 
 /// Service that caches the community product list locally for fast search
 /// Products are fetched once and cached to disk for offline access

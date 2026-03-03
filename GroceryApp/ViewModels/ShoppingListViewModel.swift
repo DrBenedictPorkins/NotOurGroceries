@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import Amplify
+import AWSPluginsCore
 import AudioToolbox
 import os.log
 

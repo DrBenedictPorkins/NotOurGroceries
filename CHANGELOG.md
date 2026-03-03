@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0] - 2026-03-03
+
+Build 20
+
+- Fix: After login, app showed "create/join household" instead of loading existing household — caused by a pre-signout call inside signIn() that corrupted the Amplify API plugin's auth state, causing all subsequent API calls to fall back to API key auth and fail with "Not Authorized"
+
 ## [1.0] - 2026-03-02
 
 Build 19

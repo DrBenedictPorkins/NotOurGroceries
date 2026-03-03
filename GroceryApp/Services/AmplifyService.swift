@@ -105,19 +105,14 @@ class AmplifyService: ObservableObject {
     }
 
     func signIn(email: String, password: String) async throws {
-        // Clear any stale session before attempting sign-in
-        let session = try await Amplify.Auth.fetchAuthSession()
-        if session.isSignedIn {
-            _ = await Amplify.Auth.signOut()
-        }
-
+        // Do NOT call signOut() here before signIn() — doing so causes the Amplify API plugin
+        // to lose its auth interceptor state and fall back to API key for subsequent requests,
+        // resulting in "Not Authorized" on all queries even with fresh credentials.
+        // checkAuthSession() already calls signOut() when tokens are expired, so by the time
+        // the user reaches the login screen, the session is already cleared.
         let result = try await Amplify.Auth.signIn(username: email, password: password)
 
         if result.isSignedIn {
-            // Force the API client to pick up the fresh session tokens before making any queries.
-            // Without this, the API plugin may still hold the previous (expired) token and the
-            // first query fires with stale credentials → "Not Authorized".
-            _ = try? await Amplify.Auth.fetchAuthSession()
             isAuthenticated = true
             currentUser = try await Amplify.Auth.getCurrentUser()
             await fetchOrCreateUserProfile()

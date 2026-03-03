@@ -14,6 +14,33 @@ class StoreService: ObservableObject {
 
     private init() {}
 
+    // MARK: - Standard Sections
+
+    /// Perimeter sections present in virtually every US grocery store.
+    /// These use stable deterministic IDs so we can detect if a store already has them.
+    static let standardSections: [StoreAisle] = [
+        StoreAisle(id: "standard-produce",  number: "", name: "Produce",        displayOrder: 900),
+        StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: 901),
+        StoreAisle(id: "standard-seafood",  number: "", name: "Seafood",        displayOrder: 902),
+        StoreAisle(id: "standard-dairy",    number: "", name: "Dairy & Eggs",   displayOrder: 903),
+        StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: 904),
+        StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: 905),
+        StoreAisle(id: "standard-frozen",   number: "", name: "Frozen",         displayOrder: 906),
+    ]
+
+    /// Adds any missing standard sections to a store and persists to backend.
+    /// Safe to call repeatedly — only adds what isn't already there.
+    func addMissingStandardSections(to store: HouseholdStore) async throws -> HouseholdStore {
+        let existingIds = Set(store.aisleLayout.map { $0.id })
+        let missing = Self.standardSections.filter { !existingIds.contains($0.id) }
+        guard !missing.isEmpty else { return store }
+
+        var updatedStore = store
+        updatedStore.aisleLayout.append(contentsOf: missing)
+        try await updateStore(updatedStore)
+        return updatedStore
+    }
+
     // MARK: - Store CRUD
 
     /// Create a new store for a household
@@ -33,6 +60,10 @@ class StoreService: ObservableObject {
         }
         """
 
+        let initialAisles = Self.standardSections.map { aisle -> [String: Any] in
+            ["id": aisle.id, "number": aisle.number, "name": aisle.name, "displayOrder": aisle.displayOrder]
+        }
+
         // AWSJSON fields must be sent as native JSON values (arrays/objects),
         // NOT as JSON strings. DynamoDB S-type strings get double-encoded by AppSync.
         let request = GraphQLRequest<JSONValue>(
@@ -42,7 +73,8 @@ class StoreService: ObservableObject {
                     "id": storeId,
                     "householdId": householdId,
                     "name": name,
-                    "chain": chain ?? ""
+                    "chain": chain ?? "",
+                    "aisleLayout": initialAisles
                 ]
             ],
             responseType: JSONValue.self,

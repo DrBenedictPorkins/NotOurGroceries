@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0] - 2026-03-03
+
+Build 24
+
+- Add standard store sections (Produce, Meat & Poultry, Seafood, Dairy & Eggs, Deli, Bakery, Frozen) to all new stores automatically
+- Existing stores get standard sections added when opening aisle management
+
 ## [1.0] - 2026-03-02
 
 Build 23

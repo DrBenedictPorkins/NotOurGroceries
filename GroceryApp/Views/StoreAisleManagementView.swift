@@ -300,6 +300,12 @@ struct StoreAisleManagementView: View {
             }
         }
         .task {
+            // Ensure standard perimeter sections exist (Produce, Meat, Dairy, etc.)
+            if let updated = try? await storeService.addMissingStandardSections(to: currentStore) {
+                if let index = viewModel.householdStores.firstIndex(where: { $0.id == updated.id }) {
+                    viewModel.householdStores[index] = updated
+                }
+            }
             // Load mappings if not already loaded
             if mappings.isEmpty {
                 try? await storeService.fetchMappings(storeId: store.id)

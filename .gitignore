@@ -22,3 +22,4 @@ DerivedData/
 .swiftpm/
 *.xcworkspace/xcshareddata/swiftpm/Package.resolved
 .venv
+scripts/amplify-monitor.py

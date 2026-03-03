@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0] - 2026-03-03
+
+Build 23
+
+- Fix: Brief flash of "Set Up Household" screen after login — UI now waits for profile fetch to complete before transitioning, so it goes directly to the shopping list
+
 ## [1.0] - 2026-03-02
 
 Build 22

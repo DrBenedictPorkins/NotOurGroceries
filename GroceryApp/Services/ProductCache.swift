@@ -153,7 +153,8 @@ class ProductCache: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: variables,
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)

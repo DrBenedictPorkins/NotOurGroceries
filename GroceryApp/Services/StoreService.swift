@@ -44,7 +44,8 @@ class StoreService: ObservableObject {
                     "chain": chain ?? ""
                 ]
             ],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -107,7 +108,8 @@ class StoreService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: variables,
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -144,7 +146,8 @@ class StoreService: ObservableObject {
                     "id": storeId
                 ]
             ],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -179,7 +182,8 @@ class StoreService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["householdId": householdId],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)
@@ -294,7 +298,8 @@ class StoreService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["input": input],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -340,7 +345,8 @@ class StoreService: ObservableObject {
                     "id": mapping.id
                 ]
             ],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -371,7 +377,8 @@ class StoreService: ObservableObject {
                     "id": id
                 ]
             ],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -446,7 +453,8 @@ class StoreService: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: variables,
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.query(request: request)

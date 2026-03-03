@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0] - 2026-03-03
 
+Build 21
+
+- Fix: App showed "create/join household" after login — Amplify API plugin was silently falling back to API key auth after signOut+signIn, causing all GraphQL requests to fail the "authenticated user" check. All API calls now explicitly specify Cognito User Pool auth mode.
+
+## [1.0] - 2026-03-03
+
 Build 20
 
 - Fix: After login, app showed "create/join household" instead of loading existing household — caused by a pre-signout call inside signIn() that corrupted the Amplify API plugin's auth state, causing all subsequent API calls to fall back to API key auth and fail with "Not Authorized"

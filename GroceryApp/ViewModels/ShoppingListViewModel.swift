@@ -235,7 +235,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["filter": filter, "limit": 1000],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.query(request: request)
@@ -424,7 +425,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -533,7 +535,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -646,7 +649,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -739,7 +743,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -807,7 +812,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -916,7 +922,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -999,7 +1006,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -1060,7 +1068,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -1126,7 +1135,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -1200,7 +1210,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -1287,7 +1298,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -1687,7 +1699,8 @@ class ShoppingListViewModel: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["id": id],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         do {
@@ -1846,7 +1859,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -1941,7 +1955,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -2052,7 +2067,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -2139,7 +2155,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             _ = try await Amplify.API.mutate(request: request)
@@ -2174,7 +2191,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["id": householdId],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.query(request: request)
@@ -2329,7 +2347,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -2402,7 +2421,8 @@ class ShoppingListViewModel: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -2457,7 +2477,8 @@ class ShoppingListViewModel: ObservableObject {
                     "householdId": householdId,
                     "status": ["eq": "PENDING"]
                 ],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.query(request: request)
@@ -2538,7 +2559,8 @@ class ShoppingListViewModel: ObservableObject {
             let graphQLRequest = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["input": input],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: graphQLRequest)
@@ -2709,7 +2731,8 @@ class ShoppingListViewModel: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["input": input],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)

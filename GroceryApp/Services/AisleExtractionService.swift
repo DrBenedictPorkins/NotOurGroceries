@@ -250,7 +250,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["input": input],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -332,7 +333,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["id": jobId],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)
@@ -512,7 +514,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["input": input],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -593,7 +596,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: variables,
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)
@@ -723,7 +727,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["input": input],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -763,7 +768,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["input": input],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -832,7 +838,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: variables,
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -933,7 +940,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: variables,
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -1068,7 +1076,8 @@ class AisleExtractionService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["input": input],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)

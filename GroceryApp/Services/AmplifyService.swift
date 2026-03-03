@@ -18,8 +18,16 @@ class AmplifyService: ObservableObject {
             // Persist householdId locally
             if let householdId = currentHouseholdId {
                 UserDefaults.standard.set(householdId, forKey: "currentHouseholdId")
+                // Also write a user-scoped cache so it survives signOut and can be
+                // restored if the same user signs back in (even if getUser fails).
+                if let userId = currentUser?.userId {
+                    UserDefaults.standard.set(householdId, forKey: "cachedHouseholdId")
+                    UserDefaults.standard.set(userId, forKey: "cachedUserId")
+                }
             } else {
                 UserDefaults.standard.removeObject(forKey: "currentHouseholdId")
+                // Intentionally do NOT clear cachedHouseholdId/cachedUserId here —
+                // they persist across signOut so the same user can recover on next login.
             }
         }
     }
@@ -173,7 +181,8 @@ class AmplifyService: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["id": user.userId],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.query(request: request)
@@ -258,7 +267,8 @@ class AmplifyService: ObservableObject {
                         "displayName": displayName
                     ]
                 ],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -276,9 +286,19 @@ class AmplifyService: ObservableObject {
     }
 
     private func loadLocalHouseholdId() {
+        // Primary: simple stored value (set whenever currentHouseholdId is set)
         if let storedHouseholdId = UserDefaults.standard.string(forKey: "currentHouseholdId") {
             self.currentHouseholdId = storedHouseholdId
             print("Loaded householdId from UserDefaults: \(storedHouseholdId)")
+            return
+        }
+        // Fallback: user-scoped cache that survives signOut.
+        // Only restore if the cached userId matches the currently signed-in user.
+        if let cachedUserId = UserDefaults.standard.string(forKey: "cachedUserId"),
+           let cachedHouseholdId = UserDefaults.standard.string(forKey: "cachedHouseholdId"),
+           cachedUserId == currentUser?.userId {
+            self.currentHouseholdId = cachedHouseholdId
+            print("Restored householdId from user-scoped cache: \(cachedHouseholdId)")
         }
     }
 
@@ -337,7 +357,8 @@ class AmplifyService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["name": name],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)
@@ -381,7 +402,8 @@ class AmplifyService: ObservableObject {
                     "sequenceNumber": 0
                 ]
             ],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -417,7 +439,8 @@ class AmplifyService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["inviteCode": inviteCode],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)
@@ -463,7 +486,8 @@ class AmplifyService: ObservableObject {
                         "householdId": householdId
                     ]
                 ],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: updateRequest)
@@ -513,7 +537,8 @@ class AmplifyService: ObservableObject {
                         "householdId": householdId
                     ]
                 ],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.mutate(request: request)
@@ -582,7 +607,8 @@ class AmplifyService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["id": householdId],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)
@@ -688,7 +714,8 @@ class AmplifyService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["householdId": householdId],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -746,7 +773,8 @@ class AmplifyService: ObservableObject {
                 "recipientEmail": email,
                 "senderName": senderName
             ],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -799,7 +827,8 @@ class AmplifyService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["inviteCode": inviteCode.uppercased()],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -880,7 +909,8 @@ class AmplifyService: ObservableObject {
                     "profilePattern": pattern
                 ]
             ],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -921,7 +951,8 @@ class AmplifyService: ObservableObject {
         let request = GraphQLRequest<JSONValue>(
             document: document,
             variables: ["id": user.userId],
-            responseType: JSONValue.self
+            responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.query(request: request)

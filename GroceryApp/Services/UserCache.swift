@@ -75,7 +75,8 @@ class UserCache: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["householdId": householdId],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.query(request: request)
@@ -119,7 +120,8 @@ class UserCache: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["id": userId],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let response = try await Amplify.API.query(request: request)

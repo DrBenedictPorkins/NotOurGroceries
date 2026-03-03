@@ -158,7 +158,8 @@ class SubscriptionService: ObservableObject {
 
             let request = GraphQLRequest<JSONValue>(
                 document: document,
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let subscription = Amplify.API.subscribe(request: request)
@@ -219,7 +220,8 @@ class SubscriptionService: ObservableObject {
 
             let request = GraphQLRequest<JSONValue>(
                 document: document,
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let subscription = Amplify.API.subscribe(request: request)
@@ -281,7 +283,8 @@ class SubscriptionService: ObservableObject {
 
             let request = GraphQLRequest<JSONValue>(
                 document: document,
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let subscription = Amplify.API.subscribe(request: request)
@@ -349,7 +352,8 @@ class SubscriptionService: ObservableObject {
             let request = GraphQLRequest<JSONValue>(
                 document: document,
                 variables: ["id": householdId],
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let subscription = Amplify.API.subscribe(request: request)
@@ -435,7 +439,8 @@ class SubscriptionService: ObservableObject {
 
             let request = GraphQLRequest<JSONValue>(
                 document: document,
-                responseType: JSONValue.self
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
             let subscription = Amplify.API.subscribe(request: request)

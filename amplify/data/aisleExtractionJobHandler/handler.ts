@@ -930,7 +930,7 @@ async function fetchUnmappedProducts(
 
   for (const product of products) {
     const existing = await getExistingMapping(storeId, product.id);
-    if (!existing || existing.source === 'LLM_INFER') {
+    if (!existing || existing.source === 'LLM_GUESS') {
       // No mapping, or only an inference — eligible for re-inference with fresh store context
       // (user overrides are stored in userAisleOverride field, not source, so this is safe)
       if (existing?.userAisleOverride) continue;
@@ -1100,7 +1100,7 @@ async function phase4InferUnmappedProducts(
     try {
       // Re-check: an IMAGE mapping may have been written by Phase 3 during our parallel run
       const existing = await getExistingMapping(storeId, mapping.productId);
-      if (existing && existing.source !== 'LLM_INFER') {
+      if (existing && existing.source !== 'LLM_GUESS') {
         console.log(`[PHASE 4] Skipping ${mapping.productId}: IMAGE mapping appeared during inference`);
         continue;
       }
@@ -1108,7 +1108,7 @@ async function phase4InferUnmappedProducts(
       const mappingId = `${storeId}-${mapping.productId}`;
       const cappedConfidence = Math.min(mapping.confidence, 0.7);
 
-      if (existing?.source === 'LLM_INFER') {
+      if (existing?.source === 'LLM_GUESS') {
         // Update the existing LLM_INFER record with fresh inference from new store layout
         await ddbClient.send(
           new UpdateCommand({
@@ -1137,7 +1137,7 @@ async function phase4InferUnmappedProducts(
               normalizedName: mapping.normalizedName,
               aisleId: mapping.aisleId,
               confidence: cappedConfidence,
-              source: 'LLM_INFER',
+              source: 'LLM_GUESS',
               reasoning: mapping.reasoning,
               mappedAt: now,
               createdAt: now,

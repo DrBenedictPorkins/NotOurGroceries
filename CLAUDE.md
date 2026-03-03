@@ -92,6 +92,42 @@ echo "Shopping data cleared!"
 EOF
 ```
 
+## DynamoDB Backups (Prod Only)
+
+Point-in-time recovery (PITR) is enabled on all prod tables that hold user data:
+
+| Table | PITR |
+|-------|------|
+| Aisle | ✅ enabled |
+| GroceryItem | ✅ enabled |
+| Household | ✅ enabled |
+| HouseholdStore | ✅ enabled |
+| Product | ✅ enabled |
+| ProductAisleMapping | ✅ enabled |
+| Store | ✅ enabled |
+| User | ✅ enabled |
+| AisleExtractionJob | — transient |
+| Commit | — transient |
+| ShoppingRequest | — transient |
+
+### Restoring a Table
+
+DynamoDB restores to a **new table** — it never overwrites in place. The restore workflow is:
+
+1. Restore source table to a temp table name:
+```bash
+AWS_PROFILE=mine aws dynamodb restore-table-to-point-in-time \
+  --source-table-name "GroceryItem-vdsfrt2plzgwfdae2ucpxtwzh4-NONE" \
+  --target-table-name "GroceryItem-vdsfrt2plzgwfdae2ucpxtwzh4-NONE-restored" \
+  --restore-date-time "2026-03-02T10:00:00Z"
+```
+
+2. Verify the restored data looks correct (scan the temp table)
+
+3. Copy items from temp table back into the live table (scan + batch write), then delete temp table
+
+This approach requires no app redeployment — the live table name never changes. Claude can execute all three steps via CLI when asked.
+
 ## Data Model
 
 ### ItemStatus Enum

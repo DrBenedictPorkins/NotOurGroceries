@@ -114,6 +114,10 @@ class AmplifyService: ObservableObject {
         let result = try await Amplify.Auth.signIn(username: email, password: password)
 
         if result.isSignedIn {
+            // Force the API client to pick up the fresh session tokens before making any queries.
+            // Without this, the API plugin may still hold the previous (expired) token and the
+            // first query fires with stale credentials → "Not Authorized".
+            _ = try? await Amplify.Auth.fetchAuthSession()
             isAuthenticated = true
             currentUser = try await Amplify.Auth.getCurrentUser()
             await fetchOrCreateUserProfile()
@@ -217,16 +221,12 @@ class AmplifyService: ObservableObject {
                 }
             case .failure(let error):
                 print("Failed to fetch user: \(error)")
-                if isAuthError(error) {
-                    try? await signOut()
-                    return
-                }
-                // Fallback to locally stored householdId
+                // Fallback to locally stored householdId — do NOT sign out here;
+                // a fresh login should never be invalidated by a failing profile fetch.
                 loadLocalHouseholdId()
             }
         } catch {
             print("Error fetching user profile: \(error)")
-            handleAuthError(error)
             // Fallback to locally stored householdId
             loadLocalHouseholdId()
         }

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0] - 2026-03-02
 
+Build 19
+
+- Fix: Sign-in loop — after logging in, app briefly showed household screen then returned to sign-in. Caused by overly aggressive auth error detection in profile fetch calling sign-out on any failure
+- Fix: Aisle mappings showing 0 mapped items — invalid enum value `LLM_INFER` in database records caused AppSync to error on the entire mappings query; records updated and backend fixed
+
+## [1.0] - 2026-03-02
+
 Build 18
 
 - Aisle scan now updates the aisle management view progressively as each phase completes, rather than waiting for the full job to finish

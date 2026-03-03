@@ -30,17 +30,20 @@ struct StoreAisle: Identifiable, Codable, Hashable {
     let number: String
     let name: String
     let displayOrder: Int
+    var description: String?
 
     init(
         id: String = UUID().uuidString,
         number: String,
         name: String,
-        displayOrder: Int
+        displayOrder: Int,
+        description: String? = nil
     ) {
         self.id = id
         self.number = number
         self.name = name
         self.displayOrder = displayOrder
+        self.description = description
     }
 }
 

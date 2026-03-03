@@ -148,6 +148,7 @@ addEnvVars(aisleExtractionJobLambda, {
   MAPPING_TABLE_NAME: backend.data.resources.tables['ProductAisleMapping'].tableName,
   BUCKET_NAME: aisleImagesBucket.bucketName,
   HOUSEHOLD_STORE_TABLE_NAME: householdStoreTableForJob.tableName,
+  GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
 });
 
 // Grant permissions
@@ -156,6 +157,7 @@ productTable.grantReadData(aisleExtractionJobLambda);
 backend.data.resources.tables['ProductAisleMapping'].grantReadWriteData(aisleExtractionJobLambda);
 aisleImagesBucket.grantRead(aisleExtractionJobLambda);
 householdStoreTableForJob.grantReadWriteData(aisleExtractionJobLambda);
+groceryItemTable.grantReadData(aisleExtractionJobLambda);
 
 // ========================================
 // INFER PRODUCT AISLE FUNCTION

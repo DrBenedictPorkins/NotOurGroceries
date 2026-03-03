@@ -20,6 +20,7 @@ const MAPPING_TABLE = process.env.MAPPING_TABLE_NAME!;
 const BUCKET_NAME = process.env.BUCKET_NAME!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 const HOUSEHOLD_STORE_TABLE = process.env.HOUSEHOLD_STORE_TABLE_NAME!;
+const GROCERY_ITEM_TABLE = process.env.GROCERY_ITEM_TABLE_NAME!;
 
 // Constants - Updated 2026-02-01: Haiku 3.5 + parallel batches for speed
 const MAX_RETRIES = 3;
@@ -370,17 +371,57 @@ interface StoreAisle {
   number: string;
   name: string;
   displayOrder: number;
+  description?: string;
 }
 
 /**
- * Extract unique aisles from OCR entries and update the store's aisleLayout
- * Groups products by aisle to create a descriptive name
+ * Hardcoded standard sections present in virtually every US grocery store.
+ * IDs match the iOS StoreService.standardSections stable IDs.
+ * Used as extra context in LLM prompts so the model can assign perimeter
+ * items (produce, dairy, meat, etc.) even when they are absent from the
+ * store's numbered aisle directory.
+ */
+const STANDARD_SECTIONS: Record<string, string> = {
+  'standard-produce': 'Fresh fruits, vegetables, leafy greens, and fresh herbs',
+  'standard-meat': 'Fresh and packaged beef, chicken, pork, turkey, lamb, and sausages',
+  'standard-seafood': 'Fresh and packaged fish, shrimp, shellfish, and seafood',
+  'standard-dairy': 'Milk, cream, yogurt, butter, cheese, eggs, and dairy alternatives',
+  'standard-deli': 'Sliced meats, deli cheese, prepared foods, and cold cuts',
+  'standard-bakery': 'Fresh bread, rolls, muffins, cakes, pastries, and baked goods',
+  'standard-frozen': 'Frozen vegetables, meals, pizza, ice cream, and frozen meats',
+};
+
+/**
+ * Build a prompt snippet listing standard sections so the LLM knows to use
+ * their IDs (e.g. "standard-produce") as aisleId for perimeter items.
+ */
+function buildStandardSectionsContext(): string {
+  const lines = Object.entries(STANDARD_SECTIONS).map(
+    ([id, desc]) => `- ID: "${id}" | ${desc}`
+  );
+  return lines.join('\n');
+}
+
+/**
+ * Extract unique aisles from OCR entries and update the store's aisleLayout.
+ * Preserves any existing standard sections (id starts with "standard-") so a
+ * re-scan never removes them.
+ * Returns the final combined aisleLayout.
  */
 async function updateStoreAisleLayout(
   storeId: string,
   aisleEntries: AisleEntry[]
-): Promise<void> {
+): Promise<{ layout: StoreAisle[]; householdId: string }> {
   console.log(`[PHASE 1.5] Updating store aisle layout from ${aisleEntries.length} entries`);
+
+  // Fetch current store to preserve existing standard sections and get householdId
+  const currentItem = await ddbClient.send(
+    new GetCommand({ TableName: HOUSEHOLD_STORE_TABLE, Key: { id: storeId } })
+  );
+  const householdId: string = currentItem.Item?.householdId ?? '';
+  const existingLayout: StoreAisle[] = currentItem.Item?.aisleLayout || [];
+  const standardSections = existingLayout.filter((a: StoreAisle) => a.id.startsWith('standard-'));
+  console.log(`[PHASE 1.5] Preserving ${standardSections.length} existing standard sections`);
 
   // Group entries by aisle
   const aisleGroups = new Map<string, string[]>();
@@ -406,10 +447,9 @@ async function updateStoreAisleLayout(
     return a.localeCompare(b); // Alphabetical for named sections
   });
 
-  // Create StoreAisle objects
-  const aisleLayout: StoreAisle[] = aisleKeys.map((aisleKey, index) => {
+  // Create StoreAisle objects for OCR-derived aisles
+  const ocrAisles: StoreAisle[] = aisleKeys.map((aisleKey, index) => {
     const products = aisleGroups.get(aisleKey) || [];
-    // Create a name from the first few products
     const sampleProducts = products.slice(0, 3).join(', ');
     const suffix = products.length > 3 ? '...' : '';
 
@@ -418,10 +458,14 @@ async function updateStoreAisleLayout(
       number: aisleKey,
       name: sampleProducts + suffix,
       displayOrder: index,
+      description: products.slice(0, 10).join(', '),
     };
   });
 
-  console.log(`[PHASE 1.5] Created ${aisleLayout.length} aisles: ${aisleKeys.join(', ')}`);
+  // Final layout: OCR aisles + preserved standard sections (standard sections keep 900+ displayOrder)
+  const finalLayout: StoreAisle[] = [...ocrAisles, ...standardSections];
+
+  console.log(`[PHASE 1.5] Created ${ocrAisles.length} OCR aisles + ${standardSections.length} standard sections`);
 
   // Update the HouseholdStore record
   // Store as native DynamoDB List (L type), NOT a JSON string (S type).
@@ -432,13 +476,14 @@ async function updateStoreAisleLayout(
       Key: { id: storeId },
       UpdateExpression: 'SET aisleLayout = :aisleLayout, updatedAt = :updatedAt',
       ExpressionAttributeValues: {
-        ':aisleLayout': aisleLayout,
+        ':aisleLayout': finalLayout,
         ':updatedAt': new Date().toISOString(),
       },
     })
   );
 
-  console.log(`[PHASE 1.5] Store aisle layout updated with ${aisleLayout.length} aisles`);
+  console.log(`[PHASE 1.5] Store aisle layout updated with ${finalLayout.length} total aisles`);
+  return { layout: finalLayout, householdId };
 }
 
 // =============================================================================
@@ -605,15 +650,21 @@ async function matchProductBatch(
     2
   );
 
+  const standardSectionsContext = buildStandardSectionsContext();
+
   const prompt = `You are matching grocery products to store aisles.
 
 STORE AISLE DIRECTORY (extracted from store sign):
 ${aisleDirectory}
 
+STANDARD STORE SECTIONS (perimeter areas not in the numbered directory):
+${standardSectionsContext}
+Use the section ID (e.g. "standard-produce") as the aisleId for products in these sections.
+
 PRODUCTS TO MATCH:
 ${productList}
 
-For EACH product, find the best matching aisle from the directory above.
+For EACH product, find the best matching aisle from the directory above, OR the best matching standard section if the product belongs there (e.g. fresh produce, meat, dairy, deli, bakery, seafood, frozen).
 
 Return a JSON array:
 [
@@ -626,8 +677,9 @@ Return a JSON array:
   ...
 ]
 
+For standard section matches use the section ID: e.g. "aisleId": "standard-produce"
 Confidence: 1.0=exact, 0.8-0.99=strong, 0.5-0.79=likely, 0.3-0.49=weak, <0.3=uncertain.
-If no match, use aisleId "Unknown" with low confidence.
+If no match anywhere, use aisleId "Unknown" with low confidence.
 Keep reasoning SHORT (under 10 words). Map EVERY product. Return ONLY the JSON array.`;
 
   const response = await anthropic.messages.create({
@@ -961,16 +1013,22 @@ async function inferUnmappedBatch(
     2
   );
 
+  const standardSectionsContext = buildStandardSectionsContext();
+
   const prompt = `You are assigning grocery products to store aisles based on general grocery store knowledge.
 
 STORE AISLE DIRECTORY (what this store stocks in each aisle):
 ${aisleDirectory}
 
+STANDARD STORE SECTIONS (perimeter areas not in the numbered directory):
+${standardSectionsContext}
+Use the section ID (e.g. "standard-produce") as the aisleId for products in these sections.
+
 PRODUCTS TO ASSIGN (not found in store scan — use your best judgment):
 ${productList}
 
-For EACH product, pick the most likely aisle from the directory above where it would be stocked.
-If there is genuinely no reasonable aisle (very unusual item), use "Unknown".
+For EACH product, pick the most likely aisle from the directory above, OR the best matching standard section if the product belongs there (fresh produce, meat, dairy, deli, bakery, seafood, frozen).
+If there is genuinely no reasonable match anywhere, use "Unknown".
 
 Return a JSON array:
 [
@@ -983,6 +1041,7 @@ Return a JSON array:
   ...
 ]
 
+For standard section matches use the section ID: e.g. "aisleId": "standard-produce"
 Confidence: 0.5-0.69=reasonable guess, 0.3-0.49=weak guess, <0.3=very uncertain.
 Do NOT use confidence above 0.7 — these are inferences, not confirmed mappings.
 Map EVERY product. Return ONLY the JSON array.`;
@@ -1158,6 +1217,198 @@ async function phase4InferUnmappedProducts(
 }
 
 // =============================================================================
+// PHASE 5: Infer Aisles for Custom Household Items
+// =============================================================================
+
+interface CustomItem {
+  id: string;
+  name: string;
+  normalizedName: string;
+}
+
+/**
+ * Scan GroceryItem table for all custom items belonging to a household.
+ * Custom items (isCustom=true) have no productId and are matched only by normalizedName.
+ */
+async function fetchCustomHouseholdItems(householdId: string): Promise<CustomItem[]> {
+  console.log(`[PHASE 5] Fetching custom items for household ${householdId}`);
+
+  const items: CustomItem[] = [];
+  let lastEvaluatedKey: Record<string, any> | undefined;
+
+  do {
+    const result = await ddbClient.send(
+      new ScanCommand({
+        TableName: GROCERY_ITEM_TABLE,
+        FilterExpression: 'isCustom = :true AND householdId = :householdId',
+        ExpressionAttributeValues: {
+          ':true': true,
+          ':householdId': householdId,
+        },
+        ProjectionExpression: 'id, #name, normalizedName',
+        ExpressionAttributeNames: { '#name': 'name' },
+        ExclusiveStartKey: lastEvaluatedKey,
+      })
+    );
+
+    if (result.Items) {
+      for (const item of result.Items) {
+        if (item.id && item.name && item.normalizedName) {
+          items.push({
+            id: item.id as string,
+            name: item.name as string,
+            normalizedName: item.normalizedName as string,
+          });
+        }
+      }
+    }
+
+    lastEvaluatedKey = result.LastEvaluatedKey;
+  } while (lastEvaluatedKey);
+
+  // Deduplicate by normalizedName (same item may appear multiple times in a household's history)
+  const seen = new Set<string>();
+  const unique: CustomItem[] = [];
+  for (const item of items) {
+    if (!seen.has(item.normalizedName)) {
+      seen.add(item.normalizedName);
+      unique.push(item);
+    }
+  }
+
+  console.log(`[PHASE 5] Found ${unique.length} unique custom items for household`);
+  return unique;
+}
+
+/**
+ * Phase 5: Infer aisles for custom household items that have no existing mapping.
+ * Uses the same LLM inference as Phase 4, but for user-created items (no productId).
+ * Saves results as LLM_GUESS name-based mappings (id: ${storeId}-name-${normalizedName}).
+ */
+async function phase5InferCustomItems(
+  jobId: string,
+  storeId: string,
+  householdId: string,
+  aisleEntries: AisleEntry[],
+  anthropic: Anthropic
+): Promise<number> {
+  console.log('[PHASE 5] Starting AI inference for custom household items...');
+
+  await updateJobStatus(jobId, {
+    phase: 5,
+    phaseLabel: 'Inferring custom item aisles',
+    detail: 'Checking for unmapped custom items...',
+  });
+
+  const allCustomItems = await fetchCustomHouseholdItems(householdId);
+
+  if (allCustomItems.length === 0) {
+    console.log('[PHASE 5] No custom items found, skipping');
+    return 0;
+  }
+
+  // Filter to items with no existing name-based mapping for this store
+  const unmapped: CustomItem[] = [];
+  for (const item of allCustomItems) {
+    const mappingId = `${storeId}-name-${item.normalizedName.replace(/\s+/g, '-')}`;
+    const existing = await ddbClient.send(
+      new GetCommand({ TableName: MAPPING_TABLE, Key: { id: mappingId } })
+    );
+    if (!existing.Item || (existing.Item.source === 'LLM_GUESS' && !existing.Item.userAisleOverride)) {
+      unmapped.push(item);
+    }
+  }
+
+  if (unmapped.length === 0) {
+    console.log('[PHASE 5] All custom items already have IMAGE or user-override mappings, skipping');
+    return 0;
+  }
+
+  console.log(`[PHASE 5] ${unmapped.length} custom items need inference`);
+
+  await updateJobStatus(jobId, {
+    detail: `Inferring aisles for ${unmapped.length} custom items...`,
+  });
+
+  // Reuse inferUnmappedBatch — pass custom items as Product-shaped objects with empty id
+  // (productId is not used for name-based mappings)
+  const productShapedItems = unmapped.map((item) => ({
+    id: item.id,
+    name: item.name,
+    normalizedName: item.normalizedName,
+  }));
+
+  const batches: { batch: typeof productShapedItems; batchNum: number }[] = [];
+  for (let i = 0; i < productShapedItems.length; i += BATCH_SIZE) {
+    batches.push({
+      batch: productShapedItems.slice(i, i + BATCH_SIZE),
+      batchNum: Math.floor(i / BATCH_SIZE) + 1,
+    });
+  }
+
+  const batchResults = await Promise.all(
+    batches.map(async ({ batch, batchNum }) => {
+      const mappings = await withRetry(
+        () => inferUnmappedBatch(batch, aisleEntries, anthropic),
+        `Phase5 batch ${batchNum}`
+      );
+      return mappings;
+    })
+  );
+
+  const allMappings = batchResults.flat();
+
+  // Save as name-based LLM_GUESS mappings
+  let saved = 0;
+  const now = new Date().toISOString();
+  const itemMap = new Map(unmapped.map((item) => [item.id, item]));
+
+  for (const mapping of allMappings) {
+    if (mapping.aisleId === 'Unknown') continue;
+
+    const item = itemMap.get(mapping.productId); // productId field holds the item.id from productShapedItems
+    if (!item) continue;
+
+    const mappingId = `${storeId}-name-${item.normalizedName.replace(/\s+/g, '-')}`;
+    const cappedConfidence = Math.min(mapping.confidence, 0.7);
+
+    try {
+      // Re-check: don't overwrite an IMAGE or user-override mapping
+      const existing = await ddbClient.send(
+        new GetCommand({ TableName: MAPPING_TABLE, Key: { id: mappingId } })
+      );
+      if (existing.Item && existing.Item.source !== 'LLM_GUESS') continue;
+      if (existing.Item?.userAisleOverride) continue;
+
+      await ddbClient.send(
+        new PutCommand({
+          TableName: MAPPING_TABLE,
+          Item: {
+            id: mappingId,
+            storeId,
+            normalizedName: item.normalizedName,
+            aisleId: mapping.aisleId,
+            confidence: cappedConfidence,
+            source: 'LLM_GUESS',
+            reasoning: mapping.reasoning,
+            mappedAt: now,
+            createdAt: existing.Item?.createdAt ?? now,
+            updatedAt: now,
+          },
+        })
+      );
+
+      saved++;
+    } catch (error: any) {
+      console.error(`[PHASE 5] Error saving mapping for "${item.normalizedName}":`, error.message);
+    }
+  }
+
+  console.log(`[PHASE 5] Complete. Saved ${saved} custom item mappings`);
+  return saved;
+}
+
+// =============================================================================
 // MAIN HANDLER
 // =============================================================================
 
@@ -1205,8 +1456,8 @@ async function processJob(record: DynamoDBRecord): Promise<void> {
       return;
     }
 
-    // Phase 1.5: Update store's aisle layout with extracted aisles
-    await updateStoreAisleLayout(storeId, aisleEntries);
+    // Phase 1.5: Update store's aisle layout with extracted aisles (preserves standard sections)
+    const { householdId } = await updateStoreAisleLayout(storeId, aisleEntries);
 
     // Phase 1.7: Save all OCR entries as direct name-based mappings
     // This preserves items not in the catalog (e.g. "Beer" → "Beer Garden")
@@ -1237,15 +1488,20 @@ async function processJob(record: DynamoDBRecord): Promise<void> {
     // Phase 4: AI inference for catalog products still unmapped after Phases 1-3
     const inferred = await phase4InferUnmappedProducts(jobId, storeId, aisleEntries, anthropic);
 
+    // Phase 5: Infer aisles for custom household items (no productId, matched by name)
+    const customInferred = householdId
+      ? await phase5InferCustomItems(jobId, storeId, householdId, aisleEntries, anthropic)
+      : 0;
+
     // Mark job complete
     await updateJobStatus(jobId, {
       status: 'COMPLETE',
-      detail: `Complete! ${directMappings} direct + ${applied} catalog + ${inferred} inferred mappings, ${skipped} skipped`,
-      mappingsCreated: directMappings + applied + inferred,
+      detail: `Complete! ${directMappings} direct + ${applied} catalog + ${inferred} inferred + ${customInferred} custom mappings, ${skipped} skipped`,
+      mappingsCreated: directMappings + applied + inferred + customInferred,
       completedAt: new Date().toISOString(),
     });
 
-    console.log(`[HANDLER] Job ${jobId} complete. Applied: ${applied}, Inferred: ${inferred}, Skipped: ${skipped}`);
+    console.log(`[HANDLER] Job ${jobId} complete. Applied: ${applied}, Inferred: ${inferred}, Custom: ${customInferred}, Skipped: ${skipped}`);
   } catch (error: any) {
     console.error(`[HANDLER] Job ${jobId} failed:`, error);
 

@@ -19,13 +19,13 @@ class StoreService: ObservableObject {
     /// Perimeter sections present in virtually every US grocery store.
     /// These use stable deterministic IDs so we can detect if a store already has them.
     static let standardSections: [StoreAisle] = [
-        StoreAisle(id: "standard-produce",  number: "", name: "Produce",        displayOrder: 900),
-        StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: 901),
-        StoreAisle(id: "standard-seafood",  number: "", name: "Seafood",        displayOrder: 902),
-        StoreAisle(id: "standard-dairy",    number: "", name: "Dairy & Eggs",   displayOrder: 903),
-        StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: 904),
-        StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: 905),
-        StoreAisle(id: "standard-frozen",   number: "", name: "Frozen",         displayOrder: 906),
+        StoreAisle(id: "standard-produce",  number: "", name: "Produce",        displayOrder: 900, description: "Fresh fruits, vegetables, leafy greens, and fresh herbs"),
+        StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: 901, description: "Fresh and packaged beef, chicken, pork, turkey, lamb, and sausages"),
+        StoreAisle(id: "standard-seafood",  number: "", name: "Seafood",        displayOrder: 902, description: "Fresh and packaged fish, shrimp, shellfish, and seafood"),
+        StoreAisle(id: "standard-dairy",    number: "", name: "Dairy & Eggs",   displayOrder: 903, description: "Milk, cream, yogurt, butter, cheese, eggs, and dairy alternatives"),
+        StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: 904, description: "Sliced meats, deli cheese, prepared foods, and cold cuts"),
+        StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: 905, description: "Fresh bread, rolls, muffins, cakes, pastries, and baked goods"),
+        StoreAisle(id: "standard-frozen",   number: "", name: "Frozen",         displayOrder: 906, description: "Frozen vegetables, meals, pizza, ice cream, and frozen meats"),
     ]
 
     /// Adds any missing standard sections to a store and persists to backend.
@@ -61,7 +61,9 @@ class StoreService: ObservableObject {
         """
 
         let initialAisles = Self.standardSections.map { aisle -> [String: Any] in
-            ["id": aisle.id, "number": aisle.number, "name": aisle.name, "displayOrder": aisle.displayOrder]
+            var dict: [String: Any] = ["id": aisle.id, "number": aisle.number, "name": aisle.name, "displayOrder": aisle.displayOrder]
+            if let description = aisle.description { dict["description"] = description }
+            return dict
         }
 
         // AWSJSON fields must be sent as native JSON values (arrays/objects),
@@ -114,12 +116,14 @@ class StoreService: ObservableObject {
         // AWSJSON fields must be sent as native JSON values (arrays/objects),
         // NOT as JSON strings. DynamoDB S-type strings get double-encoded by AppSync.
         let aisleLayoutNative = store.aisleLayout.map { aisle -> [String: Any] in
-            return [
+            var dict: [String: Any] = [
                 "id": aisle.id,
                 "number": aisle.number,
                 "name": aisle.name,
                 "displayOrder": aisle.displayOrder
             ]
+            if let description = aisle.description { dict["description"] = description }
+            return dict
         }
 
         var input: [String: Any] = [
@@ -264,7 +268,8 @@ class StoreService: ObservableObject {
                 id: aisle.id,
                 number: aisle.number,
                 name: aisle.name,
-                displayOrder: index
+                displayOrder: index,
+                description: aisle.description
             )
         }
 
@@ -283,7 +288,8 @@ class StoreService: ObservableObject {
                     id: aisle.id,
                     number: aisle.number,
                     name: aisle.name,
-                    displayOrder: index
+                    displayOrder: index,
+                    description: aisle.description
                 ))
             }
         }
@@ -688,11 +694,17 @@ class StoreService: ObservableObject {
             return nil
         }
 
+        var description: String? = nil
+        if case .string(let value) = obj["description"], !value.isEmpty {
+            description = value
+        }
+
         return StoreAisle(
             id: id,
             number: number,
             name: name,
-            displayOrder: Int(displayOrder)
+            displayOrder: Int(displayOrder),
+            description: description
         )
     }
 

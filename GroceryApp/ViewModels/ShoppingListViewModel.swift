@@ -1984,6 +1984,37 @@ class ShoppingListViewModel: ObservableObject {
                     // Load mappings for the store
                     if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
                         productAisleMappings[store.id] = mappings
+
+                        // Infer aisles for custom active items with no existing mapping
+                        let mappedNames = Set(mappings.compactMap { $0.normalizedName })
+                        let unmappedCustomItems = items.filter { item in
+                            item.isCustom && item.status == .active && !mappedNames.contains(item.normalizedName)
+                        }
+                        if !unmappedCustomItems.isEmpty {
+                            let batchInputs = unmappedCustomItems.map {
+                                AisleExtractionService.BatchInferenceInput(
+                                    id: $0.id,
+                                    productName: $0.name,
+                                    normalizedName: $0.normalizedName,
+                                    productId: nil
+                                )
+                            }
+                            if let results = try? await AisleExtractionService.shared.inferProductAisleBatch(
+                                storeId: store.id,
+                                items: batchInputs
+                            ) {
+                                let saved = try? await AisleExtractionService.shared.saveBatchInferenceResults(
+                                    items: batchInputs,
+                                    results: results,
+                                    storeId: store.id
+                                )
+                                logger.info("At-Store pre-check: inferred aisles for \(saved ?? 0) custom items")
+                                // Refresh mappings to include newly saved inferences
+                                if let refreshed = try? await StoreService.shared.fetchMappings(storeId: store.id) {
+                                    productAisleMappings[store.id] = refreshed
+                                }
+                            }
+                        }
                     }
 
                     // Fetch pending requests

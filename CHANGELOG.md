@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0] - 2026-03-03
+
+Build 25
+
+- Phase 5 in aisle scan job: after each scan, custom household items (user-created, no catalog match) are now automatically assigned aisles via AI inference
+- At-Store pre-check: when entering shopping mode, any new custom items with no aisle mapping get inferred on the fly before the list loads
+- StoreAisle now carries a description field used as LLM context for standard sections (Produce, Dairy, Meat, etc.)
+
 ## [1.0] - 2026-03-02
 
 Build 24

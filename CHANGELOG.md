@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0] - 2026-04-29
+
+Build 26
+
+
+- Bulk import: paste a recipe, chat message, or any ingredient list — AI cleans it into individual grocery items, you review and select, then they're added to the list in one tap
+- Fix: re-saving an AI-inferred aisle for an item no longer fails with a "duplicate key" error
+- Fix: aisle scanner now correctly maps standard store sections (Produce, Dairy, Meat, etc.) to their standard IDs instead of raw text strings
+
 ## [1.0] - 2026-03-03
 
 Build 25
@@ -191,5 +200,5 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: https://github.com/DrBenedictPorkins/NotOurGroceries/compare/v1.0-24...HEAD
+[Unreleased]: https://github.com/DrBenedictPorkins/NotOurGroceries/compare/v1.0-26...HEAD
 [1.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0-2[1.0.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0.0

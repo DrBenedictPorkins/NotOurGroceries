@@ -1051,14 +1051,23 @@ class AisleExtractionService: ObservableObject {
         iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         let document = """
-        mutation CreateProductAisleMapping($input: CreateProductAisleMappingInput!) {
-            createProductAisleMapping(input: $input) {
+        mutation UpsertProductAisleMapping(
+            $id: String!, $storeId: ID!, $aisleId: String!,
+            $normalizedName: String, $productId: ID,
+            $confidence: Float, $source: String, $reasoning: String, $mappedAt: AWSDateTime
+        ) {
+            upsertProductAisleMapping(
+                id: $id, storeId: $storeId, aisleId: $aisleId,
+                normalizedName: $normalizedName, productId: $productId,
+                confidence: $confidence, source: $source, reasoning: $reasoning, mappedAt: $mappedAt
+            ) {
                 id
+                aisleId
             }
         }
         """
 
-        var input: [String: Any] = [
+        var variables: [String: Any] = [
             "id": mappingId,
             "storeId": storeId,
             "normalizedName": normalizedName,
@@ -1070,14 +1079,14 @@ class AisleExtractionService: ObservableObject {
         ]
 
         if let productId = productId {
-            input["productId"] = productId
+            variables["productId"] = productId
         }
 
         let request = GraphQLRequest<JSONValue>(
             document: document,
-            variables: ["input": input],
+            variables: variables,
             responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
         let response = try await Amplify.API.mutate(request: request)
@@ -1086,7 +1095,7 @@ class AisleExtractionService: ObservableObject {
             throw error
         }
 
-        logger.info("[INFER] Created mapping for '\(productName)' -> aisle \(inference.suggestedAisle)")
+        logger.info("[INFER] Upserted mapping for '\(productName)' -> aisle \(inference.suggestedAisle)")
     }
 }
 

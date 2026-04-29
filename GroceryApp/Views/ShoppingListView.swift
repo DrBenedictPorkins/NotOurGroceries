@@ -12,6 +12,7 @@ struct ShoppingListView: View {
     @State private var isInCartExpanded = true
     @FocusState private var searchFieldFocused: Bool
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var showBulkImport = false
 
     var body: some View {
         ZStack {
@@ -200,6 +201,10 @@ struct ShoppingListView: View {
             })
             .environmentObject(viewModel)
         }
+        .sheet(isPresented: $showBulkImport) {
+            BulkImportSheet(isPresented: $showBulkImport)
+                .environmentObject(viewModel)
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 viewModel.lockInteractionsOnWakeup()
@@ -248,6 +253,31 @@ struct ShoppingListView: View {
                             .font(.system(size: 9, weight: .regular))
                             .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
                     }
+
+                    // Import from Recipe button
+                    Button(action: {
+                        showBulkImport = true
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "list.clipboard")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Import")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(Color.white.opacity(0.06))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
 
                     // At Store Button
                     Button(action: {

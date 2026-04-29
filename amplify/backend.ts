@@ -9,6 +9,7 @@ import {
   sendInviteEmailFunction,
   aisleExtractionJobHandler,
   inferProductAisleFunction,
+  parseIngredientsFunction,
   adminMcpFunction,
 } from './data/resource';
 import { storage } from './storage/resource';
@@ -30,6 +31,7 @@ const backend = defineBackend({
   sendInviteEmailFunction,
   aisleExtractionJobHandler,
   inferProductAisleFunction,
+  parseIngredientsFunction,
   adminMcpFunction,
 });
 

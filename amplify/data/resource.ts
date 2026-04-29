@@ -3,9 +3,10 @@ import { type ClientSchema, a, defineData, defineFunction } from '@aws-amplify/b
 // Import Lambda handlers defined in their own resource files (with secrets)
 import { aisleExtractionJobHandler } from './aisleExtractionJobHandler/resource';
 import { inferProductAisleFunction } from './inferProductAisleFunction/resource';
+import { parseIngredientsFunction } from './parseIngredientsFunction/resource';
 
 // Re-export for backend.ts
-export { aisleExtractionJobHandler, inferProductAisleFunction };
+export { aisleExtractionJobHandler, inferProductAisleFunction, parseIngredientsFunction };
 
 // ========================================
 // LAMBDA FUNCTIONS
@@ -457,6 +458,37 @@ const schema = a.schema({
     .returns(a.json())  // Returns {success, results: [...]} or {success: false, error}
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(inferProductAisleFunction)),
+
+  // Parse raw text (recipe, notes, list) into clean grocery items using AI
+  parseIngredients: a
+    .mutation()
+    .arguments({
+      rawText: a.string().required(),
+    })
+    .returns(a.json())  // Returns JSON string: [{name: string, quantity?: string}]
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(parseIngredientsFunction)),
+
+  // Upsert a ProductAisleMapping — unconditional write via custom resolver (no duplicate-key errors)
+  upsertProductAisleMapping: a
+    .mutation()
+    .arguments({
+      id: a.string().required(),
+      storeId: a.id().required(),
+      aisleId: a.string().required(),
+      normalizedName: a.string(),
+      productId: a.id(),
+      confidence: a.float(),
+      source: a.string(),
+      reasoning: a.string(),
+      mappedAt: a.datetime(),
+    })
+    .returns(a.ref('ProductAisleMapping'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.custom({
+      dataSource: a.ref('ProductAisleMapping'),
+      entry: './upsertProductAisleMapping.js',
+    })),
 });
 
 export type Schema = ClientSchema<typeof schema>;

@@ -192,16 +192,29 @@ async function extractFromImage(
 
   const prompt = `Extract ALL product-to-aisle mappings from this grocery store aisle directory image.
 
-Return a JSON array ONLY - no markdown, no code fences, no explanation:
-[{"productName":"Canned Tomatoes","aisle":"4"},{"productName":"Pasta","aisle":"4"}]
+STANDARD SECTIONS — if a product is listed under one of these areas, use EXACTLY this ID as the aisle value:
+- "standard-produce"  → fruits, vegetables, leafy greens, fresh herbs
+- "standard-meat"     → beef, chicken, pork, turkey, lamb, sausages
+- "standard-seafood"  → fish, shrimp, shellfish, seafood
+- "standard-dairy"    → milk, cream, yogurt, butter, cheese, eggs
+- "standard-deli"     → sliced meats, deli cheese, prepared foods, cold cuts
+- "standard-bakery"   → bread, rolls, muffins, cakes, pastries
+- "standard-frozen"   → frozen vegetables, meals, pizza, ice cream
+
+For numbered aisles, use ONLY the number — never add a prefix like "Aisle".
+
+Examples:
+{"productName":"Apples","aisle":"standard-produce"}
+{"productName":"Cheddar","aisle":"standard-dairy"}
+{"productName":"Canned Tomatoes","aisle":"4"}
+{"productName":"Pasta","aisle":"4"}
 
 Rules:
 - Extract EVERY item visible
 - Use exact product names from the sign
-- For aisle: use ONLY the number (e.g., "4" not "Aisle 4") or section name (e.g., "Dairy")
 - List each product separately
 
-IMPORTANT: Return ONLY valid JSON array. No \`\`\` or other text.`;
+Return a JSON array ONLY — no markdown, no code fences, no explanation.`;
 
   const response = await anthropic.messages.create({
     model: MODEL,

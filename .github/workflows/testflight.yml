@@ -29,7 +29,7 @@ jobs:
       - name: Write Amplify prod config
         env:
           AMPLIFY_OUTPUTS_PROD: ${{ secrets.AMPLIFY_OUTPUTS_PROD }}
-        run: echo "$AMPLIFY_OUTPUTS_PROD" > amplify_outputs_prod.json
+        run: echo "$AMPLIFY_OUTPUTS_PROD" | base64 --decode | gunzip > amplify_outputs_prod.json
 
       - name: Import distribution certificate
         env:

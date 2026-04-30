@@ -33,6 +33,7 @@
 		AA0000000000000000000032 /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* SearchBar.swift */; };
 		AA0000000000000000000033 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* ToastView.swift */; };
 		AA0000000000000000000034 /* ShoppingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* ShoppingListView.swift */; };
+		A1B2C3D4E5F601234567890B /* BulkImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */; };
 		AA0000000000000000000035 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000035 /* SettingsView.swift */; };
 		AA0000000000000000000036 /* HouseholdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000036 /* HouseholdView.swift */; };
 		AA0000000000000000000040 /* Amplify in Frameworks */ = {isa = PBXBuildFile; productRef = CC0000000000000000000040 /* Amplify */; };
@@ -121,6 +122,7 @@
 		BB0000000000000000000032 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
 		BB0000000000000000000033 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000034 /* ShoppingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportSheet.swift; sourceTree = "<group>"; };
 		BB0000000000000000000035 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000036 /* HouseholdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseholdView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000050 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -284,6 +286,7 @@
 				BB0000000000000000000030 /* AtStoreModeView.swift */,
 				BB0000000000000000000074 /* CreateStoreSheet.swift */,
 				BB0000000000000000000034 /* ShoppingListView.swift */,
+				A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */,
 				BB0000000000000000000035 /* SettingsView.swift */,
 				BB0000000000000000000073 /* StoreSelectionSheet.swift */,
 				BB0000000000000000000036 /* HouseholdView.swift */,
@@ -484,6 +487,7 @@
 				AA0000000000000000000033 /* ToastView.swift in Sources */,
 				AA0000000000000000000057 /* MarqueeText.swift in Sources */,
 				AA0000000000000000000034 /* ShoppingListView.swift in Sources */,
+				A1B2C3D4E5F601234567890B /* BulkImportSheet.swift in Sources */,
 				AA0000000000000000000035 /* SettingsView.swift in Sources */,
 				AA0000000000000000000036 /* HouseholdView.swift in Sources */,
 				AA0000000000000000000050 /* RootView.swift in Sources */,

@@ -307,11 +307,20 @@ class StoreService: ObservableObject {
             throw StoreServiceError.invalidMapping("Either productId or normalizedName must be provided")
         }
 
-        let mappingId = UUID().uuidString
+        // Reuse existing mapping ID if one exists, so DynamoDB UpdateItem updates in place
+        let mappingId = productMappings[storeId]?.first(where: {
+            (productId != nil && $0.productId == productId) ||
+            (normalizedName != nil && $0.normalizedName == normalizedName)
+        })?.id ?? UUID().uuidString
 
         let document = """
-        mutation CreateProductAisleMapping($input: CreateProductAisleMappingInput!) {
-            createProductAisleMapping(input: $input) {
+        mutation UpsertProductAisleMapping(
+            $id: String!, $storeId: ID!, $aisleId: String!, $productId: ID, $normalizedName: String
+        ) {
+            upsertProductAisleMapping(
+                id: $id, storeId: $storeId, aisleId: $aisleId,
+                productId: $productId, normalizedName: $normalizedName
+            ) {
                 id
                 storeId
                 productId
@@ -321,22 +330,22 @@ class StoreService: ObservableObject {
         }
         """
 
-        var input: [String: Any] = [
+        var variables: [String: Any] = [
             "id": mappingId,
             "storeId": storeId,
             "aisleId": aisleId
         ]
 
         if let productId = productId {
-            input["productId"] = productId
+            variables["productId"] = productId
         }
         if let normalizedName = normalizedName {
-            input["normalizedName"] = normalizedName
+            variables["normalizedName"] = normalizedName
         }
 
         let request = GraphQLRequest<JSONValue>(
             document: document,
-            variables: ["input": input],
+            variables: variables,
             responseType: JSONValue.self,
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
@@ -345,11 +354,11 @@ class StoreService: ObservableObject {
 
         switch response {
         case .success(let json):
-            if let mapping = parseProductAisleMapping(json, key: "createProductAisleMapping") {
-                // Update local cache
+            if let mapping = parseProductAisleMapping(json, key: "upsertProductAisleMapping") {
                 if productMappings[storeId] == nil {
                     productMappings[storeId] = []
                 }
+                productMappings[storeId]?.removeAll { $0.id == mapping.id }
                 productMappings[storeId]?.append(mapping)
             }
         case .failure(let error):

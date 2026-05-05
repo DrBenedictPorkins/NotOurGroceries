@@ -667,16 +667,7 @@ struct ItemDetailSheet: View {
 
         guard let aisle = targetAisle else { return }
 
-        // Remove existing mapping first if present
-        if currentMapping != nil {
-            try? await StoreService.shared.removeMapping(
-                storeId: store.id,
-                productId: item.productId,
-                normalizedName: item.productId == nil ? item.normalizedName : nil
-            )
-        }
-
-        // Create new mapping
+        // Upsert mapping
         do {
             try await StoreService.shared.assignProductToAisle(
                 productId: item.productId,

@@ -328,7 +328,7 @@ struct BulkImportSheet: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Failed to parse items. Please try again."
+                    errorMessage = "Error: \(error)"
                     phase = .input
                 }
             }
@@ -382,7 +382,9 @@ struct BulkImportSheet: View {
 
         switch response {
         case .success(let json):
+            print("[BulkImport] raw json: \(json)")
             guard case .object(let root) = json else { return [] }
+            print("[BulkImport] parseIngredients value: \(String(describing: root["parseIngredients"]))")
 
             switch root["parseIngredients"] {
             case .array(let array):

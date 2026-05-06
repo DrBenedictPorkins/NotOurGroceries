@@ -14,6 +14,7 @@ struct SearchBar: View {
     @FocusState.Binding var isFocused: Bool
     var onSubmit: () -> Void
     var onProductSelected: (Product) -> Void
+    var onImport: (() -> Void)? = nil
 
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @State private var showAutocomplete = false
@@ -56,14 +57,17 @@ struct SearchBar: View {
                     .transition(.scale.combined(with: .opacity))
                 }
 
-                // Voice input button (placeholder)
-                Button(action: {
-                    // TODO: Implement voice input
-                    hapticFeedback(.medium)
-                }) {
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Color(hex: "7B2CBF"))
+                // Import button
+                if text.isEmpty, let onImport {
+                    Button(action: {
+                        hapticFeedback(.light)
+                        onImport()
+                    }) {
+                        Image(systemName: "list.clipboard")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Color(hex: "7B2CBF"))
+                    }
+                    .transition(.scale.combined(with: .opacity))
                 }
             }
             .padding(.horizontal, 16)

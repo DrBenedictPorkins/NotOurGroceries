@@ -382,19 +382,27 @@ struct BulkImportSheet: View {
 
         switch response {
         case .success(let json):
-            guard case .object(let root) = json,
-                  case .string(let resultString) = root["parseIngredients"],
-                  let data = resultString.data(using: .utf8) else {
+            guard case .object(let root) = json else { return [] }
+
+            switch root["parseIngredients"] {
+            case .array(let array):
+                return array.compactMap { element -> ParsedIngredient? in
+                    guard case .object(let obj) = element,
+                          case .string(let name) = obj["name"] else { return nil }
+                    let qty: String? = {
+                        if case .string(let q) = obj["quantity"] { return q }
+                        return nil
+                    }()
+                    return ParsedIngredient(name: name, quantity: qty)
+                }
+            case .string(let resultString):
+                guard let data = resultString.data(using: .utf8) else { return [] }
+                struct RawItem: Decodable { let name: String; let quantity: String? }
+                let rawItems = try JSONDecoder().decode([RawItem].self, from: data)
+                return rawItems.map { ParsedIngredient(name: $0.name, quantity: $0.quantity) }
+            default:
                 return []
             }
-
-            struct RawItem: Decodable {
-                let name: String
-                let quantity: String?
-            }
-
-            let rawItems = try JSONDecoder().decode([RawItem].self, from: data)
-            return rawItems.map { ParsedIngredient(name: $0.name, quantity: $0.quantity) }
 
         case .failure(let error):
             throw error

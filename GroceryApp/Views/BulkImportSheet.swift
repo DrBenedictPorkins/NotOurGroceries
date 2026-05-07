@@ -8,6 +8,7 @@ struct ParsedIngredient: Identifiable {
     let id = UUID()
     var name: String
     var quantity: String?
+    var productId: String?
     var isSelected: Bool = true
 }
 
@@ -316,7 +317,16 @@ struct BulkImportSheet: View {
 
         Task {
             do {
-                let items = try await callParseIngredients(text: text)
+                var items = try await callParseIngredients(text: text)
+                for i in items.indices {
+                    let matches = ProductCache.shared.search(query: items[i].name)
+                    if let top = matches.first {
+                        let parsed = items[i].name.lowercased()
+                        if top.normalizedName.lowercased() == parsed || top.name.lowercased() == parsed {
+                            items[i].productId = top.id
+                        }
+                    }
+                }
                 await MainActor.run {
                     if items.isEmpty {
                         errorMessage = "No grocery items found. Try rephrasing the text."
@@ -328,7 +338,7 @@ struct BulkImportSheet: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Error: \(error)"
+                    errorMessage = "Failed to parse items. Please try again."
                     phase = .input
                 }
             }
@@ -351,7 +361,7 @@ struct BulkImportSheet: View {
 
         Task {
             for (i, item) in selected.enumerated() {
-                await viewModel.addItem(name: item.name, quantity: item.quantity)
+                await viewModel.addItem(name: item.name, quantity: item.quantity, productId: item.productId)
                 await MainActor.run {
                     phase = .adding(done: i + 1, total: total)
                 }
@@ -382,34 +392,60 @@ struct BulkImportSheet: View {
 
         switch response {
         case .success(let json):
-            print("[BulkImport] raw json: \(json)")
-            guard case .object(let root) = json else { return [] }
-            print("[BulkImport] parseIngredients value: \(String(describing: root["parseIngredients"]))")
-
-            switch root["parseIngredients"] {
-            case .array(let array):
-                return array.compactMap { element -> ParsedIngredient? in
-                    guard case .object(let obj) = element,
-                          case .string(let name) = obj["name"] else { return nil }
-                    let qty: String? = {
-                        if case .string(let q) = obj["quantity"] { return q }
-                        return nil
-                    }()
-                    return ParsedIngredient(name: name, quantity: qty)
-                }
-            case .string(let resultString):
-                guard let data = resultString.data(using: .utf8) else { return [] }
-                struct RawItem: Decodable { let name: String; let quantity: String? }
-                let rawItems = try JSONDecoder().decode([RawItem].self, from: data)
-                return rawItems.map { ParsedIngredient(name: $0.name, quantity: $0.quantity) }
-            default:
-                return []
-            }
+            return extractIngredients(from: json)
 
         case .failure(let error):
+            if case GraphQLResponseError<JSONValue>.partial(let json, _) = error {
+                return extractIngredients(from: json)
+            }
+            if case GraphQLResponseError<JSONValue>.transformationError(let raw, _) = error {
+                return try extractIngredientsFromRaw(raw)
+            }
             throw error
         }
     }
+
+    private func extractIngredients(from json: JSONValue) -> [ParsedIngredient] {
+        guard case .object(let root) = json else { return [] }
+        switch root["parseIngredients"] {
+        case .array(let array):
+            return array.compactMap { element -> ParsedIngredient? in
+                guard case .object(let obj) = element,
+                      case .string(let name) = obj["name"] else { return nil }
+                let qty: String? = { if case .string(let q) = obj["quantity"] { return q }; return nil }()
+                return ParsedIngredient(name: name, quantity: qty)
+            }
+        case .string(let s):
+            guard let data = s.data(using: .utf8),
+                  let items = try? JSONDecoder().decode([_RawItem].self, from: data) else { return [] }
+            return items.map { ParsedIngredient(name: $0.name, quantity: $0.quantity) }
+        default:
+            return []
+        }
+    }
+
+    private func extractIngredientsFromRaw(_ raw: String) throws -> [ParsedIngredient] {
+        guard let data = raw.data(using: .utf8),
+              let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let dataObj = obj["data"] as? [String: Any] else { return [] }
+
+        if let str = dataObj["parseIngredients"] as? String {
+            guard let itemData = str.data(using: .utf8) else { return [] }
+            let items = try JSONDecoder().decode([_RawItem].self, from: itemData)
+            return items.map { ParsedIngredient(name: $0.name, quantity: $0.quantity) }
+        } else if let arr = dataObj["parseIngredients"] as? [[String: Any]] {
+            return arr.compactMap { obj -> ParsedIngredient? in
+                guard let name = obj["name"] as? String else { return nil }
+                return ParsedIngredient(name: name, quantity: obj["quantity"] as? String)
+            }
+        }
+        return []
+    }
+}
+
+private struct _RawItem: Decodable {
+    let name: String
+    let quantity: String?
 }
 
 // MARK: - Ingredient Review Row

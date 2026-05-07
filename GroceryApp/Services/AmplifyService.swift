@@ -42,13 +42,8 @@ class AmplifyService: ObservableObject {
             try Amplify.add(plugin: AWSAPIPlugin(modelRegistration: AmplifyModels()))
             try Amplify.add(plugin: AWSS3StoragePlugin())
 
-            #if DEBUG
-            try Amplify.configure(with: .resource(named: "amplify_outputs_dev"))
-            print("Amplify configured for DEVELOPMENT (sandbox)")
-            #else
             try Amplify.configure(with: .resource(named: "amplify_outputs_prod"))
             print("Amplify configured for PRODUCTION")
-            #endif
 
             isConfigured = true
 

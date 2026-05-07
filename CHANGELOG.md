@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-05-07
+
+- Fix: bulk import now correctly parses ingredients (AppSync AWSJSON double-encoding resolved at source)
+- Fix: debug builds now use the production backend
+- Bulk import: parsed items are matched against the product catalog so aisle mapping works immediately
+- Bulk import: catalog terms added to AI prompt for consistent item naming (e.g. "Carrot" not "Carrots")
+
 ## [1.1.0] - 2026-05-06
 
 ## [1.0] - 2026-04-29

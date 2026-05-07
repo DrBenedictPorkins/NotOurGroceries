@@ -1,7 +1,7 @@
+import { SSMClient, GetParametersCommand } from '@aws-sdk/client-ssm';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Schema } from '../resource';
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 const MODEL = 'claude-haiku-4-5-20251001'; // Fast and cheap for simple text parsing
 
 type Handler = Schema['parseIngredients']['functionHandler'];
@@ -11,14 +11,36 @@ interface ParsedIngredient {
   quantity?: string;
 }
 
+// Amplify stores secrets in SSM and resolves them via a wrapper at build time.
+// When deploying manually we must resolve them ourselves.
+let secretsResolved = false;
+async function resolveAmplifySecrets(): Promise<void> {
+  if (secretsResolved) return;
+  secretsResolved = true;
+  const raw = process.env.AMPLIFY_SSM_ENV_CONFIG;
+  if (!raw) return;
+  const config: Record<string, { path: string; sharedPath: string }> = JSON.parse(raw);
+  const ssm = new SSMClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
+  for (const [envVar, { path, sharedPath }] of Object.entries(config)) {
+    const { Parameters } = await ssm.send(new GetParametersCommand({ Names: [path, sharedPath], WithDecryption: true }));
+    const found = Parameters?.find((p) => p.Value);
+    if (found?.Value) process.env[envVar] = found.Value;
+  }
+}
+
 export const handler: Handler = async (event) => {
-  const { rawText } = event.arguments;
+  await resolveAmplifySecrets();
+  const { rawText, knownTerms } = event.arguments;
 
   if (!rawText || rawText.trim().length === 0) {
-    return JSON.stringify([]);
+    return [] as unknown as string;
   }
 
-  const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+
+  const knownTermsSection = knownTerms?.length
+    ? `\nKnown product names in our catalog — use these exact terms when they match semantically (e.g. output "Carrot" not "Carrots", "Chicken Breast" not "Chicken Breast Fillet"):\n${knownTerms.join(', ')}\n`
+    : '';
 
   const prompt = `Parse the following text and extract a clean list of grocery items.
 
@@ -30,7 +52,7 @@ Rules:
 - Each unique item should appear only once
 - Ignore non-grocery text like recipe titles, step numbers, comments
 - Keep names concise but recognizable (Title Case)
-
+${knownTermsSection}
 Input text:
 ${rawText}
 
@@ -50,14 +72,14 @@ Return ONLY a JSON array, no markdown, no explanation:
 
   const textContent = response.content.find((block) => block.type === 'text');
   if (!textContent || textContent.type !== 'text') {
-    return JSON.stringify([]);
+    return [] as unknown as string;
   }
 
   // Extract JSON array from response
   const jsonMatch = textContent.text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
     console.error('[PARSE] No JSON array found in response:', textContent.text);
-    return JSON.stringify([]);
+    return [] as unknown as string;
   }
 
   const parsed: ParsedIngredient[] = JSON.parse(jsonMatch[0]);
@@ -70,5 +92,5 @@ Return ONLY a JSON array, no markdown, no explanation:
       ...(item.quantity && item.quantity.trim() ? { quantity: item.quantity.trim() } : {}),
     }));
 
-  return JSON.stringify(cleaned);
+  return cleaned as unknown as string;
 };

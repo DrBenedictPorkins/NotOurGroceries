@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.2.0] - unreleased
+- Bulk import: scan a photo (camera, photo library, or clipboard) — AI extracts grocery items from the image
+- Bulk import: AI now extracts qualifiers (e.g. "Red Bell Peppers" → item "Bell Peppers", notes "Red")
+- Bulk import: item rows open a detail sheet via the ... button for editing before import
+- Bulk import: checkbox toggle requires tapping the checkbox only (not the full row)
+- Splash screen shows app version and build datetime
+- Fix: import catalog matching now handles singular/plural correctly (e.g. "Carrot" matches "Carrots")
+- Lambda: structured logging added for all parse requests and responses
 
 ## [1.1.1] - 2026-05-06
 

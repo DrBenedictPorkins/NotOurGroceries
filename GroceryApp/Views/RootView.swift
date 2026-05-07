@@ -82,6 +82,21 @@ struct RootView: View {
 struct SplashView: View {
     @ObservedObject private var loadingState = AppLoadingState.shared
 
+    private var versionString: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "v\(version) (\(build))"
+    }
+
+    private var buildDateString: String {
+        guard let execURL = Bundle.main.executableURL,
+              let attrs = try? FileManager.default.attributesOfItem(atPath: execURL.path),
+              let modDate = attrs[.modificationDate] as? Date else { return "" }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd HH:mm"
+        return fmt.string(from: modDate)
+    }
+
     var body: some View {
         ZStack {
             DesignSystem.Colors.background
@@ -103,6 +118,17 @@ struct SplashView: View {
                 Text("NotOurGroceries")
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(DesignSystem.Colors.accentGradient)
+
+                VStack(spacing: 4) {
+                    Text(versionString)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    if !buildDateString.isEmpty {
+                        Text("Built \(buildDateString)")
+                            .font(.system(size: 11))
+                            .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.6))
+                    }
+                }
 
                 Spacer()
 

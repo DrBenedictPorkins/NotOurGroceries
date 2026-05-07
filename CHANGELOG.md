@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-05-06
+
 ## [1.1.1] - 2026-05-07
 
 - Fix: bulk import now correctly parses ingredients (AppSync AWSJSON double-encoding resolved at source)
@@ -209,6 +211,7 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.1.0...HEAD
+[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.1.1...HEAD
+[1.1.1]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.1.1
 [1.1.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.1.0
 [1.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0-2[1.0.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0.0

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-07
+
 - Bulk import: scan a photo (camera, photo library, or clipboard) — AI extracts grocery items from the image
 - Bulk import: AI now extracts qualifiers (e.g. "Red Bell Peppers" → item "Bell Peppers", notes "Red")
 - Bulk import: item rows open a detail sheet via the ... button for editing before import
@@ -219,7 +221,8 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.1.1...HEAD
+[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.2.0...HEAD
+[1.2.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.2.0
 [1.1.1]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.1.1
 [1.1.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.1.0
 [1.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0-2[1.0.0]: https://github.com/DrBenedictPorkins/NotOurGroceries/releases/tag/v1.0.0

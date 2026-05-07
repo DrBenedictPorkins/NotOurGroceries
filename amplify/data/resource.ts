@@ -463,8 +463,9 @@ const schema = a.schema({
   parseIngredients: a
     .mutation()
     .arguments({
-      rawText: a.string().required(),
+      rawText: a.string(),
       knownTerms: a.string().array(),
+      imageData: a.string(),
     })
     .returns(a.json())
     .authorization((allow) => [allow.authenticated()])

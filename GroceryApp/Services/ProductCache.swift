@@ -59,8 +59,8 @@ class ProductCache: ObservableObject {
 
         let normalized = normalize(trimmed)
 
-        // First try exact match on normalized name
-        if let exactMatch = products.first(where: { $0.normalizedName == normalized }) {
+        // First try exact match on normalized name (normalize both sides so "carrot"=="carrots")
+        if let exactMatch = products.first(where: { normalize($0.normalizedName) == normalized }) {
             return exactMatch
         }
 
@@ -75,7 +75,7 @@ class ProductCache: ObservableObject {
         var bestMatch: (product: Product, score: Double)?
 
         for product in products {
-            let nameScore = calculateScore(query: normalized, target: product.normalizedName)
+            let nameScore = calculateScore(query: normalized, target: normalize(product.normalizedName))
             let aliasScore = product.aliases.map { calculateScore(query: normalized, target: normalize($0)) }.max() ?? 0
             let score = max(nameScore, aliasScore)
 

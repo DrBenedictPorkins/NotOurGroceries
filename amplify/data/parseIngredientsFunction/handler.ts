@@ -9,6 +9,7 @@ type Handler = Schema['parseIngredients']['functionHandler'];
 interface ParsedIngredient {
   name: string;
   quantity?: string;
+  qualifier?: string;
 }
 
 // Amplify stores secrets in SSM and resolves them via a wrapper at build time.
@@ -30,9 +31,19 @@ async function resolveAmplifySecrets(): Promise<void> {
 
 export const handler: Handler = async (event) => {
   await resolveAmplifySecrets();
-  const { rawText, knownTerms } = event.arguments;
+  const { rawText, knownTerms, imageData } = event.arguments;
 
-  if (!rawText || rawText.trim().length === 0) {
+  const isImageMode = !!(imageData && imageData.length > 0);
+
+  console.log('[PARSE] request', JSON.stringify({
+    mode: isImageMode ? 'image' : 'text',
+    textLength: rawText?.length ?? 0,
+    imageDataLength: imageData?.length ?? 0,
+    knownTermsCount: knownTerms?.length ?? 0,
+  }));
+
+  if (!isImageMode && (!rawText || rawText.trim().length === 0)) {
+    console.log('[PARSE] empty input, returning []');
     return [] as unknown as string;
   }
 
@@ -42,43 +53,64 @@ export const handler: Handler = async (event) => {
     ? `\nKnown product names in our catalog — use these exact terms when they match semantically (e.g. output "Carrot" not "Carrots", "Chicken Breast" not "Chicken Breast Fillet"):\n${knownTerms.join(', ')}\n`
     : '';
 
-  const prompt = `Parse the following text and extract a clean list of grocery items.
-
-Rules:
+  const rules = `Rules:
 - Extract only grocery/food items and common household supplies
 - For quantities: separate the amount from the item name (e.g., "2 cups flour" → name: "Flour", quantity: "2 cups")
-- Normalize item names to simple grocery store form (e.g., "all-purpose flour" → "Flour", "unsalted butter" → "Butter")
+- For qualifiers: extract color, variety, flavor, or type modifiers into a separate "qualifier" field; the name should be the base catalog item
+  Examples: "Red Bell Peppers" → name: "Bell Peppers", qualifier: "Red"
+            "Beef Stock" → name: "Stock", qualifier: "Beef"
+            "Unsalted Butter" → name: "Butter", qualifier: "Unsalted"
+            "Chicken Breast" → name: "Chicken Breast" (no qualifier — Breast defines the cut, not a modifier)
+- Normalize item names to simple grocery store form (e.g., "all-purpose flour" → name: "Flour", qualifier: "All-Purpose")
 - Remove cooking instructions, temperatures, prep notes (e.g., "diced", "chopped", "at room temperature")
 - Each unique item should appear only once
 - Ignore non-grocery text like recipe titles, step numbers, comments
 - Keep names concise but recognizable (Title Case)
 ${knownTermsSection}
-Input text:
-${rawText}
-
 Return ONLY a JSON array, no markdown, no explanation:
 [
   {"name": "Chicken Breast", "quantity": "2 lbs"},
   {"name": "Garlic", "quantity": "3 cloves"},
+  {"name": "Bell Peppers", "quantity": "3", "qualifier": "Red"},
   {"name": "Olive Oil"}
 ]`;
+
+  const messageContent: Anthropic.MessageParam['content'] = isImageMode
+    ? [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/jpeg',
+            data: imageData!,
+          },
+        },
+        {
+          type: 'text',
+          text: `Look at this image and extract all grocery/food items visible. This may be a recipe, shopping list, handwritten note, menu, or ingredient list.\n\n${rules}`,
+        },
+      ]
+    : `Parse the following text and extract a clean list of grocery items.\n\n${rules}\n\nInput text:\n${rawText}`;
 
   const response = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 1024,
     temperature: 0,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [{ role: 'user', content: messageContent }],
   });
 
   const textContent = response.content.find((block) => block.type === 'text');
   if (!textContent || textContent.type !== 'text') {
+    console.error('[PARSE] no text block in Claude response:', JSON.stringify(response.content));
     return [] as unknown as string;
   }
+
+  console.log('[PARSE] claude raw response:', textContent.text);
 
   // Extract JSON array from response
   const jsonMatch = textContent.text.match(/\[[\s\S]*\]/);
   if (!jsonMatch) {
-    console.error('[PARSE] No JSON array found in response:', textContent.text);
+    console.error('[PARSE] no JSON array in response:', textContent.text);
     return [] as unknown as string;
   }
 
@@ -90,7 +122,10 @@ Return ONLY a JSON array, no markdown, no explanation:
     .map((item) => ({
       name: item.name.trim(),
       ...(item.quantity && item.quantity.trim() ? { quantity: item.quantity.trim() } : {}),
+      ...(item.qualifier && item.qualifier.trim() ? { qualifier: item.qualifier.trim() } : {}),
     }));
+
+  console.log('[PARSE] result', JSON.stringify(cleaned));
 
   return cleaned as unknown as string;
 };

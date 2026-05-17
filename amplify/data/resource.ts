@@ -4,9 +4,10 @@ import { type ClientSchema, a, defineData, defineFunction } from '@aws-amplify/b
 import { aisleExtractionJobHandler } from './aisleExtractionJobHandler/resource';
 import { inferProductAisleFunction } from './inferProductAisleFunction/resource';
 import { parseIngredientsFunction } from './parseIngredientsFunction/resource';
+import { transcribeAudioFunction } from './transcribeAudioFunction/resource';
 
 // Re-export for backend.ts
-export { aisleExtractionJobHandler, inferProductAisleFunction, parseIngredientsFunction };
+export { aisleExtractionJobHandler, inferProductAisleFunction, parseIngredientsFunction, transcribeAudioFunction };
 
 // ========================================
 // LAMBDA FUNCTIONS
@@ -470,6 +471,16 @@ const schema = a.schema({
     .returns(a.json())
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(parseIngredientsFunction)),
+
+  // Transcribe base64-encoded audio (m4a) via OpenAI Whisper, returns plain text
+  transcribeAudio: a
+    .mutation()
+    .arguments({
+      audioData: a.string().required(),
+    })
+    .returns(a.string())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(transcribeAudioFunction)),
 
   // Upsert a ProductAisleMapping — unconditional write via custom resolver (no duplicate-key errors)
   upsertProductAisleMapping: a

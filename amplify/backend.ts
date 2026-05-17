@@ -10,6 +10,7 @@ import {
   aisleExtractionJobHandler,
   inferProductAisleFunction,
   parseIngredientsFunction,
+  transcribeAudioFunction,
   adminMcpFunction,
 } from './data/resource';
 import { storage } from './storage/resource';
@@ -32,6 +33,7 @@ const backend = defineBackend({
   aisleExtractionJobHandler,
   inferProductAisleFunction,
   parseIngredientsFunction,
+  transcribeAudioFunction,
   adminMcpFunction,
 });
 

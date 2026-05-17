@@ -7,11 +7,21 @@ import PhotosUI
 
 struct ParsedIngredient: Identifiable {
     let id = UUID()
+    let originalName: String
     var name: String
     var quantity: String?
     var notes: String?
     var productId: String?
     var isSelected: Bool = true
+
+    init(name: String, quantity: String? = nil, notes: String? = nil, productId: String? = nil, isSelected: Bool = true) {
+        self.originalName = name
+        self.name = name
+        self.quantity = quantity
+        self.notes = notes
+        self.productId = productId
+        self.isSelected = isSelected
+    }
 }
 
 // MARK: - Phase
@@ -38,6 +48,8 @@ struct BulkImportSheet: View {
     @State private var ingredients: [ParsedIngredient] = []
     @State private var errorMessage: String?
     @FocusState private var editorFocused: Bool
+    @StateObject private var dictation = SpeechDictationService()
+    @State private var showMicAuthHint = false
 
     private var selectedCount: Int {
         ingredients.filter(\.isSelected).count
@@ -64,7 +76,19 @@ struct BulkImportSheet: View {
                 }
             }
         }
-        .onAppear { editorFocused = true }
+        .onAppear {
+            editorFocused = true
+            dictation.onCommit = { chunk in
+                if rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    rawText = chunk
+                } else {
+                    rawText += "\n" + chunk
+                }
+            }
+        }
+        .onDisappear {
+            if dictation.isRecording { dictation.stop() }
+        }
         .sheet(isPresented: $showCamera) {
             CameraPicker(image: $selectedImage)
                 .ignoresSafeArea()
@@ -185,26 +209,127 @@ struct BulkImportSheet: View {
             )
             .padding(.horizontal, 20)
 
-            // Image source buttons
+            // Image source + mic buttons
+            let imageDisabled = !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || dictation.isBusy
             HStack(spacing: 12) {
                 Spacer()
-                imageSourceButton(icon: "camera.fill", label: "Camera") {
+                imageSourceButton(icon: "camera.fill", label: "Camera", disabled: imageDisabled) {
                     editorFocused = false
                     showCamera = true
                 }
-                imageSourceButton(icon: "photo.fill", label: "Photos") {
+                imageSourceButton(icon: "photo.fill", label: "Photos", disabled: imageDisabled) {
                     editorFocused = false
                     showPhotoPicker = true
                 }
-                imageSourceButton(icon: "doc.on.clipboard", label: "Paste") {
+                imageSourceButton(icon: "doc.on.clipboard", label: "Paste", disabled: imageDisabled) {
                     if let img = UIPasteboard.general.image {
                         editorFocused = false
                         selectedImage = img
                     }
                 }
+                micButton
             }
             .padding(.horizontal, 20)
             .padding(.top, 4)
+
+            micStatusView
+        }
+    }
+
+    private var micButton: some View {
+        let recording = dictation.isRecording
+        let transcribing = dictation.isTranscribing
+        return Button(action: toggleDictation) {
+            VStack(spacing: 4) {
+                Group {
+                    if transcribing {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                            .tint(DesignSystem.Colors.neonCyan)
+                    } else {
+                        Image(systemName: recording ? "stop.circle.fill" : "mic.fill")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                }
+                .frame(height: 16)
+                Text(transcribing ? "Wait…" : (recording ? "Stop" : "Voice"))
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundColor(recording ? DesignSystem.Colors.neonPink : (transcribing ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textSecondary))
+            .frame(width: 68, height: 50)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(recording ? DesignSystem.Colors.neonPink.opacity(0.15) : Color.white.opacity(0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                recording ? DesignSystem.Colors.neonPink.opacity(0.6) : Color.white.opacity(0.12),
+                                lineWidth: 1
+                            )
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(transcribing)
+    }
+
+    @ViewBuilder
+    private var micStatusView: some View {
+        if dictation.isRecording {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(DesignSystem.Colors.neonPink)
+                    .frame(width: 8, height: 8)
+                Text("Recording… speak items, tap Stop when done.")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+        } else if dictation.isTranscribing {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .scaleEffect(0.7)
+                    .tint(DesignSystem.Colors.neonCyan)
+                Text("Transcribing…")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+        } else if case .denied(let reason) = dictation.authState {
+            Text(reason)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.neonPink)
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
+        } else if let err = dictation.errorMessage {
+            Text(err)
+                .font(.system(size: 12, weight: .regular))
+                .foregroundColor(DesignSystem.Colors.neonPink)
+                .padding(.horizontal, 20)
+                .padding(.top, 6)
+        }
+    }
+
+    private func toggleDictation() {
+        if dictation.isRecording {
+            dictation.stop()
+            return
+        }
+        if dictation.isTranscribing { return }
+        editorFocused = false
+        Task {
+            if case .granted = dictation.authState {
+                dictation.start()
+                return
+            }
+            await dictation.requestAuth()
+            if case .granted = dictation.authState {
+                dictation.start()
+            }
         }
     }
 
@@ -234,7 +359,7 @@ struct BulkImportSheet: View {
         }
     }
 
-    private func imageSourceButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+    private func imageSourceButton(icon: String, label: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: icon)
@@ -252,8 +377,10 @@ struct BulkImportSheet: View {
                             .stroke(Color.white.opacity(0.12), lineWidth: 1)
                     )
             )
+            .opacity(disabled ? 0.3 : 1.0)
         }
         .buttonStyle(.plain)
+        .disabled(disabled)
     }
 
     private var parseButton: some View {
@@ -329,7 +456,7 @@ struct BulkImportSheet: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     ForEach($ingredients) { $item in
-                        IngredientReviewRow(item: $item)
+                        IngredientReviewRow(item: $item, viewModel: viewModel)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -601,6 +728,9 @@ private struct _RawItem: Decodable {
 
 private struct IngredientReviewRow: View {
     @Binding var item: ParsedIngredient
+    let viewModel: ShoppingListViewModel
+    @State private var showMatches = false
+    @State private var matches: [Product] = []
 
     private var nameLabel: Text {
         if let notes = item.notes, !notes.isEmpty {
@@ -625,6 +755,33 @@ private struct IngredientReviewRow: View {
     @State private var showDetail = false
 
     var body: some View {
+        VStack(spacing: 0) {
+            rowContent
+            if showMatches {
+                matchesDropdown
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(item.isSelected ? Color.white.opacity(0.06) : Color.white.opacity(0.02))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            item.isSelected
+                            ? DesignSystem.Colors.neonCyan.opacity(0.2)
+                            : Color.white.opacity(0.06),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .animation(.easeInOut(duration: 0.15), value: item.isSelected)
+        .animation(.easeInOut(duration: 0.2), value: showMatches)
+        .sheet(isPresented: $showDetail) {
+            IngredientDetailSheet(item: $item)
+        }
+    }
+
+    private var rowContent: some View {
         HStack(spacing: 14) {
             // Checkbox — only this toggles selection
             Button(action: { item.isSelected.toggle() }) {
@@ -648,25 +805,35 @@ private struct IngredientReviewRow: View {
             }
             .buttonStyle(.plain)
 
-            nameLabel
+            Button(action: toggleMatches) {
+                HStack(spacing: 6) {
+                    nameLabel
 
-            if item.productId != nil {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.neonCyan.opacity(item.isSelected ? 0.7 : 0.3))
-            } else {
-                Text("new")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.neonPurple.opacity(item.isSelected ? 0.8 : 0.3))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(DesignSystem.Colors.neonPurple.opacity(item.isSelected ? 0.12 : 0.05))
-                    )
+                    if item.productId != nil {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.neonCyan.opacity(item.isSelected ? 0.7 : 0.3))
+                    } else {
+                        Text("new")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.neonPurple.opacity(item.isSelected ? 0.8 : 0.3))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(DesignSystem.Colors.neonPurple.opacity(item.isSelected ? 0.12 : 0.05))
+                            )
+                    }
+
+                    Image(systemName: showMatches ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
-
-            Spacer()
+            .buttonStyle(.plain)
 
             // Quantity badge
             if let qty = item.quantity, !qty.isEmpty {
@@ -692,23 +859,87 @@ private struct IngredientReviewRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(item.isSelected ? Color.white.opacity(0.06) : Color.white.opacity(0.02))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            item.isSelected
-                            ? DesignSystem.Colors.neonCyan.opacity(0.2)
-                            : Color.white.opacity(0.06),
-                            lineWidth: 1
-                        )
-                )
-        )
-        .animation(.easeInOut(duration: 0.15), value: item.isSelected)
-        .sheet(isPresented: $showDetail) {
-            IngredientDetailSheet(item: $item)
+    }
+
+    private var matchesDropdown: some View {
+        VStack(spacing: 0) {
+            Divider().background(Color.white.opacity(0.08))
+            if matches.isEmpty {
+                Text("No matches found in your list or catalog.")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ForEach(matches) { product in
+                    matchRow(product)
+                    if product.id != matches.last?.id {
+                        Divider().background(Color.white.opacity(0.06))
+                    }
+                }
+            }
         }
+    }
+
+    private func matchRow(_ product: Product) -> some View {
+        let isCurrent = item.productId == product.id
+        let isHousehold = product.category == "Previous"
+        return Button(action: { pick(product) }) {
+            HStack(spacing: 10) {
+                Image(systemName: isHousehold ? "house.fill" : "cart.badge.plus")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(isHousehold ? DesignSystem.Colors.neonPurple.opacity(0.8) : DesignSystem.Colors.neonCyan.opacity(0.7))
+                    .frame(width: 16)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(product.name)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white)
+                    Text(product.category)
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+
+                Spacer()
+
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func toggleMatches() {
+        if showMatches {
+            showMatches = false
+            return
+        }
+        let trimmed = item.originalName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let householdMatches: [Product] = viewModel.suggestions
+            .filter { $0.name.lowercased().contains(trimmed) || $0.normalizedName.lowercased().contains(trimmed) }
+            .map { Product(id: $0.id, name: $0.name, normalizedName: $0.normalizedName, category: "Previous") }
+        let catalogMatches = ProductCache.shared.strictMatches(for: item.originalName)
+        var seen = Set(householdMatches.map { $0.normalizedName })
+        let dedupedCatalog = catalogMatches.filter { p in
+            if seen.contains(p.normalizedName) { return false }
+            seen.insert(p.normalizedName)
+            return true
+        }
+        matches = householdMatches + dedupedCatalog
+        showMatches = true
+    }
+
+    private func pick(_ product: Product) {
+        item.productId = product.id
+        item.name = product.name
+        showMatches = false
     }
 }
 

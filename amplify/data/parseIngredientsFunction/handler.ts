@@ -66,6 +66,7 @@ export const handler: Handler = async (event) => {
 - Each unique item should appear only once
 - Ignore non-grocery text like recipe titles, step numbers, comments
 - Keep names concise but recognizable (Title Case)
+- Word grouping: when adjacent words in the input could form a single known catalog term (see list below), prefer the multi-word interpretation and do NOT split it. Example: input "tomato soup" → one item "Tomato Soup" if it appears in the catalog (or is a common dish), not two items "Tomato" + "Soup". This matters especially for voice/dictated input where commas may be missing.
 ${knownTermsSection}
 Return ONLY a JSON array, no markdown, no explanation:
 [

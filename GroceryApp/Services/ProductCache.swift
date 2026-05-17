@@ -51,6 +51,36 @@ class ProductCache: ObservableObject {
         products.first { $0.id == id }
     }
 
+    /// Strict matching for disambiguation picker (no permissive fuzzy matches)
+    /// Returns products whose name/alias contains the normalized query as a substring,
+    /// ranked: exact match > prefix > contains. Max 6 results.
+    func strictMatches(for query: String) -> [Product] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return [] }
+        let normalizedQuery = normalize(trimmed)
+        guard !normalizedQuery.isEmpty else { return [] }
+
+        var scored: [(product: Product, score: Double)] = []
+        for product in products {
+            let target = normalize(product.normalizedName)
+            let aliasTargets = product.aliases.map { normalize($0) }
+            let allTargets = [target] + aliasTargets
+
+            var best: Double = 0
+            for t in allTargets {
+                if t == normalizedQuery { best = max(best, 1.0); continue }
+                if t.hasPrefix(normalizedQuery) { best = max(best, 0.9) }
+                else if t.contains(normalizedQuery) { best = max(best, 0.75) }
+            }
+            if best > 0 { scored.append((product, best)) }
+        }
+
+        return scored
+            .sorted { $0.score > $1.score }
+            .prefix(6)
+            .map { $0.product }
+    }
+
     /// Find a product that matches the given name (exact or close match)
     /// Returns the product if found, nil if the item should be considered custom
     func findMatchingProduct(for name: String) -> Product? {

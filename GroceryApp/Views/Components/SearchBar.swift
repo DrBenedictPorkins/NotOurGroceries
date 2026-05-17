@@ -54,6 +54,7 @@ struct SearchBar: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white.opacity(0.5))
                     }
+                    .buttonStyle(.plain)
                     .transition(.scale.combined(with: .opacity))
                 }
 
@@ -67,6 +68,7 @@ struct SearchBar: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(Color(hex: "7B2CBF"))
                     }
+                    .buttonStyle(.plain)
                     .transition(.scale.combined(with: .opacity))
                 }
             }

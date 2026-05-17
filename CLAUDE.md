@@ -196,6 +196,27 @@ git push origin main  # Amplify Console auto-deploys on push
 - **Separate databases**: Prod DynamoDB tables are independent from sandbox
 - **Config files are gitignored**: `amplify_outputs*.json` files are in `.gitignore`
 
+### Lambda Secrets
+
+Lambda functions read API keys via `secret('NAME')` in their `resource.ts`, resolved from SSM at runtime. Set per environment in the Amplify Console (App settings → Secrets) or via CLI.
+
+| Secret | Used by | Purpose |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | `parseIngredientsFunction`, `inferProductAisleFunction`, `aisleExtractionJobHandler` | Claude API for parsing, aisle inference, OCR |
+| `OPENAI_API_KEY` | `transcribeAudioFunction` | OpenAI Whisper for voice-to-text dictation |
+
+Where to set:
+- **Production (CLI)**: Amplify Gen 2 secrets live in AWS SSM. Set directly:
+  ```bash
+  AWS_PROFILE=mine aws ssm put-parameter \
+    --name "/amplify/d2rsreno8nimo5/main/SECRET_NAME" \
+    --value "..." \
+    --type SecureString --overwrite --region us-east-1
+  ```
+  Read back with `aws ssm get-parameter --name ... --with-decryption`. Picked up on next Lambda cold start.
+- **Production (UI)**: Amplify Console → App → `main` branch → App settings → Secrets.
+- **Sandbox (local dev only)**: `AWS_PROFILE=mine npx ampx sandbox secret set NAME` — only applies while `npx ampx sandbox` is running.
+
 ## Release Order — CRITICAL
 
 **NEVER commit, bump version, or deploy unless explicitly told to.**

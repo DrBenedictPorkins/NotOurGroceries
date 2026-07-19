@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-19
+
 - Voice dictation: speak your grocery list in bulk import — transcribed via OpenAI Whisper
 - Bulk import: match picker lets you link a parsed item to an existing list item or catalog product before importing
 - Abandoned session recovery: if a shopping session sits idle for over an hour, any household member can force-finish it (hold-to-confirm) — cart items return to the list
@@ -227,7 +229,8 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.2.0...HEAD
+[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.3.0...HEAD
+[1.3.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.3.0
 [1.2.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.2.0
 [1.1.1]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.1.1
 [1.1.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.1.0

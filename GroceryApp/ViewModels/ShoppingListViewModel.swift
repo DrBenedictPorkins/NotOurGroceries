@@ -53,6 +53,14 @@ class ShoppingListViewModel: ObservableObject {
     @Published var shoppingCompletionStats: ShoppingCompletionStats?
     @Published var showShoppingCompletedSheet = false
 
+    /// Tick that drives time-based UI (e.g. "session abandoned" banner). Updated once per minute while at-store.
+    @Published var abandonedCheckTick: Date = Date()
+    private var abandonedCheckTimer: Timer?
+
+    /// After this many seconds without the shopper finishing, other members can force-finish.
+    static let abandonedShoppingThreshold: TimeInterval = 60 * 60  // 1 hour
+    static let shopperInactivityReminder: TimeInterval = 10 * 60   // 10 minutes
+
     // MARK: - Shopping Request Inbox
     @Published var pendingRequests: [ShoppingRequest] = []
     @Published var showInboxSheet = false
@@ -117,6 +125,33 @@ class ShoppingListViewModel: ObservableObject {
         return UserCache.shared.displayName(for: shopperId)
     }
 
+    /// Seconds elapsed since shopping started (nil when not shopping).
+    /// Re-evaluates whenever `abandonedCheckTick` fires.
+    var shoppingElapsed: TimeInterval? {
+        guard let startedAt = shoppingStartedAt else { return nil }
+        _ = abandonedCheckTick
+        return Date().timeIntervalSince(startedAt)
+    }
+
+    /// True when someone else is shopping and the session has exceeded the abandoned threshold.
+    /// Only surfaced to non-shoppers — the shopper themselves ends their own session.
+    var isSessionAbandoned: Bool {
+        guard isSomeoneElseShopping,
+              let elapsed = shoppingElapsed else { return false }
+        return elapsed >= Self.abandonedShoppingThreshold
+    }
+
+    /// Human-readable elapsed time like "1h 23m" for banner/alert text.
+    var shoppingElapsedDescription: String? {
+        guard let elapsed = shoppingElapsed else { return nil }
+        let hours = Int(elapsed) / 3600
+        let minutes = (Int(elapsed) % 3600) / 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+        return "\(minutes)m"
+    }
+
     /// Number of pending shopping requests
     var pendingRequestCount: Int {
         pendingRequests.count
@@ -145,6 +180,7 @@ class ShoppingListViewModel: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
         }
         reminderTimer?.invalidate()
+        abandonedCheckTimer?.invalidate()
     }
 
     private func setupHouseholdChangeObserver() {
@@ -330,18 +366,8 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Add Item
     func addItem(name: String, quantity: String? = nil, notes: String? = nil, productId: String? = nil) async {
-        // If someone else is shopping, submit a request instead of adding directly
-        if isSomeoneElseShopping {
-            let normalizedName = normalizeName(name)
-            await submitAddRequest(
-                name: name,
-                quantity: quantity,
-                notes: notes,
-                productId: productId,
-                normalizedName: normalizedName
-            )
-            return
-        }
+        // Direct add even while someone else is shopping — the shopper sees a live
+        // toast + pulse via handleItemCreated / remoteAddedAt on their device.
 
         guard let householdId = householdId else {
             showToast(message: "No household selected")
@@ -354,7 +380,11 @@ class ShoppingListViewModel: ObservableObject {
             return
         }
 
-        // Check for duplicates in cached list
+        // Check for duplicates in cached list (exact normalized-name match only —
+        // fuzzy token-subset matching is deliberately restricted to the bulk-import
+        // review picker, where the user gets to accept/reject each candidate. Silent
+        // auto-merge risks buying the wrong thing, e.g. "coconut milk" collapsing
+        // into "coconut milk yogurt".)
         let normalizedName = normalizeName(name)
         if let existingItem = shoppingList.first(where: { $0.normalizedName == normalizedName }) {
             showToast(message: "\(existingItem.name) is already on the list")
@@ -546,6 +576,7 @@ class ShoppingListViewModel: ObservableObject {
             case .success(_):
                 print("moveToCart SUCCESS - showing toast for: \(item.name)")
                 showToast(message: "Added \(item.name) to cart")
+                bumpShopperActivity()
             case .failure(let error):
                 print("moveToCart FAILURE: \(error)")
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -674,12 +705,8 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Restore Item
     func restoreItem(_ item: GroceryItem) async {
-        // List is read-only for remote members during active shopping
-        if isSomeoneElseShopping {
-            showToast(message: "List is read-only while shopping", type: .warning)
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
-            return
-        }
+        // Adding a suggestion back onto the ACTIVE list is allowed even while
+        // someone else is shopping — the shopper sees the item appear live.
 
         let currentUserId = AmplifyService.shared.currentUser?.userId ?? ""
 
@@ -1602,6 +1629,7 @@ class ShoppingListViewModel: ObservableObject {
         if shoppingStatus == .idle, isAtStoreMode {
             // Someone else ended the shopping session
             isAtStoreMode = false
+            ShopperReminderService.shared.cancel()
             showToast(message: "Shopping trip ended", type: .info)
         }
 
@@ -1909,6 +1937,30 @@ class ShoppingListViewModel: ObservableObject {
         reminderTimer = nil
     }
 
+    /// Start a 60s tick that lets the UI re-evaluate `isSessionAbandoned` while at-store.
+    func startAbandonedCheckTimer() {
+        abandonedCheckTimer?.invalidate()
+        abandonedCheckTick = Date()
+        abandonedCheckTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.abandonedCheckTick = Date()
+            }
+        }
+    }
+
+    func stopAbandonedCheckTimer() {
+        abandonedCheckTimer?.invalidate()
+        abandonedCheckTimer = nil
+    }
+
+    /// Push the shopper-inactivity reminder out to `shopperInactivityReminder` from now.
+    /// Called on session start and on every successful `moveToCart` — silent no-op
+    /// if the current user is not the active shopper.
+    func bumpShopperActivity() {
+        guard isCurrentUserShopping else { return }
+        ShopperReminderService.shared.schedule(after: Self.shopperInactivityReminder)
+    }
+
     /// Play reminder notification for pending requests
     @MainActor
     private func playReminderNotification() {
@@ -2023,6 +2075,10 @@ class ShoppingListViewModel: ObservableObject {
                     // Start reminder timer for pending requests
                     startReminderTimer()
 
+                    // Nudge the shopper if nothing gets crossed off for a while.
+                    await ShopperReminderService.shared.requestPermissionIfNeeded()
+                    bumpShopperActivity()
+
                     showToast(message: "Shopping at \(store.name)")
                     logger.info("Entered shopping mode at store: \(store.name)")
                 }
@@ -2046,6 +2102,7 @@ class ShoppingListViewModel: ObservableObject {
         do {
             // Stop reminder timer
             stopReminderTimer()
+            ShopperReminderService.shared.cancel()
 
             // Calculate stats BEFORE changing item statuses
             let itemsInCart = items.filter { $0.status == .inCart }
@@ -2136,6 +2193,74 @@ class ShoppingListViewModel: ObservableObject {
         } catch {
             showToast(message: "Failed to exit shopping mode", type: .error)
             logger.error("Failed to exit shopping mode: \(error)")
+        }
+    }
+
+    /// Force-finish an abandoned shopping session started by another member.
+    /// Only allowed once `isSessionAbandoned` is true (session idle > threshold).
+    /// Moves any IN_CART items back to ACTIVE — nothing is treated as shopped.
+    func forceFinishAbandonedSession() async {
+        guard isSessionAbandoned else {
+            logger.warning("forceFinishAbandonedSession called but session is not abandoned")
+            return
+        }
+        guard let householdId = householdId else {
+            showToast(message: "No household selected", type: .error)
+            return
+        }
+
+        let abandonedByName = activeShopperDisplayName ?? "the shopper"
+        stopAbandonedCheckTimer()
+
+        // Move IN_CART items back to ACTIVE so nothing is treated as shopped.
+        let inCartItems = items.filter { $0.status == .inCart }
+        for item in inCartItems {
+            await updateItemStatus(item, to: .active)
+        }
+
+        do {
+            let document = """
+            mutation UpdateHousehold($input: UpdateHouseholdInput!) {
+                updateHousehold(input: $input) {
+                    id
+                    shoppingStatus
+                    activeShopperId
+                    shoppingStoreId
+                }
+            }
+            """
+
+            let input: [String: Any] = [
+                "id": householdId,
+                "shoppingStatus": "IDLE",
+                "activeShopperId": NSNull(),
+                "shoppingStoreId": NSNull()
+            ]
+
+            let request = GraphQLRequest<JSONValue>(
+                document: document,
+                variables: ["input": input],
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
+            )
+
+            let response = try await Amplify.API.mutate(request: request)
+
+            switch response {
+            case .success:
+                shoppingStatus = .idle
+                activeShopperId = nil
+                shoppingStoreId = nil
+                shoppingStartedAt = nil
+                showToast(message: "Ended abandoned session from \(abandonedByName)", type: .success)
+                logger.info("Force-finished abandoned shopping session by \(abandonedByName); returned \(inCartItems.count) in-cart items to list")
+            case .failure(let error):
+                showToast(message: "Failed to end session", type: .error)
+                logger.error("Failed to force-finish shopping: \(error)")
+            }
+        } catch {
+            showToast(message: "Failed to end session", type: .error)
+            logger.error("Failed to force-finish shopping: \(error)")
         }
     }
 
@@ -2276,6 +2401,11 @@ class ShoppingListViewModel: ObservableObject {
 
                         // Start reminder timer for pending requests
                         startReminderTimer()
+
+                        // Restart the inactivity reminder — we lost any prior schedule
+                        // when the app was killed.
+                        await ShopperReminderService.shared.requestPermissionIfNeeded()
+                        bumpShopperActivity()
 
                         logger.info("Restored shopping mode for current user")
                         return true

@@ -144,31 +144,15 @@ struct GroceryItemRow: View {
                 }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                // Swipe RIGHT: suggestions → active only
+                // Swipe RIGHT: suggestions → active only (direct even while someone
+                // else is shopping — shopper sees a live add via handleItemCreated).
                 if item.status == .suggestion {
-                    if viewModel.isSomeoneElseShopping {
-                        Button {
-                            Task {
-                                await viewModel.submitAddRequest(
-                                    name: item.name,
-                                    quantity: item.quantity,
-                                    notes: item.notes,
-                                    productId: item.productId
-                                )
-                            }
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
-                        } label: {
-                            Label("Add to List", systemImage: "plus.circle.fill")
-                        }
-                        .tint(DesignSystem.Colors.neonCyan)
-                    } else {
-                        Button {
-                            animateToActive()
-                        } label: {
-                            Label("Add to List", systemImage: "plus.circle.fill")
-                        }
-                        .tint(DesignSystem.Colors.neonCyan)
+                    Button {
+                        animateToActive()
+                    } label: {
+                        Label("Add to List", systemImage: "plus.circle.fill")
                     }
+                    .tint(DesignSystem.Colors.neonCyan)
                 }
             }
             .offset(x: shakeOffset)
@@ -195,19 +179,7 @@ struct GroceryItemRow: View {
                         animateToSuggestions()
                     }
                 } else if item.status == .suggestion {
-                    if viewModel.isSomeoneElseShopping {
-                        Task {
-                            await viewModel.submitAddRequest(
-                                name: item.name,
-                                quantity: item.quantity,
-                                notes: item.notes,
-                                productId: item.productId
-                            )
-                        }
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    } else {
-                        animateToActive()
-                    }
+                    animateToActive()
                 } else if item.status == .inCart {
                     animateToActive()
                 }

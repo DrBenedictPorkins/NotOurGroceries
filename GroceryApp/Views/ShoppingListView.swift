@@ -13,6 +13,8 @@ struct ShoppingListView: View {
     @FocusState private var searchFieldFocused: Bool
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showBulkImport = false
+    @State private var showForceFinishAlert = false
+    @State private var showForceFinishHoldSheet = false
 
     var body: some View {
         ZStack {
@@ -206,6 +208,27 @@ struct ShoppingListView: View {
             BulkImportSheet(isPresented: $showBulkImport)
                 .environmentObject(viewModel)
         }
+        .alert("Force finish shopping?", isPresented: $showForceFinishAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Continue", role: .destructive) {
+                showForceFinishHoldSheet = true
+            }
+        } message: {
+            let name = viewModel.activeShopperDisplayName ?? "The shopper"
+            let elapsed = viewModel.shoppingElapsedDescription ?? "a while"
+            Text("\(name) started shopping \(elapsed) ago and hasn't finished. Items in the cart will be moved back to the list.")
+        }
+        .sheet(isPresented: $showForceFinishHoldSheet) {
+            ForceFinishHoldSheet(
+                isPresented: $showForceFinishHoldSheet,
+                shopperName: viewModel.activeShopperDisplayName ?? "the shopper",
+                elapsed: viewModel.shoppingElapsedDescription ?? ""
+            ) {
+                Task { await viewModel.forceFinishAbandonedSession() }
+            }
+            .presentationDetents([.height(320)])
+            .presentationDragIndicator(.visible)
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 viewModel.lockInteractionsOnWakeup()
@@ -217,6 +240,21 @@ struct ShoppingListView: View {
             } else if newPhase == .background {
                 lastBackgroundTime = Date()
             }
+        }
+        .onChange(of: viewModel.isSomeoneElseShopping) { _, isShopping in
+            if isShopping {
+                viewModel.startAbandonedCheckTimer()
+            } else {
+                viewModel.stopAbandonedCheckTimer()
+            }
+        }
+        .onAppear {
+            if viewModel.isSomeoneElseShopping {
+                viewModel.startAbandonedCheckTimer()
+            }
+        }
+        .onDisappear {
+            viewModel.stopAbandonedCheckTimer()
         }
         // Note: Initial data loading and shopping status check is handled by ContentView
         // This view only needs to handle user-initiated "At Store" mode entry
@@ -313,34 +351,89 @@ struct ShoppingListView: View {
     // MARK: - Compact Shopping Status Line
 
     private var shoppingStatusLine: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "cart.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.neonPink)
-
-            if let shopperName = viewModel.activeShopperDisplayName {
-                Text(shopperName)
-                    .font(.system(size: 13, weight: .semibold))
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "cart.fill")
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(DesignSystem.Colors.neonPink)
-            }
 
-            Text("is shopping")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+                if let shopperName = viewModel.activeShopperDisplayName {
+                    Text(shopperName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.neonPink)
+                }
 
-            if let storeId = viewModel.shoppingStoreId,
-               let store = viewModel.householdStores.first(where: { $0.id == storeId }) {
-                Text("at")
+                Text("is shopping")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
-                Text(store.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.neonPurple)
+
+                if let storeId = viewModel.shoppingStoreId,
+                   let store = viewModel.householdStores.first(where: { $0.id == storeId }) {
+                    Text("at")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text(store.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.neonPurple)
+                }
+
+                Spacer()
+            }
+
+            if viewModel.isSessionAbandoned {
+                abandonedSessionBanner
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    private var abandonedSessionBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.neonYellow)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Session idle \(viewModel.shoppingElapsedDescription ?? "")")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                Text("Looks abandoned — you can end it")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
             }
 
             Spacer()
+
+            Button(action: {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                showForceFinishAlert = true
+            }) {
+                Text("Force finish")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(DesignSystem.Colors.neonPink.opacity(0.25))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(DesignSystem.Colors.neonPink, lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.top, 4)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(DesignSystem.Colors.neonYellow.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(DesignSystem.Colors.neonYellow.opacity(0.4), lineWidth: 1)
+                )
+        )
     }
 
     // MARK: - Shopping Active Border Overlay
@@ -670,4 +763,105 @@ private struct InCartItemRow: View {
     ShoppingListView()
         .environmentObject(ShoppingListViewModel())
         .environmentObject(AmplifyService.shared)
+}
+
+// MARK: - Force Finish Hold-to-Confirm Sheet
+
+private struct ForceFinishHoldSheet: View {
+    @Binding var isPresented: Bool
+    let shopperName: String
+    let elapsed: String
+    let onConfirm: () -> Void
+
+    private let holdDuration: TimeInterval = 2.0
+    @State private var progress: CGFloat = 0
+    @State private var isHolding: Bool = false
+    @State private var didConfirm: Bool = false
+    @State private var holdTask: Task<Void, Never>?
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 36, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.neonYellow)
+                .padding(.top, 12)
+
+            VStack(spacing: 6) {
+                Text("Force finish shopping")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                Text("\(shopperName) started \(elapsed) ago. Hold the button to confirm — items in the cart will move back to the list.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+            }
+
+            Spacer(minLength: 0)
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(DesignSystem.Colors.neonPink.opacity(0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(DesignSystem.Colors.neonPink, lineWidth: 1.5)
+                    )
+
+                GeometryReader { geo in
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(DesignSystem.Colors.neonPink.opacity(0.45))
+                        .frame(width: geo.size.width * progress)
+                }
+                .allowsHitTesting(false)
+
+                HStack(spacing: 8) {
+                    Image(systemName: isHolding ? "hourglass" : "hand.tap.fill")
+                    Text(isHolding ? "Keep holding…" : "Hold to end session")
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+            }
+            .frame(height: 54)
+            .padding(.horizontal, 20)
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !isHolding, !didConfirm else { return }
+                        isHolding = true
+                        withAnimation(.linear(duration: holdDuration)) {
+                            progress = 1.0
+                        }
+                        holdTask?.cancel()
+                        holdTask = Task {
+                            try? await Task.sleep(nanoseconds: UInt64(holdDuration * 1_000_000_000))
+                            if Task.isCancelled || didConfirm { return }
+                            didConfirm = true
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                            onConfirm()
+                            isPresented = false
+                        }
+                    }
+                    .onEnded { _ in
+                        guard !didConfirm else { return }
+                        holdTask?.cancel()
+                        holdTask = nil
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            progress = 0
+                        }
+                        isHolding = false
+                    }
+            )
+
+            Button("Cancel") {
+                isPresented = false
+            }
+            .font(.system(size: 14, weight: .medium))
+            .foregroundColor(DesignSystem.Colors.textSecondary)
+            .padding(.bottom, 12)
+        }
+        .padding(.vertical, 8)
+        .presentationBackground(DesignSystem.Colors.background)
+    }
 }

@@ -21,6 +21,7 @@ class SubscriptionService: ObservableObject {
         let shoppingStatus: String?
         let activeShopperId: String?
         let shoppingStoreId: String?
+        let shoppingStartedAt: Date?
     }
 
     struct SubscriptionError: Identifiable {
@@ -346,6 +347,7 @@ class SubscriptionService: ObservableObject {
                     shoppingStatus
                     activeShopperId
                     shoppingStoreId
+                    shoppingStartedAt
                 }
             }
             """
@@ -389,13 +391,22 @@ class SubscriptionService: ObservableObject {
                                     shoppingStoreId = value
                                 }
 
+                                var shoppingStartedAt: Date? = nil
+                                if case .string(let value) = data["shoppingStartedAt"] {
+                                    let formatter = ISO8601DateFormatter()
+                                    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                                    shoppingStartedAt = formatter.date(from: value)
+                                        ?? ISO8601DateFormatter().date(from: value)
+                                }
+
                                 print("SubscriptionService: Household updated - status: \(shoppingStatus ?? "nil"), shopperId: \(activeShopperId ?? "nil")")
 
                                 self.lastHouseholdShoppingUpdate = HouseholdShoppingUpdate(
                                     householdId: id,
                                     shoppingStatus: shoppingStatus,
                                     activeShopperId: activeShopperId,
-                                    shoppingStoreId: shoppingStoreId
+                                    shoppingStoreId: shoppingStoreId,
+                                    shoppingStartedAt: shoppingStartedAt
                                 )
                             }
                         case .failure(let error):

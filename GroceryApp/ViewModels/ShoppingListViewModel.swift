@@ -1616,6 +1616,19 @@ class ShoppingListViewModel: ObservableObject {
         activeShopperId = update.activeShopperId
         shoppingStoreId = update.shoppingStoreId
 
+        // Track session start so non-shoppers can detect an abandoned session.
+        if shoppingStatus == .atStore {
+            if let startedAt = update.shoppingStartedAt {
+                shoppingStartedAt = startedAt
+            } else if shoppingStartedAt == nil {
+                // Session started by an app version that didn't write the field —
+                // fall back to when we first observed it.
+                shoppingStartedAt = Date()
+            }
+        } else {
+            shoppingStartedAt = nil
+        }
+
         // If someone else started shopping, show a toast
         let currentUserId = AmplifyService.shared.currentUser?.userId
         if shoppingStatus == .atStore,
@@ -1994,15 +2007,20 @@ class ShoppingListViewModel: ObservableObject {
                     shoppingStatus
                     activeShopperId
                     shoppingStoreId
+                    shoppingStartedAt
                 }
             }
             """
+
+            let iso8601Formatter = ISO8601DateFormatter()
+            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
             let input: [String: Any] = [
                 "id": householdId,
                 "shoppingStatus": "AT_STORE",
                 "activeShopperId": currentUserId,
-                "shoppingStoreId": store.id
+                "shoppingStoreId": store.id,
+                "shoppingStartedAt": iso8601Formatter.string(from: Date())
             ]
 
             let request = GraphQLRequest<JSONValue>(
@@ -2150,7 +2168,8 @@ class ShoppingListViewModel: ObservableObject {
                 "id": householdId,
                 "shoppingStatus": "IDLE",
                 "activeShopperId": NSNull(),
-                "shoppingStoreId": NSNull()
+                "shoppingStoreId": NSNull(),
+                "shoppingStartedAt": NSNull()
             ]
 
             let request = GraphQLRequest<JSONValue>(
@@ -2234,7 +2253,8 @@ class ShoppingListViewModel: ObservableObject {
                 "id": householdId,
                 "shoppingStatus": "IDLE",
                 "activeShopperId": NSNull(),
-                "shoppingStoreId": NSNull()
+                "shoppingStoreId": NSNull(),
+                "shoppingStartedAt": NSNull()
             ]
 
             let request = GraphQLRequest<JSONValue>(
@@ -2341,6 +2361,7 @@ class ShoppingListViewModel: ObservableObject {
                     shoppingStatus
                     activeShopperId
                     shoppingStoreId
+                    shoppingStartedAt
                 }
             }
             """
@@ -2375,6 +2396,23 @@ class ShoppingListViewModel: ObservableObject {
                         shoppingStoreId = storeId
                     } else {
                         shoppingStoreId = nil
+                    }
+
+                    // Session start time — needed on non-shopper devices for the
+                    // abandoned-session banner.
+                    if shoppingStatus == .atStore {
+                        if case .string(let startedAtString) = household["shoppingStartedAt"] {
+                            let formatter = ISO8601DateFormatter()
+                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                            shoppingStartedAt = formatter.date(from: startedAtString)
+                                ?? ISO8601DateFormatter().date(from: startedAtString)
+                                ?? shoppingStartedAt
+                        } else if shoppingStartedAt == nil {
+                            // Field not written (older app version) — fall back to first observation.
+                            shoppingStartedAt = Date()
+                        }
+                    } else {
+                        shoppingStartedAt = nil
                     }
 
                     logger.info("Fetched household shopping status: \(self.shoppingStatus.rawValue)")

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Voice dictation: speak your grocery list in bulk import — transcribed via OpenAI Whisper
+- Bulk import: match picker lets you link a parsed item to an existing list item or catalog product before importing
+- Abandoned session recovery: if a shopping session sits idle for over an hour, any household member can force-finish it (hold-to-confirm) — cart items return to the list
+- Shopper reminder: a "Still shopping?" notification nudges the shopper after 10 minutes with nothing crossed off
+- Adding items during an active shopping trip now goes straight onto the list (no approval step) — the shopper sees new items appear live
+
 ## [1.2.0] - 2026-05-07
 
 - Bulk import: scan a photo (camera, photo library, or clipboard) — AI extracts grocery items from the image

@@ -139,6 +139,7 @@ const schema = a.schema({
       shoppingStatus: a.ref('ShoppingStatus'),  // IDLE or AT_STORE
       activeShopperId: a.id(),  // User ID of the person currently shopping
       shoppingStoreId: a.id(),  // HouseholdStore ID where they're shopping
+      shoppingStartedAt: a.datetime(),  // When the current session began — drives abandoned-session detection on other members' devices
     })
     .authorization((allow) => [
       allow.authenticated(),

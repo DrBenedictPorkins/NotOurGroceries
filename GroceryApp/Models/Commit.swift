@@ -10,13 +10,18 @@ struct Commit: Identifiable, Codable, Hashable {
     let payload: String // JSON string
     let timestamp: Date
 
+    /// Mirrors the `CommitAction` enum in amplify/data/resource.ts. These raw values
+    /// are what `commitStreamHandler` writes; any drift here silently fails to decode.
     enum CommitAction: String, Codable {
         case addItem = "ADD_ITEM"
         case removeItem = "REMOVE_ITEM"
-        case checkOffItem = "CHECK_OFF_ITEM"
-        case restoreItem = "RESTORE_ITEM"
+        case moveToCart = "MOVE_TO_CART"
+        case restoreToList = "RESTORE_TO_LIST"
+        case moveToSuggestions = "MOVE_TO_SUGGESTIONS"
         case lockItem = "LOCK_ITEM"
         case unlockItem = "UNLOCK_ITEM"
+        case addReaction = "ADD_REACTION"
+        case removeReaction = "REMOVE_REACTION"
         case updateItem = "UPDATE_ITEM"
     }
 

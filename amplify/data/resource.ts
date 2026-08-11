@@ -510,9 +510,11 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
   schema,
   authorizationModes: {
+    // Cognito user pools only. The API key auth mode was removed deliberately:
+    // nothing used it (the app sets amazonCognitoUserPools on every request and
+    // Lambdas talk to DynamoDB over IAM), and its 30-day expiry left CloudFormation
+    // referencing a key AWS had already reaped, which blocked every subsequent
+    // deploy with a 404 on AWS::AppSync::ApiKey.
     defaultAuthorizationMode: 'userPool',
-    apiKeyAuthorizationMode: {
-      expiresInDays: 30,
-    },
   },
 });

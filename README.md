@@ -9,6 +9,8 @@ iOS 17+, SwiftUI, AWS Amplify Gen 2.
 | <img src="docs/screenshots/04-shopping-list.png" width="290" alt="Shopping list showing six items, each labelled with who added it"> | <img src="docs/screenshots/09-at-store.png" width="290" alt="Shopping mode showing a progress bar at 2 of 6 items, a to-get section, and an in-cart section"> |
 | **Import anything** | **Item detail** |
 | <img src="docs/screenshots/06-bulk-import.png" width="290" alt="Import screen offering camera, photos, paste and voice input for a recipe or list"> | <img src="docs/screenshots/07-item-detail.png" width="290" alt="Item detail sheet showing notes, photo slots, and emoji reactions with attribution"> |
+| **Store setup** | **Your stores** |
+| <img src="docs/screenshots/05-store-layout-picker.png" width="290" alt="New store form asking whether the store has numbered aisles or no aisles"> | <img src="docs/screenshots/08-stores.png" width="290" alt="Store list showing one store labelled no aisles"> |
 
 ## What it does
 
@@ -142,14 +144,19 @@ Because backend and app deploy from the same push, a schema change lands before 
 
 ## Screenshots
 
-`docs/screenshots/` holds nine screens captured from the simulator at 1179×2556 against the **sandbox** backend: launch, both auth screens, the list, store setup, the store-layout picker, bulk import, item detail, and shopping mode.
+Captured from the simulator at 1179×2556 against the **sandbox** backend. Every image in `docs/screenshots/` is referenced above; the set is deliberately kept small rather than exhaustive.
 
-Shopping mode is shown for a store with no aisles. The aisle-*ordered* variant isn't captured yet — it needs a store with a scanned aisle directory, which takes a photo of a real aisle sign to produce.
+Two screens are still missing, both blocked on the same thing — a store with a scanned aisle directory:
 
-To add more, run against sandbox (debug builds do this automatically) so no household's real data ends up in a committed image:
+- **Aisle-ordered shopping**, the feature that most distinguishes this app. The version shown above is a store with *no* aisles, so the list is flat.
+- **The aisle scanner** — photographing a directory sign and watching the extraction run.
+
+Producing either needs a photo of a real aisle sign plus a working `ANTHROPIC_API_KEY` in the sandbox environment.
+
+To add a screen, run against sandbox (debug builds do this automatically) so no household's real data lands in a committed image:
 
 ```bash
-xcrun simctl io booted screenshot docs/screenshots/06-example.png
+xcrun simctl io booted screenshot docs/screenshots/10-aisle-scan.png
 ```
 
 ## Operations

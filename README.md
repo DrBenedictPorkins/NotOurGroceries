@@ -4,9 +4,11 @@ A shared grocery list for a household, built around the way people actually shop
 
 iOS 17+, SwiftUI, AWS Amplify Gen 2.
 
-| The list | Store setup |
+| The shared list | At the store |
 |---|---|
-| <img src="docs/screenshots/04-shopping-list.png" width="300" alt="Shopping list with six items, each showing who added it"> | <img src="docs/screenshots/05-store-layout-picker.png" width="300" alt="New store form with a store layout picker offering numbered aisles or no aisles"> |
+| <img src="docs/screenshots/04-shopping-list.png" width="290" alt="Shopping list showing six items, each labelled with who added it"> | <img src="docs/screenshots/09-at-store.png" width="290" alt="Shopping mode showing a progress bar at 2 of 6 items, a to-get section, and an in-cart section"> |
+| **Import anything** | **Item detail** |
+| <img src="docs/screenshots/06-bulk-import.png" width="290" alt="Import screen offering camera, photos, paste and voice input for a recipe or list"> | <img src="docs/screenshots/07-item-detail.png" width="290" alt="Item detail sheet showing notes, photo slots, and emoji reactions with attribution"> |
 
 ## What it does
 
@@ -140,9 +142,9 @@ Because backend and app deploy from the same push, a schema change lands before 
 
 ## Screenshots
 
-`docs/screenshots/` currently holds the launch screen, both auth screens, the shopping list, and the store-layout picker, captured from the simulator at 1179×2556 against the **sandbox** backend.
+`docs/screenshots/` holds nine screens captured from the simulator at 1179×2556 against the **sandbox** backend: launch, both auth screens, the list, store setup, the store-layout picker, bulk import, item detail, and shopping mode.
 
-The at-store aisle-ordered view is not captured yet — it needs a store with a scanned aisle directory, which takes a real photo of a real aisle sign to produce.
+Shopping mode is shown for a store with no aisles. The aisle-*ordered* variant isn't captured yet — it needs a store with a scanned aisle directory, which takes a photo of a real aisle sign to produce.
 
 To add more, run against sandbox (debug builds do this automatically) so no household's real data ends up in a committed image:
 

@@ -73,18 +73,25 @@ class StoreService: ObservableObject {
 
         // AWSJSON fields must be sent as native JSON values (arrays/objects),
         // NOT as JSON strings. DynamoDB S-type strings get double-encoded by AppSync.
+        var input: [String: Any] = [
+            "id": storeId,
+            "householdId": householdId,
+            "name": name,
+            "chain": chain ?? "",
+            "layoutType": layoutType.rawValue
+        ]
+
+        // Omit aisleLayout entirely rather than sending an empty array. AppSync
+        // rejects `[]` for an AWSJSON variable ("has an invalid value"), which only
+        // shows up for no-aisle stores since every other path seeds standard sections.
+        // The field is nullable and parseHouseholdStore treats a missing value as [].
+        if !initialAisles.isEmpty {
+            input["aisleLayout"] = initialAisles
+        }
+
         let request = GraphQLRequest<JSONValue>(
             document: document,
-            variables: [
-                "input": [
-                    "id": storeId,
-                    "householdId": householdId,
-                    "name": name,
-                    "chain": chain ?? "",
-                    "aisleLayout": initialAisles,
-                    "layoutType": layoutType.rawValue
-                ]
-            ],
+            variables: ["input": input],
             responseType: JSONValue.self,
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )

@@ -64,11 +64,16 @@ struct StoreDetailView: View {
                     // Store Info Section
                     storeInfoSection
 
-                    // Aisle Management Section
-                    aisleManagementSection
+                    // Aisle machinery is meaningless for stores with no aisles
+                    if !currentStore.hasNoAisles {
+                        // Aisle Management Section
+                        aisleManagementSection
 
-                    // Actions Section
-                    actionsSection
+                        // Actions Section
+                        actionsSection
+                    } else {
+                        noAislesSection
+                    }
 
                     // Delete Section
                     deleteSection
@@ -356,6 +361,47 @@ struct StoreDetailView: View {
     }
 
     // MARK: - Helper Views
+
+    // MARK: - No Aisles Section
+
+    private var noAislesSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionHeader(title: "STORE LAYOUT", icon: "list.bullet.indent")
+
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(DesignSystem.Colors.neonPurple.opacity(0.15))
+                        .frame(width: 48, height: 48)
+
+                    Image(systemName: "basket")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.neonPurple)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No Aisles")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Your list stays in one section while shopping here")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+
+                Spacer()
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(DesignSystem.Colors.glassBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
+                    )
+            )
+        }
+    }
 
     private func sectionHeader(title: String, icon: String) -> some View {
         HStack(spacing: 8) {

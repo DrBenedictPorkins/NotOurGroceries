@@ -31,6 +31,9 @@ class StoreService: ObservableObject {
     /// Adds any missing standard sections to a store and persists to backend.
     /// Safe to call repeatedly — only adds what isn't already there.
     func addMissingStandardSections(to store: HouseholdStore) async throws -> HouseholdStore {
+        // Stores without aisles have no perimeter sections to seed.
+        guard !store.hasNoAisles else { return store }
+
         let existingIds = Set(store.aisleLayout.map { $0.id })
         let missing = Self.standardSections.filter { !existingIds.contains($0.id) }
         guard !missing.isEmpty else { return store }
@@ -44,7 +47,7 @@ class StoreService: ObservableObject {
     // MARK: - Store CRUD
 
     /// Create a new store for a household
-    func createStore(name: String, chain: String?, householdId: String) async throws -> HouseholdStore {
+    func createStore(name: String, chain: String?, householdId: String, layoutType: StoreLayoutType = .aisles) async throws -> HouseholdStore {
         let storeId = UUID().uuidString
 
         let document = """
@@ -56,11 +59,13 @@ class StoreService: ObservableObject {
                 chain
                 address
                 aisleLayout
+                layoutType
             }
         }
         """
 
-        let initialAisles = Self.standardSections.map { aisle -> [String: Any] in
+        // Stores with no aisles get no standard perimeter sections seeded.
+        let initialAisles: [[String: Any]] = layoutType == .noAisles ? [] : Self.standardSections.map { aisle -> [String: Any] in
             var dict: [String: Any] = ["id": aisle.id, "number": aisle.number, "name": aisle.name, "displayOrder": aisle.displayOrder]
             if let description = aisle.description { dict["description"] = description }
             return dict
@@ -76,7 +81,8 @@ class StoreService: ObservableObject {
                     "householdId": householdId,
                     "name": name,
                     "chain": chain ?? "",
-                    "aisleLayout": initialAisles
+                    "aisleLayout": initialAisles,
+                    "layoutType": layoutType.rawValue
                 ]
             ],
             responseType: JSONValue.self,
@@ -109,6 +115,7 @@ class StoreService: ObservableObject {
                 chain
                 address
                 aisleLayout
+                layoutType
             }
         }
         """
@@ -129,7 +136,8 @@ class StoreService: ObservableObject {
         var input: [String: Any] = [
             "id": store.id,
             "name": store.name,
-            "aisleLayout": aisleLayoutNative
+            "aisleLayout": aisleLayoutNative,
+            "layoutType": store.layoutType.rawValue
         ]
 
         // Add optional fields
@@ -211,6 +219,7 @@ class StoreService: ObservableObject {
                     chain
                     address
                     aisleLayout
+                    layoutType
                 }
             }
         }
@@ -684,13 +693,21 @@ class StoreService: ObservableObject {
             aisleLayout = aisleArray.compactMap { parseStoreAisle($0) }
         }
 
+        // Nullable on the backend — a missing/unknown value means AISLES (back-compat).
+        var layoutType: StoreLayoutType = .aisles
+        if case .string(let layoutValue) = obj["layoutType"],
+           let parsed = StoreLayoutType(rawValue: layoutValue) {
+            layoutType = parsed
+        }
+
         return HouseholdStore(
             id: id,
             householdId: householdId,
             name: name,
             chain: chain,
             address: address,
-            aisleLayout: aisleLayout
+            aisleLayout: aisleLayout,
+            layoutType: layoutType
         )
     }
 

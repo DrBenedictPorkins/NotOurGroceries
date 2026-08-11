@@ -5,6 +5,7 @@ struct CreateStoreSheet: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @State private var storeName = ""
     @State private var chainName = ""
+    @State private var layoutType: StoreLayoutType = .aisles
     @State private var showAisleScanSheet = false
     @State private var createdStore: HouseholdStore?
     @State private var isSaving = false
@@ -76,6 +77,8 @@ struct CreateStoreSheet: View {
             VStack(spacing: 24) {
                 storeInfoSection
 
+                storeLayoutSection
+
                 // Next button
                 Button(action: saveAndAdvance) {
                     HStack(spacing: 8) {
@@ -83,7 +86,7 @@ struct CreateStoreSheet: View {
                             ProgressView()
                                 .tint(.white)
                         }
-                        Text("Next")
+                        Text(layoutType == .noAisles ? "Create Store" : "Next")
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .frame(maxWidth: .infinity)
@@ -246,6 +249,85 @@ struct CreateStoreSheet: View {
         }
     }
 
+    // MARK: - Store Layout Section
+
+    private var storeLayoutSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("STORE LAYOUT")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .tracking(1.2)
+
+            VStack(spacing: 12) {
+                layoutOption(
+                    type: .aisles,
+                    icon: "list.bullet.indent",
+                    title: "Has numbered aisles",
+                    subtitle: "Sort your list by aisle while shopping"
+                )
+
+                layoutOption(
+                    type: .noAisles,
+                    icon: "basket",
+                    title: "No aisles",
+                    subtitle: "Farmers market, corner shop, small grocery"
+                )
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                    .fill(DesignSystem.Colors.glassBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
+                            .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
+                    )
+            )
+        }
+    }
+
+    private func layoutOption(type: StoreLayoutType, icon: String, title: String, subtitle: String) -> some View {
+        let isSelected = layoutType == type
+
+        return Button(action: {
+            layoutType = type
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(isSelected ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textTertiary)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(isSelected ? .white : DesignSystem.Colors.textSecondary)
+
+                    Text(subtitle)
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(isSelected ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textTertiary)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                    .fill(isSelected ? DesignSystem.Colors.neonCyan.opacity(0.08) : Color.white.opacity(0.03))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                            .stroke(isSelected ? DesignSystem.Colors.neonCyan.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Helpers
 
     private var canSave: Bool {
@@ -261,23 +343,33 @@ struct CreateStoreSheet: View {
         let trimmedStoreName = storeName.trimmingCharacters(in: .whitespaces)
         let trimmedChain = chainName.trimmingCharacters(in: .whitespaces)
 
+        // A store with no aisles has nothing to set up in step 2 — create and dismiss.
+        let skipAisleSetup = layoutType == .noAisles
+        let selectedLayout = layoutType
+
         isSaving = true
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        withAnimation(.spring) {
-            step = .aisleSetup
+        if !skipAisleSetup {
+            withAnimation(.spring) {
+                step = .aisleSetup
+            }
         }
 
         Task {
             let newStore = await viewModel.createStore(
                 name: trimmedStoreName,
                 chain: trimmedChain.isEmpty ? nil : trimmedChain,
-                aisles: []
+                aisles: [],
+                layoutType: selectedLayout
             )
 
             await MainActor.run {
                 isSaving = false
                 if let store = newStore {
                     createdStore = store
+                }
+                if skipAisleSetup {
+                    dismiss()
                 }
             }
         }

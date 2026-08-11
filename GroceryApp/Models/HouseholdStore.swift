@@ -1,5 +1,12 @@
 import Foundation
 
+/// Whether a store is organized into aisles at all.
+/// Backend field is nullable — a missing value maps to `.aisles` for back-compat.
+enum StoreLayoutType: String, Codable, Hashable, CaseIterable {
+    case aisles = "AISLES"
+    case noAisles = "NO_AISLES"
+}
+
 struct HouseholdStore: Identifiable, Codable, Hashable {
     let id: String
     let householdId: String
@@ -7,6 +14,14 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
     var chain: String?
     var address: String?
     var aisleLayout: [StoreAisle]
+    var layoutType: StoreLayoutType
+
+    /// True when this store has no aisle organization at all (farmers market, corner shop).
+    var hasNoAisles: Bool { layoutType == .noAisles }
+
+    /// True when aisle-based navigation/inference should be attempted for this store.
+    /// A store flagged AISLES but with an empty layout has nothing to infer against either.
+    var supportsAisleNavigation: Bool { layoutType == .aisles && !aisleLayout.isEmpty }
 
     init(
         id: String = UUID().uuidString,
@@ -14,7 +29,8 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
         name: String,
         chain: String? = nil,
         address: String? = nil,
-        aisleLayout: [StoreAisle] = []
+        aisleLayout: [StoreAisle] = [],
+        layoutType: StoreLayoutType = .aisles
     ) {
         self.id = id
         self.householdId = householdId
@@ -22,6 +38,19 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
         self.chain = chain
         self.address = address
         self.aisleLayout = aisleLayout
+        self.layoutType = layoutType
+    }
+
+    // Tolerant decoding: older payloads have no `layoutType` key at all.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        householdId = try container.decode(String.self, forKey: .householdId)
+        name = try container.decode(String.self, forKey: .name)
+        chain = try container.decodeIfPresent(String.self, forKey: .chain)
+        address = try container.decodeIfPresent(String.self, forKey: .address)
+        aisleLayout = try container.decodeIfPresent([StoreAisle].self, forKey: .aisleLayout) ?? []
+        layoutType = try container.decodeIfPresent(StoreLayoutType.self, forKey: .layoutType) ?? .aisles
     }
 }
 

@@ -118,6 +118,14 @@ struct StoreSelectionSheet: View {
         isCheckingMappings = true
         selectedStore = store
 
+        // Stores with no aisles never need aisle mapping — go straight to ready-to-shop.
+        guard !store.hasNoAisles else {
+            unmappedItems = []
+            isCheckingMappings = false
+            showReadyToShop = true
+            return
+        }
+
         // Fetch mappings for this store
         _ = try? await storeService.fetchMappings(storeId: store.id)
 
@@ -256,9 +264,9 @@ private struct StoreRow: View {
 
                     // Aisle count
                     HStack(spacing: 4) {
-                        Image(systemName: "list.bullet")
+                        Image(systemName: store.hasNoAisles ? "basket" : "list.bullet")
                             .font(.system(size: 11, weight: .medium))
-                        Text("\(store.aisleLayout.count) aisles")
+                        Text(store.hasNoAisles ? "No aisles" : "\(store.aisleLayout.count) aisles")
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(DesignSystem.Colors.textSecondary)

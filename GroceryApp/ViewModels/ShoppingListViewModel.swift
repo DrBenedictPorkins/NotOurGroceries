@@ -1821,7 +1821,7 @@ class ShoppingListViewModel: ObservableObject {
 
     /// Create a new store and add it to the household
     @discardableResult
-    func createStore(name: String, chain: String?, aisles: [StoreAisle]) async -> HouseholdStore? {
+    func createStore(name: String, chain: String?, aisles: [StoreAisle], layoutType: StoreLayoutType = .aisles) async -> HouseholdStore? {
         guard let householdId = householdId else {
             showToast(message: "No household selected", type: .error)
             return nil
@@ -1829,7 +1829,7 @@ class ShoppingListViewModel: ObservableObject {
 
         do {
             // Create the store
-            var store = try await StoreService.shared.createStore(name: name, chain: chain, householdId: householdId)
+            var store = try await StoreService.shared.createStore(name: name, chain: chain, householdId: householdId, layoutType: layoutType)
 
             // Add aisles to the store
             for aisle in aisles {
@@ -2055,12 +2055,18 @@ class ShoppingListViewModel: ObservableObject {
                     if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
                         productAisleMappings[store.id] = mappings
 
-                        // Infer aisles for custom active items with no existing mapping
+                        // Infer aisles for custom active items with no existing mapping.
+                        // Only stores that actually navigate by aisle are worth the LLM spend:
+                        // a NO_AISLES store has nothing to infer, and an empty aisleLayout means
+                        // there are no aisles to infer *against*, so the guesses are pure noise
+                        // (and get persisted as phantom mappings).
                         let mappedNames = Set(mappings.compactMap { $0.normalizedName })
                         let unmappedCustomItems = items.filter { item in
                             item.isCustom && item.status == .active && !mappedNames.contains(item.normalizedName)
                         }
-                        if !unmappedCustomItems.isEmpty {
+                        if !store.supportsAisleNavigation {
+                            logger.info("At-Store pre-check: skipped aisle inference (store has no aisle layout)")
+                        } else if !unmappedCustomItems.isEmpty {
                             let batchInputs = unmappedCustomItems.map {
                                 AisleExtractionService.BatchInferenceInput(
                                     id: $0.id,

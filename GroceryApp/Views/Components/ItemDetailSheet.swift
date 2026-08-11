@@ -68,6 +68,19 @@ struct ItemDetailSheet: View {
         return viewModel.householdStores.first
     }
 
+    /// Whether the relevant store organizes by aisle at all.
+    /// Stores flagged NO_AISLES get no aisle UI and no AI aisle inference.
+    private var storeSupportsAisles: Bool {
+        !(currentStore?.hasNoAisles ?? false)
+    }
+
+    /// Aisle UI only makes sense in proposed mode, or while shopping at an aisle-based store.
+    private var showAisleSection: Bool {
+        guard storeSupportsAisles else { return false }
+        if isProposedAisleMode { return true }
+        return viewModel.shoppingStatus == .atStore && currentStore != nil
+    }
+
     /// Get the current aisle mapping for this item
     private var currentMapping: ProductAisleMapping? {
         guard let store = currentStore else { return nil }
@@ -116,8 +129,9 @@ struct ItemDetailSheet: View {
                     // Metadata section
                     metadataSection
 
-                    // Aisle section (show when in proposed mode or actively shopping at a store)
-                    if isProposedAisleMode || (viewModel.shoppingStatus == .atStore && currentStore != nil) {
+                    // Aisle section (show when in proposed mode or actively shopping at a store).
+                    // Hidden entirely when the active store has no aisles.
+                    if showAisleSection {
                         Divider()
                             .background(DesignSystem.Colors.glassBorder)
 
@@ -407,7 +421,8 @@ struct ItemDetailSheet: View {
             }
 
             // AI Inference Button - hide in proposed mode (already AI-generated)
-            if !isProposedAisleMode {
+            // and for stores with no aisles (nothing to infer against).
+            if !isProposedAisleMode && storeSupportsAisles {
                 aiInferenceSection
             }
 

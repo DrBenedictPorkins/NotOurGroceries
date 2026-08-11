@@ -477,16 +477,22 @@ struct AtStoreModeView: View {
         .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 8, trailing: 20))
     }
 
+    /// A store with no aisles has nothing to map, so unmapped items aren't an error state —
+    /// they're just the list. Show a neutral header instead of the pink "unknown" warning.
+    private var storeHasNoAisles: Bool {
+        selectedHouseholdStore?.hasNoAisles ?? false
+    }
+
     private var unmappedHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: "questionmark.circle.fill")
+                Image(systemName: storeHasNoAisles ? "cart.fill" : "questionmark.circle.fill")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.neonPink)
+                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.neonPink)
 
-                Text("UNKNOWN AISLE")
+                Text(storeHasNoAisles ? "TO GET" : "UNKNOWN AISLE")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.neonPink)
+                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.neonPink)
                     .tracking(1.2)
 
                 Spacer()
@@ -496,9 +502,11 @@ struct AtStoreModeView: View {
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }
 
-            Text("Long-press items to assign aisle")
-                .font(.system(size: 11, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
+            if !storeHasNoAisles {
+                Text("Long-press items to assign aisle")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
         }
         .textCase(nil)
         .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 8, trailing: 20))

@@ -251,6 +251,7 @@ class ShoppingListViewModel: ObservableObject {
                         normalizedName
                         quantity
                         notes
+                        notesEphemeral
                         isCustom
                         productId
                         status
@@ -258,7 +259,6 @@ class ShoppingListViewModel: ObservableObject {
                         addedBy
                         addedAt
                         version
-                        reactions
                         images
                     }
                 }
@@ -432,8 +432,8 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation CreateGroceryItem($input: CreateGroceryItemInput!) {
                 createGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes isCustom productId
-                    status lockedBy addedBy addedAt version reactions
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    status lockedBy addedBy addedAt version
                 }
             }
             """
@@ -551,8 +551,8 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes isCustom productId
-                    status lockedBy addedBy addedAt version reactions
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    status lockedBy addedBy addedAt version
                 }
             }
             """
@@ -762,8 +762,8 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes isCustom productId
-                    status lockedBy addedBy addedAt version reactions
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    status lockedBy addedBy addedAt version
                 }
             }
             """
@@ -886,253 +886,19 @@ class ShoppingListViewModel: ObservableObject {
         // 3. The shopper would see a badge on the item indicating a removal suggestion
     }
 
-    // MARK: - Toggle Reaction
-    func toggleReaction(_ emoji: String, on item: GroceryItem) async {
-        let currentUserId = AmplifyService.shared.currentUser?.userId ?? ""
-        guard !currentUserId.isEmpty else {
-            showToast(message: "Not signed in", type: .warning)
-            return
-        }
-
-        var updatedItem = item
-
-        // Check if user already has this reaction (toggle off)
-        if let existingIndex = item.reactions.firstIndex(where: {
-            $0.emoji == emoji && $0.userId == currentUserId
-        }) {
-            // Remove reaction
-            updatedItem.reactions.remove(at: existingIndex)
-        } else {
-            // Add reaction
-            let newReaction = ItemReaction(emoji: emoji, userId: currentUserId, addedAt: Date())
-            updatedItem.reactions.append(newReaction)
-        }
-        updatedItem.version += 1
-
-        // Optimistic update
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            items[index] = updatedItem
-        }
-
-        do {
-            let document = """
-            mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
-                updateGroceryItem(input: $input) {
-                    id reactions version
-                }
-            }
-            """
-
-            // Convert reactions to JSON string for AWSJSON field type
-            let iso8601Formatter = ISO8601DateFormatter()
-            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-            let reactionsArray: [[String: Any]] = updatedItem.reactions.map { reaction in
-                [
-                    "emoji": reaction.emoji,
-                    "userId": reaction.userId,
-                    "addedAt": iso8601Formatter.string(from: reaction.addedAt)
-                ]
-            }
-
-            // AWSJSON requires serialized JSON string
-            let jsonData = try JSONSerialization.data(withJSONObject: reactionsArray)
-            guard let jsonString = String(data: jsonData, encoding: .utf8) else {
-                throw NSError(domain: "ShoppingList", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize reactions"])
-            }
-
-            let input: [String: Any] = [
-                "id": item.id,
-                "reactions": jsonString,
-                "version": updatedItem.version
-            ]
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await Amplify.API.mutate(request: request)
-
-            switch response {
-            case .success:
-                // Success - optimistic update already applied
-                break
-            case .failure(let error):
-                // Revert optimistic update on failure
-                if let index = items.firstIndex(where: { $0.id == item.id }) {
-                    items[index] = item
-                }
-                showToast(message: "Failed to update reaction", type: .error)
-                logger.error("⚠️ Reaction mutation failed: \(error)")
-                logger.error("  Error description: \(error.errorDescription ?? "none")")
-                logger.error("  Underlying error: \(String(describing: error.underlyingError))")
-            }
-        } catch {
-            // Revert optimistic update on error
-            if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index] = item
-            }
-            showToast(message: "Failed to update reaction", type: .error)
-            logger.error("⚠️ Reaction error (catch): \(error)")
-            logger.error("  Localized: \(error.localizedDescription)")
-        }
-    }
-
-    // MARK: - Clear My Reactions
-    func clearMyReactions(from item: GroceryItem) async {
-        let currentUserId = AmplifyService.shared.currentUser?.userId ?? ""
-        guard !currentUserId.isEmpty else { return }
-
-        // Check if user has any reactions to clear
-        let myReactions = item.reactions.filter { $0.userId == currentUserId }
-        guard !myReactions.isEmpty else { return }
-
-        var updatedItem = item
-        updatedItem.reactions.removeAll { $0.userId == currentUserId }
-        updatedItem.version += 1
-
-        // Optimistic update
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            items[index] = updatedItem
-        }
-
-        do {
-            let document = """
-            mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
-                updateGroceryItem(input: $input) {
-                    id reactions version
-                }
-            }
-            """
-
-            // Convert reactions to JSON string for AWSJSON field type
-            let iso8601Formatter = ISO8601DateFormatter()
-            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-            let reactionsArray: [[String: Any]] = updatedItem.reactions.map { reaction in
-                [
-                    "emoji": reaction.emoji,
-                    "userId": reaction.userId,
-                    "addedAt": iso8601Formatter.string(from: reaction.addedAt)
-                ]
-            }
-
-            let jsonData = try JSONSerialization.data(withJSONObject: reactionsArray)
-            guard let jsonString = String(data: jsonData, encoding: .utf8) else {
-                throw NSError(domain: "ShoppingList", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to serialize reactions"])
-            }
-
-            let input: [String: Any] = [
-                "id": item.id,
-                "reactions": jsonString,
-                "version": updatedItem.version
-            ]
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await Amplify.API.mutate(request: request)
-
-            switch response {
-            case .success:
-                showToast(message: "Cleared \(myReactions.count) reaction\(myReactions.count == 1 ? "" : "s")")
-            case .failure(let error):
-                // Revert optimistic update
-                if let index = items.firstIndex(where: { $0.id == item.id }) {
-                    items[index] = item
-                }
-                showToast(message: "Failed to clear reactions", type: .error)
-                logger.error("⚠️ Clear reactions failed: \(error)")
-            }
-        } catch {
-            // Revert optimistic update
-            if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index] = item
-            }
-            showToast(message: "Failed to clear reactions", type: .error)
-            logger.error("⚠️ Clear reactions error: \(error)")
-        }
-    }
-
-    // MARK: - Clear All Reactions
-    func clearAllReactions(from item: GroceryItem) async {
-        guard !item.reactions.isEmpty else { return }
-
-        let reactionCount = item.reactions.count
-        var updatedItem = item
-        updatedItem.reactions = []
-        updatedItem.version += 1
-
-        // Optimistic update
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            items[index] = updatedItem
-        }
-
-        do {
-            let document = """
-            mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
-                updateGroceryItem(input: $input) {
-                    id reactions version
-                }
-            }
-            """
-
-            // Empty array as JSON string
-            let jsonString = "[]"
-
-            let input: [String: Any] = [
-                "id": item.id,
-                "reactions": jsonString,
-                "version": updatedItem.version
-            ]
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await Amplify.API.mutate(request: request)
-
-            switch response {
-            case .success:
-                showToast(message: "Cleared \(reactionCount) reaction\(reactionCount == 1 ? "" : "s")")
-            case .failure(let error):
-                // Revert optimistic update
-                if let index = items.firstIndex(where: { $0.id == item.id }) {
-                    items[index] = item
-                }
-                showToast(message: "Failed to clear reactions", type: .error)
-                logger.error("⚠️ Clear all reactions failed: \(error)")
-            }
-        } catch {
-            // Revert optimistic update
-            if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index] = item
-            }
-            showToast(message: "Failed to clear reactions", type: .error)
-            logger.error("⚠️ Clear all reactions error: \(error)")
-        }
-    }
-
     // MARK: - Update Notes
-    func updateNotes(for item: GroceryItem, notes: String?) async {
+    func updateNotes(for item: GroceryItem, notes: String?, ephemeral: Bool = false) async {
         // Normalize empty string to nil
         let newNotes = (notes?.isEmpty == true) ? nil : notes
+        // A cleared note carries no lifetime
+        let newEphemeral = newNotes == nil ? false : ephemeral
 
-        // Skip if notes haven't changed
-        if item.notes == newNotes { return }
+        // Skip if nothing changed
+        if item.notes == newNotes && item.notesEphemeral == newEphemeral { return }
 
         var updatedItem = item
         updatedItem.notes = newNotes
+        updatedItem.notesEphemeral = newEphemeral
         updatedItem.version += 1
 
         // Optimistic update
@@ -1144,13 +910,14 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id notes version
+                    id notes notesEphemeral version
                 }
             }
             """
 
             var input: [String: Any] = [
                 "id": item.id,
+                "notesEphemeral": newEphemeral,
                 "version": updatedItem.version
             ]
 
@@ -1190,6 +957,18 @@ class ShoppingListViewModel: ObservableObject {
         }
     }
 
+    /// Wipe every trip-scoped note in the household. Called when a shopping session
+    /// finishes — the note was written for that trip and shouldn't survive into the next.
+    private func clearEphemeralNotes() async {
+        let itemsToClear = items.filter { $0.notesEphemeral && $0.notes != nil }
+        guard !itemsToClear.isEmpty else { return }
+
+        for item in itemsToClear {
+            await updateNotes(for: item, notes: nil)
+        }
+        logger.info("Cleared \(itemsToClear.count) trip-scoped notes")
+    }
+
     // MARK: - Lock/Unlock Item
     func toggleLock(_ item: GroceryItem) async {
         // List is read-only for remote members during active shopping
@@ -1222,8 +1001,8 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes isCustom productId
-                    status lockedBy addedBy addedAt version reactions
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    status lockedBy addedBy addedAt version
                 }
             }
             """
@@ -1305,8 +1084,8 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes isCustom productId
-                    status lockedBy addedBy addedAt version reactions
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    status lockedBy addedBy addedAt version
                 }
             }
             """
@@ -1740,6 +1519,7 @@ class ShoppingListViewModel: ObservableObject {
                 normalizedName
                 quantity
                 notes
+                notesEphemeral
                 isCustom
                 productId
                 status
@@ -1747,7 +1527,6 @@ class ShoppingListViewModel: ObservableObject {
                 addedBy
                 addedAt
                 version
-                reactions
                 images
             }
         }
@@ -2172,6 +1951,9 @@ class ShoppingListViewModel: ObservableObject {
             for item in itemsToUpdate {
                 await updateItemStatus(item, to: .suggestion)
             }
+
+            // Trip-scoped notes ("get only 1", "optional if found") die with the trip
+            await clearEphemeralNotes()
 
             // Update Household via GraphQL mutation
             let document = """
@@ -3008,6 +2790,9 @@ class ShoppingListViewModel: ObservableObject {
         var notes: String? = nil
         if case .string(let value) = obj["notes"] { notes = value }
 
+        var notesEphemeral = false
+        if case .boolean(let value) = obj["notesEphemeral"] { notesEphemeral = value }
+
         var productId: String? = nil
         if case .string(let value) = obj["productId"] { productId = value }
 
@@ -3016,15 +2801,6 @@ class ShoppingListViewModel: ObservableObject {
 
         var version: Int = 0
         if case .number(let value) = obj["version"] { version = Int(value) }
-
-        // Parse reactions from JSON string
-        var reactions: [ItemReaction] = []
-        if case .string(let reactionsString) = obj["reactions"],
-           let data = reactionsString.data(using: .utf8) {
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .iso8601
-            reactions = (try? decoder.decode([ItemReaction].self, from: data)) ?? []
-        }
 
         // Parse images (AWSJSON field)
         var images: [ItemImage] = []
@@ -3042,6 +2818,7 @@ class ShoppingListViewModel: ObservableObject {
             normalizedName: normalizedName,
             quantity: quantity,
             notes: notes,
+            notesEphemeral: notesEphemeral,
             isCustom: isCustom,
             productId: productId,
             status: status,
@@ -3049,7 +2826,6 @@ class ShoppingListViewModel: ObservableObject {
             addedBy: addedBy,
             addedAt: addedAt,
             version: version,
-            reactions: reactions,
             images: images
         )
     }

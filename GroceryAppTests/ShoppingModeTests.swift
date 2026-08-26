@@ -419,107 +419,6 @@ final class ShoppingModeIDLEPhaseTests: XCTestCase {
         XCTAssertTrue(shouldBlock, "Should block restore of locked item")
     }
 
-    // MARK: - Scenario 9: Add Reaction
-
-    func testToggleReaction_InIdleMode_ReactionIsAdded() {
-        // Given: IDLE mode with item that has no reactions
-        let item = GroceryItem(
-            id: "item-1",
-            householdId: householdId,
-            name: "Pizza",
-            addedBy: currentUserId,
-            reactions: []
-        )
-        viewModel.setTestState(
-            activeItems: [item],
-            shoppingStatus: .idle
-        )
-
-        // Verify preconditions
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.count, 0)
-
-        // When: Simulating adding reaction
-        let emoji = ReactionEmoji.thumbsUp.rawValue
-        var updatedItem = item
-        let newReaction = ItemReaction(emoji: emoji, userId: currentUserId, addedAt: Date())
-        updatedItem.reactions.append(newReaction)
-        updatedItem.version += 1
-
-        if let index = viewModel.activeItems.firstIndex(where: { $0.id == item.id }) {
-            viewModel.activeItems[index] = updatedItem
-        }
-
-        // Then: Reaction should be added
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.count, 1)
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.first?.emoji, emoji)
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.first?.userId, currentUserId)
-    }
-
-    func testToggleReaction_InIdleMode_ReactionIsRemoved() {
-        // Given: IDLE mode with item that has existing reaction from current user
-        let existingReaction = ItemReaction(emoji: ReactionEmoji.heart.rawValue, userId: currentUserId, addedAt: Date())
-        let item = GroceryItem(
-            id: "item-1",
-            householdId: householdId,
-            name: "Ice Cream",
-            addedBy: otherUserId,
-            reactions: [existingReaction]
-        )
-        viewModel.setTestState(
-            activeItems: [item],
-            shoppingStatus: .idle
-        )
-
-        // Verify preconditions
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.count, 1)
-
-        // When: Simulating toggle (remove existing reaction)
-        var updatedItem = item
-        updatedItem.reactions.removeAll { $0.emoji == existingReaction.emoji && $0.userId == currentUserId }
-        updatedItem.version += 1
-
-        if let index = viewModel.activeItems.firstIndex(where: { $0.id == item.id }) {
-            viewModel.activeItems[index] = updatedItem
-        }
-
-        // Then: Reaction should be removed
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.count, 0)
-    }
-
-    func testAddMultipleReactions_FromDifferentUsers_AllReactionsPreserved() {
-        // Given: IDLE mode with item that has reaction from another user
-        let otherUserReaction = ItemReaction(emoji: ReactionEmoji.question.rawValue, userId: otherUserId, addedAt: Date())
-        let item = GroceryItem(
-            id: "item-1",
-            householdId: householdId,
-            name: "Chips",
-            addedBy: currentUserId,
-            reactions: [otherUserReaction]
-        )
-        viewModel.setTestState(
-            activeItems: [item],
-            shoppingStatus: .idle
-        )
-
-        // Verify preconditions
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.count, 1)
-
-        // When: Current user adds a different reaction
-        var updatedItem = item
-        let newReaction = ItemReaction(emoji: ReactionEmoji.cart.rawValue, userId: currentUserId, addedAt: Date())
-        updatedItem.reactions.append(newReaction)
-        updatedItem.version += 1
-
-        if let index = viewModel.activeItems.firstIndex(where: { $0.id == item.id }) {
-            viewModel.activeItems[index] = updatedItem
-        }
-
-        // Then: Both reactions should be preserved
-        XCTAssertEqual(viewModel.activeItems.first?.reactions.count, 2)
-        XCTAssertTrue(viewModel.activeItems.first?.reactions.contains { $0.userId == otherUserId } ?? false)
-        XCTAssertTrue(viewModel.activeItems.first?.reactions.contains { $0.userId == currentUserId } ?? false)
-    }
-
     // MARK: - Scenario 10: Enter Shopping Mode
 
     func testEnterShoppingMode_FromIdleMode_StatusChangesToAtStore() {
@@ -669,24 +568,6 @@ final class ShoppingModeIDLEPhaseTests: XCTestCase {
 
         // Then: Version should be incremented
         XCTAssertEqual(item.version, 6)
-    }
-
-    func testVersionIncrement_OnReactionChange() {
-        // Given: Item with version 2
-        var item = GroceryItem(
-            id: "item-1",
-            householdId: householdId,
-            name: "Test Item",
-            version: 2,
-            reactions: []
-        )
-
-        // When: Adding reaction (should increment version)
-        item.reactions.append(ItemReaction(emoji: ReactionEmoji.thumbsUp.rawValue, userId: currentUserId, addedAt: Date()))
-        item.version += 1
-
-        // Then: Version should be incremented
-        XCTAssertEqual(item.version, 3)
     }
 
     // MARK: - Sorting Tests in IDLE Mode
@@ -891,45 +772,6 @@ final class ShoppingStatusEnumTests: XCTestCase {
         XCTAssertEqual(ShoppingStatus(rawValue: "IDLE"), .idle)
         XCTAssertEqual(ShoppingStatus(rawValue: "AT_STORE"), .atStore)
         XCTAssertNil(ShoppingStatus(rawValue: "INVALID"))
-    }
-}
-
-// MARK: - Reaction Tests
-
-@MainActor
-final class ItemReactionTests: XCTestCase {
-
-    func testItemReaction_Creation() {
-        let reaction = ItemReaction(
-            emoji: ReactionEmoji.thumbsUp.rawValue,
-            userId: "user-123",
-            addedAt: Date()
-        )
-
-        XCTAssertEqual(reaction.emoji, ReactionEmoji.thumbsUp.rawValue)
-        XCTAssertEqual(reaction.userId, "user-123")
-        XCTAssertNotNil(reaction.addedAt)
-    }
-
-    func testReactionEmoji_AllCases() {
-        // Verify all reaction emojis are available
-        let allEmojis = ReactionEmoji.allCases
-
-        XCTAssertEqual(allEmojis.count, 5)
-        XCTAssertTrue(allEmojis.contains(.question))
-        XCTAssertTrue(allEmojis.contains(.thumbsUp))
-        XCTAssertTrue(allEmojis.contains(.thumbsDown))
-        XCTAssertTrue(allEmojis.contains(.heart))
-        XCTAssertTrue(allEmojis.contains(.cart))
-    }
-
-    func testItemReaction_Equality() {
-        let reaction1 = ItemReaction(emoji: "test", userId: "user1", addedAt: Date())
-        let reaction2 = ItemReaction(emoji: "test", userId: "user1", addedAt: Date())
-
-        // Different addedAt should still allow comparison
-        XCTAssertEqual(reaction1.emoji, reaction2.emoji)
-        XCTAssertEqual(reaction1.userId, reaction2.userId)
     }
 }
 

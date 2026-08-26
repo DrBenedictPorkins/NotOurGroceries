@@ -1,45 +1,5 @@
 import Foundation
 
-struct ItemReaction: Codable, Hashable, Equatable {
-    let emoji: String
-    let userId: String
-    let addedAt: Date
-
-    // Custom date decoding to handle ISO8601 strings
-    private enum CodingKeys: String, CodingKey {
-        case emoji, userId, addedAt
-    }
-
-    init(emoji: String, userId: String, addedAt: Date) {
-        self.emoji = emoji
-        self.userId = userId
-        self.addedAt = addedAt
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        emoji = try container.decode(String.self, forKey: .emoji)
-        userId = try container.decode(String.self, forKey: .userId)
-
-        // Handle both Date and String formats
-        if let date = try? container.decode(Date.self, forKey: .addedAt) {
-            addedAt = date
-        } else if let dateString = try? container.decode(String.self, forKey: .addedAt) {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: dateString) {
-                addedAt = date
-            } else {
-                // Try without fractional seconds
-                formatter.formatOptions = [.withInternetDateTime]
-                addedAt = formatter.date(from: dateString) ?? Date()
-            }
-        } else {
-            addedAt = Date()
-        }
-    }
-}
-
 struct ItemImage: Codable, Hashable, Identifiable {
     let id: String           // UUID
     let s3Key: String        // S3 storage key
@@ -82,14 +42,6 @@ struct ItemImage: Codable, Hashable, Identifiable {
     }
 }
 
-enum ReactionEmoji: String, CaseIterable {
-    case question = "❓"
-    case thumbsUp = "👍"
-    case thumbsDown = "👎"
-    case heart = "❤️"
-    case cart = "🛒"
-}
-
 struct GroceryItem: Identifiable, Codable, Hashable {
     let id: String
     let householdId: String
@@ -97,6 +49,8 @@ struct GroceryItem: Identifiable, Codable, Hashable {
     let normalizedName: String
     var quantity: String?
     var notes: String?
+    /// When true, `notes` is trip-scoped and gets wiped when the shopping session finishes.
+    var notesEphemeral: Bool = false
     let isCustom: Bool
     let productId: String?
     var status: ItemStatus
@@ -104,7 +58,6 @@ struct GroceryItem: Identifiable, Codable, Hashable {
     var addedBy: String
     var addedAt: Date
     var version: Int
-    var reactions: [ItemReaction] = []
     var images: [ItemImage] = []
 
     // Transient UI state (not encoded/decoded)
@@ -121,9 +74,9 @@ struct GroceryItem: Identifiable, Codable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, householdId, name, normalizedName, quantity, notes
+        case id, householdId, name, normalizedName, quantity, notes, notesEphemeral
         case isCustom, productId, status, lockedBy, addedBy, addedAt
-        case version, reactions, images
+        case version, images
         // isPendingRemoval and isOptimisticUpdate excluded
     }
 
@@ -134,6 +87,7 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         normalizedName: String? = nil,
         quantity: String? = nil,
         notes: String? = nil,
+        notesEphemeral: Bool = false,
         isCustom: Bool = false,
         productId: String? = nil,
         status: ItemStatus = .active,
@@ -141,7 +95,6 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         addedBy: String = "",
         addedAt: Date = Date(),
         version: Int = 0,
-        reactions: [ItemReaction] = [],
         images: [ItemImage] = []
     ) {
         self.id = id
@@ -150,6 +103,7 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         self.normalizedName = normalizedName ?? name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         self.quantity = quantity
         self.notes = notes
+        self.notesEphemeral = notesEphemeral
         self.isCustom = isCustom
         self.productId = productId
         self.status = status
@@ -157,11 +111,10 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         self.addedBy = addedBy
         self.addedAt = addedAt
         self.version = version
-        self.reactions = reactions
         self.images = images
     }
 
-    // Custom decoder to handle AWSJSON reactions field (comes as JSON string)
+    // Custom decoder to handle the AWSJSON images field (comes as JSON string)
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -171,6 +124,7 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         normalizedName = try container.decode(String.self, forKey: .normalizedName)
         quantity = try container.decodeIfPresent(String.self, forKey: .quantity)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        notesEphemeral = (try? container.decode(Bool.self, forKey: .notesEphemeral)) ?? false
         isCustom = try container.decode(Bool.self, forKey: .isCustom)
         productId = try container.decodeIfPresent(String.self, forKey: .productId)
         status = try container.decode(ItemStatus.self, forKey: .status)
@@ -178,20 +132,6 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         addedBy = try container.decode(String.self, forKey: .addedBy)
         addedAt = try container.decode(Date.self, forKey: .addedAt)
         version = try container.decode(Int.self, forKey: .version)
-
-        // Handle reactions - can be JSON string (from AWSJSON), array, or nil
-        if let reactionsString = try? container.decode(String.self, forKey: .reactions),
-           let jsonData = reactionsString.data(using: .utf8) {
-            // AWSJSON comes as a JSON string - parse it
-            let jsonDecoder = JSONDecoder()
-            jsonDecoder.dateDecodingStrategy = .iso8601
-            reactions = (try? jsonDecoder.decode([ItemReaction].self, from: jsonData)) ?? []
-        } else if let reactionsArray = try? container.decode([ItemReaction].self, forKey: .reactions) {
-            // Direct array decoding
-            reactions = reactionsArray
-        } else {
-            reactions = []
-        }
 
         // Handle images - can be JSON string (from AWSJSON), array, or nil
         if let imagesString = try? container.decode(String.self, forKey: .images),
@@ -252,20 +192,5 @@ extension GroceryItem {
         )
         item.isAnimatingIn = true
         return item
-    }
-
-    static var withReactionsPreview: GroceryItem {
-        GroceryItem(
-            id: "5",
-            householdId: "household1",
-            name: "Pizza",
-            quantity: "2",
-            addedBy: "user1",
-            reactions: [
-                ItemReaction(emoji: "❤️", userId: "user1", addedAt: Date()),
-                ItemReaction(emoji: "👍", userId: "user2", addedAt: Date()),
-                ItemReaction(emoji: "🛒", userId: "user3", addedAt: Date())
-            ]
-        )
     }
 }

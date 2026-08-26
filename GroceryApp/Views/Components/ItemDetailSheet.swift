@@ -15,6 +15,7 @@ struct ItemDetailSheet: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var notesText: String = ""
+    @State private var notesEphemeral: Bool = false
     @State private var aisleText: String = ""
 
     // AI Aisle Inference State
@@ -103,14 +104,6 @@ struct ItemDetailSheet: View {
         currentMapping?.effectiveAisle
     }
 
-    private var hasMyReactions: Bool {
-        item.reactions.contains { $0.userId == currentUserId }
-    }
-
-    private var sortedReactions: [ItemReaction] {
-        item.reactions.sorted { $0.addedAt < $1.addedAt }
-    }
-
     /// Get current images from viewModel (updates after upload)
     private var currentImages: [ItemImage] {
         viewModel.items.first(where: { $0.id == item.id })?.images ?? item.images
@@ -150,17 +143,6 @@ struct ItemDetailSheet: View {
                     // Photos section
                     photosSection
 
-                    Divider()
-                        .background(DesignSystem.Colors.glassBorder)
-
-                    // Reactions section
-                    reactionsSection
-
-                    // Clear reactions buttons (only show if there are reactions)
-                    if !item.reactions.isEmpty {
-                        clearReactionsSection
-                    }
-
                     Spacer(minLength: DesignSystem.Spacing.xl)
                 }
                 .padding(DesignSystem.Spacing.lg)
@@ -178,6 +160,7 @@ struct ItemDetailSheet: View {
             }
             .onAppear {
                 notesText = item.notes ?? ""
+                notesEphemeral = item.notesEphemeral
                 // In proposed mode, use the proposed aisle; otherwise use current mapping
                 if let proposed = proposedAisleResult {
                     aisleText = proposed.suggestedAisle
@@ -257,10 +240,10 @@ struct ItemDetailSheet: View {
         let trimmedNotes = notesText.trimmingCharacters(in: .whitespacesAndNewlines)
         let newNotes: String? = trimmedNotes.isEmpty ? nil : trimmedNotes
 
-        // Only save if notes changed
-        if newNotes != item.notes {
+        // Only save if notes or their lifetime changed
+        if newNotes != item.notes || notesEphemeral != item.notesEphemeral {
             Task {
-                await viewModel.updateNotes(for: item, notes: newNotes)
+                await viewModel.updateNotes(for: item, notes: newNotes, ephemeral: notesEphemeral)
             }
         }
         dismiss()
@@ -768,6 +751,20 @@ struct ItemDetailSheet: View {
                                 .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
                         )
                 )
+
+            Toggle(isOn: $notesEphemeral) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Just for this trip")
+                        .font(DesignSystem.Typography.subheadline)
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    Text("Cleared when shopping finishes")
+                        .font(DesignSystem.Typography.caption)
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+            }
+            .tint(DesignSystem.Colors.neonCyan)
+            .disabled(notesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .opacity(notesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
         }
     }
 
@@ -1016,162 +1013,6 @@ struct ItemDetailSheet: View {
         }
     }
 
-    // MARK: - Reactions Section
-
-    private var reactionsSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            HStack {
-                Text("Reactions")
-                    .font(DesignSystem.Typography.headline)
-                    .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                if !item.reactions.isEmpty {
-                    Text("(\(item.reactions.count))")
-                        .font(DesignSystem.Typography.subheadline)
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                }
-
-                Spacer()
-            }
-
-            // Add reaction emoji picker
-            addReactionPicker
-
-            if item.reactions.isEmpty {
-                Text("No reactions yet")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
-                    .padding(.vertical, DesignSystem.Spacing.sm)
-            } else {
-                VStack(spacing: DesignSystem.Spacing.sm) {
-                    ForEach(sortedReactions, id: \.self) { reaction in
-                        reactionRow(reaction)
-                    }
-                }
-            }
-        }
-    }
-
-    /// Emoji picker to add reactions
-    private var addReactionPicker: some View {
-        HStack(spacing: DesignSystem.Spacing.md) {
-            ForEach(ReactionEmoji.allCases, id: \.self) { reaction in
-                let hasThisReaction = item.reactions.contains { $0.emoji == reaction.rawValue && $0.userId == currentUserId }
-
-                Button {
-                    Task {
-                        await viewModel.toggleReaction(reaction.rawValue, on: item)
-                    }
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                } label: {
-                    Text(reaction.rawValue)
-                        .font(.system(size: 28))
-                        .opacity(hasThisReaction ? 1.0 : 0.5)
-                        .scaleEffect(hasThisReaction ? 1.1 : 1.0)
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasThisReaction)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.vertical, DesignSystem.Spacing.sm)
-        .padding(.horizontal, DesignSystem.Spacing.md)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                .fill(Color.white.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                )
-        )
-    }
-
-    private func reactionRow(_ reaction: ItemReaction) -> some View {
-        HStack(spacing: DesignSystem.Spacing.md) {
-            Text(reaction.emoji)
-                .font(.system(size: 20))
-
-            Text(UserCache.shared.displayName(for: reaction.userId))
-                .font(DesignSystem.Typography.body)
-                .foregroundColor(reaction.userId == currentUserId ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textPrimary)
-
-            Spacer()
-
-            Text(relativeDate(reaction.addedAt))
-                .font(DesignSystem.Typography.caption)
-                .foregroundColor(DesignSystem.Colors.textTertiary)
-        }
-        .padding(.vertical, DesignSystem.Spacing.xs)
-    }
-
-    // MARK: - Clear Reactions Section
-
-    private var clearReactionsSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            Text("Actions")
-                .font(DesignSystem.Typography.headline)
-                .foregroundColor(DesignSystem.Colors.textPrimary)
-
-            HStack(spacing: DesignSystem.Spacing.md) {
-                // Clear Mine button
-                Button {
-                    Task {
-                        await viewModel.clearMyReactions(from: item)
-                    }
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    dismiss()
-                } label: {
-                    HStack {
-                        Spacer()
-                        Text("Clear Mine")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundColor(hasMyReactions ? DesignSystem.Colors.warning : DesignSystem.Colors.textTertiary)
-                        Spacer()
-                    }
-                    .padding(.vertical, DesignSystem.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                            .fill(hasMyReactions ? DesignSystem.Colors.warning.opacity(0.1) : DesignSystem.Colors.glassBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                                    .stroke(hasMyReactions ? DesignSystem.Colors.warning.opacity(0.3) : DesignSystem.Colors.glassBorder, lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
-                .disabled(!hasMyReactions)
-
-                // Clear All button
-                Button {
-                    Task {
-                        await viewModel.clearAllReactions(from: item)
-                    }
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    dismiss()
-                } label: {
-                    HStack {
-                        Spacer()
-                        Text("Clear All")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundColor(DesignSystem.Colors.error)
-                        Spacer()
-                    }
-                    .padding(.vertical, DesignSystem.Spacing.sm)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                            .fill(DesignSystem.Colors.error.opacity(0.1))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.sm)
-                                    .stroke(DesignSystem.Colors.error.opacity(0.3), lineWidth: 1)
-                            )
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.top, DesignSystem.Spacing.md)
-    }
-
     // MARK: - Aisle Name Cleanup
 
     /// Strips redundant "Aisle" prefix from aisle names for clean display
@@ -1213,6 +1054,6 @@ private struct FullScreenImageWrapper: Identifiable {
 // MARK: - Preview
 
 #Preview {
-    ItemDetailSheet(item: GroceryItem.withReactionsPreview)
+    ItemDetailSheet(item: GroceryItem.preview)
         .environmentObject(ShoppingListViewModel())
 }

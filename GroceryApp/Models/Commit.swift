@@ -20,8 +20,6 @@ struct Commit: Identifiable, Codable, Hashable {
         case moveToSuggestions = "MOVE_TO_SUGGESTIONS"
         case lockItem = "LOCK_ITEM"
         case unlockItem = "UNLOCK_ITEM"
-        case addReaction = "ADD_REACTION"
-        case removeReaction = "REMOVE_REACTION"
         case updateItem = "UPDATE_ITEM"
     }
 

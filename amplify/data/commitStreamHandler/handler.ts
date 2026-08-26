@@ -86,39 +86,11 @@ function determineAction(oldImage: any, newImage: any): string {
       return 'UNLOCK_ITEM';
     }
 
-    // Check for reaction changes
-    const oldReactions = JSON.parse(oldImage?.reactions || '[]');
-    const newReactions = JSON.parse(newImage?.reactions || '[]');
-    if (newReactions.length > oldReactions.length) {
-      return 'ADD_REACTION';
-    }
-    if (newReactions.length < oldReactions.length) {
-      return 'REMOVE_REACTION';
-    }
-
     // Other modifications
     return 'UPDATE_ITEM';
   }
 
   return 'UNKNOWN';
-}
-
-/**
- * Find a reaction that was added
- */
-function findAddedReaction(oldReactions: any[], newReactions: any[]): any | null {
-  return newReactions.find(nr =>
-    !oldReactions.some(or => or.emoji === nr.emoji && or.userId === nr.userId)
-  ) || null;
-}
-
-/**
- * Find a reaction that was removed
- */
-function findRemovedReaction(oldReactions: any[], newReactions: any[]): any | null {
-  return oldReactions.find(or =>
-    !newReactions.some(nr => nr.emoji === or.emoji && nr.userId === or.userId)
-  ) || null;
 }
 
 /**
@@ -172,21 +144,6 @@ function createPayload(action: string, oldImage: any, newImage: any): any {
         lockedBy: newImage.lockedBy,
         version: newImage.version,
       };
-
-    case 'ADD_REACTION':
-    case 'REMOVE_REACTION': {
-      const oldReactions = JSON.parse(oldImage?.reactions || '[]');
-      const newReactions = JSON.parse(newImage?.reactions || '[]');
-      const reaction = action === 'ADD_REACTION'
-        ? findAddedReaction(oldReactions, newReactions)
-        : findRemovedReaction(oldReactions, newReactions);
-      return {
-        itemId: newImage.id,
-        itemName: newImage.name,
-        reaction,
-        version: newImage.version,
-      };
-    }
 
     case 'UPDATE_ITEM':
     default:

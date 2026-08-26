@@ -63,25 +63,6 @@ struct GroceryItemRow: View {
         return userCache.displayName(for: lockedBy)
     }
 
-    private var groupedReactions: [(emoji: String, count: Int, includesCurrentUser: Bool)] {
-        var groups: [String: (count: Int, includesCurrentUser: Bool)] = [:]
-
-        for reaction in item.reactions {
-            if var existing = groups[reaction.emoji] {
-                existing.count += 1
-                if reaction.userId == currentUserId {
-                    existing.includesCurrentUser = true
-                }
-                groups[reaction.emoji] = existing
-            } else {
-                groups[reaction.emoji] = (count: 1, includesCurrentUser: reaction.userId == currentUserId)
-            }
-        }
-
-        return groups.map { (emoji: $0.key, count: $0.value.count, includesCurrentUser: $0.value.includesCurrentUser) }
-            .sorted { $0.emoji < $1.emoji }
-    }
-
     /// Check if item is locked by another user (not current user)
     /// Note: Locks are ignored during shopping mode - only the shopper can modify items
     private var isLockedByAnotherUser: Bool {
@@ -228,7 +209,7 @@ struct GroceryItemRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 itemNameRow
-                ownerAndReactionsRow
+                ownerRow
             }
 
             Spacer()
@@ -260,27 +241,13 @@ struct GroceryItemRow: View {
         }
     }
 
-    /// Shows who added the item [Username] followed by inline reaction badges
-    private var ownerAndReactionsRow: some View {
+    /// Shows who added the item [Username]
+    private var ownerRow: some View {
         HStack(spacing: 6) {
             if item.status == .active {
                 Text("[\(addedByDisplayName)]")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
-            }
-
-            if !groupedReactions.isEmpty {
-                HStack(spacing: 4) {
-                    ForEach(groupedReactions, id: \.emoji) { group in
-                        ReactionBadge(
-                            emoji: group.emoji,
-                            count: group.count,
-                            includesCurrentUser: group.includesCurrentUser
-                        )
-                    }
-                }
-                // Consume taps to prevent row tap gesture from triggering
-                .onTapGesture { }
             }
         }
     }
@@ -313,8 +280,11 @@ struct GroceryItemRow: View {
                     .font(.system(size: 14, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
                 +
+                // Trip-scoped notes lean italic — the only cue that they won't outlive the trip
                 Text(notes)
-                    .font(.system(size: 14, weight: .regular))
+                    .font(item.notesEphemeral
+                        ? .system(size: 14, weight: .regular).italic()
+                        : .system(size: 14, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textTertiary))
             } else {
                 Text(item.name)
@@ -326,11 +296,6 @@ struct GroceryItemRow: View {
             // Remote-added badge (sparkle) for items added by others during shopping
             if showRemoteAddedBadge {
                 remoteAddedBadge
-            }
-
-            // Star for custom items next to name
-            if item.isCustom {
-                customBadge
             }
 
             // Photo icon for items with images
@@ -448,14 +413,6 @@ struct GroceryItemRow: View {
                         .stroke(DesignSystem.Colors.neonPurple.opacity(0.3), lineWidth: 1)
                 )
         )
-    }
-
-    // MARK: - Custom Badge (star only)
-
-    private var customBadge: some View {
-        Image(systemName: "star.fill")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundColor(DesignSystem.Colors.neonPink)
     }
 
     // MARK: - Photo Badge
@@ -702,39 +659,6 @@ struct GroceryItemRow: View {
             isTransitioning = false
             transitionDirection = .none
         }
-    }
-}
-
-/// Read-only reaction badge for item rows (non-interactive)
-struct ReactionBadge: View {
-    let emoji: String
-    let count: Int
-    let includesCurrentUser: Bool
-
-    var body: some View {
-        HStack(spacing: 2) {
-            Text(emoji)
-                .font(.system(size: 12))
-            if count > 1 {
-                Text("\(count)")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(
-            Capsule()
-                .fill(includesCurrentUser
-                    ? DesignSystem.Colors.neonCyan.opacity(0.2)
-                    : Color.white.opacity(0.08))
-        )
-        .overlay(
-            Capsule()
-                .stroke(includesCurrentUser
-                    ? DesignSystem.Colors.neonCyan.opacity(0.4)
-                    : Color.clear, lineWidth: 1)
-        )
     }
 }
 

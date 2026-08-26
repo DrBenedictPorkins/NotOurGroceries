@@ -75,8 +75,6 @@ const schema = a.schema({
     'MOVE_TO_SUGGESTIONS',
     'LOCK_ITEM',
     'UNLOCK_ITEM',
-    'ADD_REACTION',
-    'REMOVE_REACTION',
     'UPDATE_ITEM',
   ]),
 
@@ -164,6 +162,9 @@ const schema = a.schema({
       normalizedName: a.string().required(),
       quantity: a.string(),
       notes: a.string(),
+      // When true, `notes` is trip-scoped ("get only 1", "optional if found")
+      // and is wiped when the shopping session that used it finishes.
+      notesEphemeral: a.boolean().default(false),
       isCustom: a.boolean().required().default(false),
       productId: a.id(),
       product: a.belongsTo('Product', 'productId'),
@@ -171,6 +172,9 @@ const schema = a.schema({
       lockedBy: a.id(),
       addedBy: a.id().required(),
       addedAt: a.datetime().required(),
+      // DEPRECATED — the client no longer reads or writes this. Kept only so builds
+      // <= v1.3.0, which still select `reactions`, keep passing AppSync validation.
+      // Drop it once App Store Connect shows every tester on the newer build.
       reactions: a.json(),
       images: a.json(),
       version: a.integer().required().default(0),

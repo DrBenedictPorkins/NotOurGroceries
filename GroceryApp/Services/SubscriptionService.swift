@@ -146,6 +146,7 @@ class SubscriptionService: ObservableObject {
                     normalizedName
                     quantity
                     notes
+                    notesEphemeral
                     isCustom
                     productId
                     status
@@ -153,7 +154,6 @@ class SubscriptionService: ObservableObject {
                     addedBy
                     addedAt
                     version
-                    reactions
                 }
             }
             """
@@ -558,6 +558,9 @@ class SubscriptionService: ObservableObject {
         var notes: String? = nil
         if case .string(let value) = obj["notes"] { notes = value }
 
+        var notesEphemeral = false
+        if case .boolean(let value) = obj["notesEphemeral"] { notesEphemeral = value }
+
         var productId: String? = nil
         if case .string(let value) = obj["productId"] { productId = value }
 
@@ -567,14 +570,6 @@ class SubscriptionService: ObservableObject {
         var version: Int = 0
         if case .number(let value) = obj["version"] { version = Int(value) }
 
-        var reactions: [ItemReaction] = []
-        if case .string(let reactionsString) = obj["reactions"],
-           let jsonData = reactionsString.data(using: .utf8) {
-            let jsonDecoder = JSONDecoder()
-            jsonDecoder.dateDecodingStrategy = .iso8601
-            reactions = (try? jsonDecoder.decode([ItemReaction].self, from: jsonData)) ?? []
-        }
-
         return GroceryItem(
             id: id,
             householdId: householdId,
@@ -582,14 +577,14 @@ class SubscriptionService: ObservableObject {
             normalizedName: normalizedName,
             quantity: quantity,
             notes: notes,
+            notesEphemeral: notesEphemeral,
             isCustom: isCustom,
             productId: productId,
             status: status,
             lockedBy: lockedBy,
             addedBy: addedBy,
             addedAt: addedAt,
-            version: version,
-            reactions: reactions
+            version: version
         )
     }
 

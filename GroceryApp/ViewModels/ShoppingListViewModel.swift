@@ -1433,14 +1433,29 @@ class ShoppingListViewModel: ObservableObject {
     /// Apply current sort order. Only animates if explicitly requested (user changed sort).
     func applySorting(animate: Bool = false) {
         // Compute what the sorted order would be
+        // addedAt has only 1-second precision (ISO8601DateFormatter default), so items
+        // added within the same second tie. Break ties on id so order stays identical
+        // across refreshes instead of following the backend's unordered scan result,
+        // which otherwise reshuffles those items every time the list is refetched.
         let sortedItems: [GroceryItem]
         switch currentSort {
         case .recentFirst:
-            sortedItems = items.sorted { $0.addedAt > $1.addedAt }
+            sortedItems = items.sorted {
+                if $0.addedAt != $1.addedAt { return $0.addedAt > $1.addedAt }
+                return $0.id < $1.id
+            }
         case .aToZ:
-            sortedItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            sortedItems = items.sorted {
+                let comparison = $0.name.localizedCaseInsensitiveCompare($1.name)
+                if comparison != .orderedSame { return comparison == .orderedAscending }
+                return $0.id < $1.id
+            }
         case .zToA:
-            sortedItems = items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending }
+            sortedItems = items.sorted {
+                let comparison = $0.name.localizedCaseInsensitiveCompare($1.name)
+                if comparison != .orderedSame { return comparison == .orderedDescending }
+                return $0.id < $1.id
+            }
         }
 
         // Check if order actually changed by comparing IDs

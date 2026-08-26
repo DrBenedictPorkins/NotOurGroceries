@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Quick Trip: start a store-less shopping run for a few things you need right now — your main list stays untouched and comes back when you finish
+- Quick Trip: pull items off the main list to bring along; anything you don't find returns to the main list automatically, and anything you buy is saved as a suggestion
+- Notes can be marked "Just for this trip" — trip-scoped reminders like "get only 1" clear themselves when shopping finishes, while durable notes like "Lactaid" stay
+- Fix: the shopping list no longer reshuffles itself when the app is reopened
+- Removed per-item emoji reactions
+
 ## [1.3.0] - 2026-07-19
 
 - Voice dictation: speak your grocery list in bulk import — transcribed via OpenAI Whisper

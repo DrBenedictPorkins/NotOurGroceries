@@ -65,7 +65,7 @@ const schema = a.schema({
   // ========================================
   ItemStatus: a.enum(['ACTIVE', 'IN_CART', 'SUGGESTION']),
 
-  ShoppingStatus: a.enum(['IDLE', 'AT_STORE']),
+  ShoppingStatus: a.enum(['IDLE', 'AT_STORE', 'AD_HOC']),
 
   CommitAction: a.enum([
     'ADD_ITEM',
@@ -138,7 +138,7 @@ const schema = a.schema({
       shoppingRequests: a.hasMany('ShoppingRequest', 'householdId'),
       sequenceNumber: a.integer().default(0),
       // Shopping mode status
-      shoppingStatus: a.ref('ShoppingStatus'),  // IDLE or AT_STORE
+      shoppingStatus: a.ref('ShoppingStatus'),  // IDLE, AT_STORE, or AD_HOC (store-less errand)
       activeShopperId: a.id(),  // User ID of the person currently shopping
       shoppingStoreId: a.id(),  // HouseholdStore ID where they're shopping
       shoppingStartedAt: a.datetime(),  // When the current session began — drives abandoned-session detection on other members' devices
@@ -165,6 +165,12 @@ const schema = a.schema({
       // When true, `notes` is trip-scoped ("get only 1", "optional if found")
       // and is wiped when the shopping session that used it finishes.
       notesEphemeral: a.boolean().default(false),
+      // Item belongs to the current store-less ad-hoc trip, not the main list.
+      adHoc: a.boolean().default(false),
+      // Ad-hoc item that was pulled off the main list rather than typed fresh.
+      // Decides its fate if the trip ends without it being bought: pulled items
+      // return to the main list, fresh ones are discarded.
+      adHocPulled: a.boolean().default(false),
       isCustom: a.boolean().required().default(false),
       productId: a.id(),
       product: a.belongsTo('Product', 'productId'),

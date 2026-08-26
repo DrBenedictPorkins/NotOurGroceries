@@ -29,6 +29,7 @@
 		AA0000000000000000000021 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* DesignSystem.swift */; };
 		AA0000000000000000000022 /* ShoppingListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000022 /* ShoppingListViewModel.swift */; };
 		AA0000000000000000000030 /* AtStoreModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000030 /* AtStoreModeView.swift */; };
+		AA0000000000000000000092 /* AdHocModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000092 /* AdHocModeView.swift */; };
 		AA0000000000000000000031 /* GroceryItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* GroceryItemRow.swift */; };
 		AA0000000000000000000032 /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* SearchBar.swift */; };
 		AA0000000000000000000033 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* ToastView.swift */; };
@@ -120,6 +121,7 @@
 		BB0000000000000000000021 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		BB0000000000000000000022 /* ShoppingListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListViewModel.swift; sourceTree = "<group>"; };
 		BB0000000000000000000030 /* AtStoreModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtStoreModeView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000092 /* AdHocModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdHocModeView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000031 /* GroceryItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryItemRow.swift; sourceTree = "<group>"; };
 		BB0000000000000000000032 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
 		BB0000000000000000000033 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
@@ -290,6 +292,7 @@
 				BB0000000000000000000050 /* RootView.swift */,
 				BB0000000000000000000002 /* ContentView.swift */,
 				BB0000000000000000000030 /* AtStoreModeView.swift */,
+				BB0000000000000000000092 /* AdHocModeView.swift */,
 				BB0000000000000000000074 /* CreateStoreSheet.swift */,
 				BB0000000000000000000034 /* ShoppingListView.swift */,
 				A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */,
@@ -486,6 +489,7 @@
 				AA0000000000000000000021 /* DesignSystem.swift in Sources */,
 				AA0000000000000000000022 /* ShoppingListViewModel.swift in Sources */,
 				AA0000000000000000000030 /* AtStoreModeView.swift in Sources */,
+				AA0000000000000000000092 /* AdHocModeView.swift in Sources */,
 				AA0000000000000000000031 /* GroceryItemRow.swift in Sources */,
 				AA0000000000000000000058 /* ItemDetailSheet.swift in Sources */,
 				AA0000000000000000000032 /* SearchBar.swift in Sources */,

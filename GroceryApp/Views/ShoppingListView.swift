@@ -335,6 +335,9 @@ struct ShoppingListView: View {
                         )
                     }
                     .disabled(viewModel.isSomeoneElseShopping)
+
+                    // Quick Trip — a store-less errand that leaves this list alone
+                    quickTripButton
                 }
             }
 
@@ -342,10 +345,72 @@ struct ShoppingListView: View {
             if viewModel.isSomeoneElseShopping {
                 shoppingStatusLine
             }
+
+            // Someone is out on an errand — this list is intact, just paused
+            if viewModel.isSomeoneElseAdHocShopping {
+                errandStatusLine
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 60)
         .padding(.bottom, 8)
+    }
+
+    // MARK: - Quick Trip
+
+    /// Starts a store-less errand. Only offered when nobody is mid-session, which is
+    /// what keeps the whole feature free of concurrency questions.
+    private var quickTripButton: some View {
+        Button(action: {
+            guard viewModel.shoppingStatus == .idle else { return }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            Task { await viewModel.enterAdHocMode() }
+        }) {
+            HStack(spacing: 5) {
+                Image(systemName: "figure.walk.motion")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("Quick Trip")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundColor(viewModel.shoppingStatus == .idle
+                             ? DesignSystem.Colors.neonPurple
+                             : DesignSystem.Colors.textTertiary.opacity(0.5))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(viewModel.shoppingStatus == .idle
+                          ? DesignSystem.Colors.neonPurple.opacity(0.12)
+                          : Color.white.opacity(0.04))
+                    .overlay(
+                        Capsule()
+                            .stroke(viewModel.shoppingStatus == .idle
+                                    ? DesignSystem.Colors.neonPurple.opacity(0.45)
+                                    : Color.white.opacity(0.12),
+                                    lineWidth: 1)
+                    )
+            )
+        }
+        .disabled(viewModel.shoppingStatus != .idle)
+    }
+
+    /// Shown to everyone who is not the errand runner.
+    private var errandStatusLine: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "figure.walk.motion")
+                .font(.system(size: 11, weight: .semibold))
+            Text("\(viewModel.activeShopperDisplayName ?? "Someone") is out on a quick trip — your list is untouched")
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(2)
+        }
+        .foregroundColor(DesignSystem.Colors.neonPurple.opacity(0.9))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(DesignSystem.Colors.neonPurple.opacity(0.1))
+        )
     }
 
     // MARK: - Compact Shopping Status Line

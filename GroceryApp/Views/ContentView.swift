@@ -8,12 +8,18 @@ struct ContentView: View {
     @State private var hasCheckedShoppingStatus = false
     @State private var showInfoModal = false
     @State private var isAtStoreMode = false
+    @State private var isAdHocMode = false
 
     var body: some View {
         ZStack {
             if isAtStoreMode {
                 // Direct to AtStoreModeView when shopping is active
                 AtStoreModeView(isPresented: $isAtStoreMode)
+                    .environmentObject(viewModel)
+                    .environmentObject(amplifyService)
+            } else if isAdHocMode {
+                // Store-less errand — main list stays intact underneath
+                AdHocModeView(isPresented: $isAdHocMode)
                     .environmentObject(viewModel)
                     .environmentObject(amplifyService)
             } else {
@@ -62,6 +68,7 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isAtStoreMode)
+        .animation(.easeInOut(duration: 0.3), value: isAdHocMode)
         .task {
             await checkShoppingStatusOnLaunch()
         }
@@ -69,6 +76,15 @@ struct ContentView: View {
             // When exiting shopping mode, sync the viewModel state
             if !newValue {
                 viewModel.isAtStoreMode = false
+            }
+        }
+        .onChange(of: viewModel.shoppingStatus) { _, _ in
+            // Only ever switches the errand screen ON. Leaving is driven by
+            // AdHocModeView itself, after its completion sheet is dismissed —
+            // tearing the view down the moment status flips to .idle would take
+            // that sheet with it.
+            if viewModel.isCurrentUserAdHocShopping {
+                isAdHocMode = true
             }
         }
     }
@@ -94,7 +110,10 @@ struct ContentView: View {
         let shouldRestoreShoppingMode = await viewModel.fetchHouseholdShoppingStatus()
 
         await MainActor.run {
-            if viewModel.shoppingStatus == .atStore {
+            if viewModel.isCurrentUserAdHocShopping {
+                // Resume an errand that was in progress when the app was killed
+                isAdHocMode = true
+            } else if viewModel.shoppingStatus == .atStore {
                 // Shopping is active - show info modal
                 if shouldRestoreShoppingMode {
                     // Current user is the shopper

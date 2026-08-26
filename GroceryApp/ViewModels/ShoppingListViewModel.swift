@@ -25,6 +25,8 @@ enum SortOption: String, CaseIterable {
 enum ShoppingStatus: String, Codable {
     case idle = "IDLE"
     case atStore = "AT_STORE"
+    /// A store-less errand run. Startable only from `.idle`, so it never races a store trip.
+    case adHoc = "AD_HOC"
 }
 
 @MainActor
@@ -81,17 +83,54 @@ class ShoppingListViewModel: ObservableObject {
 
     /// Items on the shopping list (active items to be picked up)
     var shoppingList: [GroceryItem] {
-        items.filter { $0.status == .active }
+        items.filter { $0.status == .active && !$0.adHoc }
     }
 
     /// Items already in the cart during the current shopping trip
     var inCart: [GroceryItem] {
-        items.filter { $0.status == .inCart }
+        items.filter { $0.status == .inCart && !$0.adHoc }
     }
 
     /// Suggested items from previous shopping trips
     var suggestions: [GroceryItem] {
         items.filter { $0.status == .suggestion }
+    }
+
+    // MARK: - Ad-Hoc Trip
+
+    /// Items still to grab on the current store-less errand
+    var adHocList: [GroceryItem] {
+        items.filter { $0.status == .active && $0.adHoc }
+    }
+
+    /// Items already grabbed on the current errand
+    var adHocInCart: [GroceryItem] {
+        items.filter { $0.status == .inCart && $0.adHoc }
+    }
+
+    /// True while this household is on a store-less errand
+    var isAdHocMode: Bool {
+        shoppingStatus == .adHoc
+    }
+
+    /// True when the current user is the one running the errand
+    var isCurrentUserAdHocShopping: Bool {
+        guard shoppingStatus == .adHoc,
+              let shopperId = activeShopperId,
+              let currentUserId = AmplifyService.shared.currentUser?.userId else {
+            return false
+        }
+        return shopperId == currentUserId
+    }
+
+    /// True when another member is out on an errand
+    var isSomeoneElseAdHocShopping: Bool {
+        guard shoppingStatus == .adHoc,
+              let shopperId = activeShopperId,
+              let currentUserId = AmplifyService.shared.currentUser?.userId else {
+            return false
+        }
+        return shopperId != currentUserId
     }
 
     /// Returns true if the current user is the active shopper
@@ -252,6 +291,8 @@ class ShoppingListViewModel: ObservableObject {
                         quantity
                         notes
                         notesEphemeral
+                        adHoc
+                        adHocPulled
                         isCustom
                         productId
                         status
@@ -385,21 +426,34 @@ class ShoppingListViewModel: ObservableObject {
         // review picker, where the user gets to accept/reject each candidate. Silent
         // auto-merge risks buying the wrong thing, e.g. "coconut milk" collapsing
         // into "coconut milk yogurt".)
+        // During an errand the item belongs to that trip, and duplicates are checked
+        // against the errand's own lists — the main list is a separate world right now.
+        let isErrandAdd = isAdHocMode
         let normalizedName = normalizeName(name)
-        if let existingItem = shoppingList.first(where: { $0.normalizedName == normalizedName }) {
+        let listToCheck = isErrandAdd ? adHocList : shoppingList
+        let cartToCheck = isErrandAdd ? adHocInCart : inCart
+
+        if let existingItem = listToCheck.first(where: { $0.normalizedName == normalizedName }) {
             showToast(message: "\(existingItem.name) is already on the list")
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
             return
         }
-        if let inCartItem = inCart.first(where: { $0.normalizedName == normalizedName }) {
+        if let inCartItem = cartToCheck.first(where: { $0.normalizedName == normalizedName }) {
             showToast(message: "\(inCartItem.name) is already in cart")
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
             return
         }
 
+        // On an errand, an item sitting on the main list is pulled onto the trip rather
+        // than duplicated — this is the "add from item list" path the user wanted.
+        if isErrandAdd, let mainListItem = shoppingList.first(where: { $0.normalizedName == normalizedName }) {
+            await pullItemToAdHoc(mainListItem)
+            return
+        }
+
         // Check suggestions - reactivate existing item instead of creating duplicate
         if let suggestionItem = suggestions.first(where: { $0.normalizedName == normalizedName }) {
-            await updateItemStatus(suggestionItem, to: .active, updateAddedAt: true)
+            await setAdHocFlags(suggestionItem, adHoc: isErrandAdd, pulled: false, status: .active)
             showToast(message: "\(suggestionItem.name) added to list", type: .success)
             return
         }
@@ -416,6 +470,7 @@ class ShoppingListViewModel: ObservableObject {
             normalizedName: normalizedName,
             quantity: quantity,
             notes: notes,
+            adHoc: isErrandAdd,
             isCustom: productId == nil,
             productId: productId,
             status: .active,
@@ -432,7 +487,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation CreateGroceryItem($input: CreateGroceryItemInput!) {
                 createGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -447,6 +502,7 @@ class ShoppingListViewModel: ObservableObject {
                 "status": "ACTIVE",
                 "addedBy": currentUserId,
                 "addedAt": ISO8601DateFormatter().string(from: now),
+                "adHoc": isErrandAdd,
                 "version": 0
             ]
             if let quantity = quantity { input["quantity"] = quantity }
@@ -507,9 +563,10 @@ class ShoppingListViewModel: ObservableObject {
             return
         }
 
-        // Check if locked by another user (skip during shopping mode - shopper has full control)
+        // Check if locked by another user (skip during shopping mode - shopper has full
+        // control, and likewise for the runner of a store-less errand)
         let currentUserId = AmplifyService.shared.currentUser?.userId
-        if !isCurrentUserShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
+        if !isCurrentUserShopping, !isCurrentUserAdHocShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
             let lockedByName = UserCache.shared.displayName(for: lockedBy)
             await MainActor.run {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -551,7 +608,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -762,7 +819,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -802,9 +859,10 @@ class ShoppingListViewModel: ObservableObject {
             return
         }
 
-        // Check if locked by another user (skip during shopping mode - shopper has full control)
+        // Check if locked by another user (skip during shopping mode - shopper has full
+        // control, and likewise for the runner of a store-less errand)
         let currentUserId = AmplifyService.shared.currentUser?.userId
-        if !isCurrentUserShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
+        if !isCurrentUserShopping, !isCurrentUserAdHocShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
             let lockedByName = UserCache.shared.displayName(for: lockedBy)
             await MainActor.run {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -1001,7 +1059,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -1058,9 +1116,10 @@ class ShoppingListViewModel: ObservableObject {
             return
         }
 
-        // Check if locked by another user (skip during shopping mode - shopper has full control)
+        // Check if locked by another user (skip during shopping mode - shopper has full
+        // control, and likewise for the runner of a store-less errand)
         let currentUserId = AmplifyService.shared.currentUser?.userId
-        if !isCurrentUserShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
+        if !isCurrentUserShopping, !isCurrentUserAdHocShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
             let lockedByName = UserCache.shared.displayName(for: lockedBy)
             await MainActor.run {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -1084,7 +1143,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -1520,6 +1579,8 @@ class ShoppingListViewModel: ObservableObject {
                 quantity
                 notes
                 notesEphemeral
+                adHoc
+                adHocPulled
                 isCustom
                 productId
                 status
@@ -1832,7 +1893,7 @@ class ShoppingListViewModel: ObservableObject {
                    case .object(let household) = root["updateHousehold"] {
                     // Update local state
                     if case .string(let status) = household["shoppingStatus"] {
-                        shoppingStatus = status == "AT_STORE" ? .atStore : .idle
+                        shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
                     }
                     if case .string(let shopperId) = household["activeShopperId"] {
                         activeShopperId = shopperId
@@ -1923,8 +1984,8 @@ class ShoppingListViewModel: ObservableObject {
             ShopperReminderService.shared.cancel()
 
             // Calculate stats BEFORE changing item statuses
-            let itemsInCart = items.filter { $0.status == .inCart }
-            let itemsOnList = items.filter { $0.status == .active }
+            let itemsInCart = inCart
+            let itemsOnList = shoppingList
             let customItemsInCart = itemsInCart.filter { $0.isCustom }
             let storeName = selectedHouseholdStore?.name ?? "Store"
             let startTime = shoppingStartedAt ?? Date()
@@ -1944,8 +2005,8 @@ class ShoppingListViewModel: ObservableObject {
             // Change all inCart items to SUGGESTION status
             // Change all active items to SUGGESTION status if discardUncrossed is true
             let itemsToUpdate = discardUncrossed
-                ? items.filter { $0.status == .inCart || $0.status == .active }
-                : items.filter { $0.status == .inCart }
+                ? inCart + shoppingList
+                : inCart
 
             // Batch update items to SUGGESTION status
             for item in itemsToUpdate {
@@ -1990,7 +2051,7 @@ class ShoppingListViewModel: ObservableObject {
                    case .object(let household) = root["updateHousehold"] {
                     // Update local state
                     if case .string(let status) = household["shoppingStatus"] {
-                        shoppingStatus = status == "AT_STORE" ? .atStore : .idle
+                        shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
                     }
                     activeShopperId = nil
                     shoppingStoreId = nil
@@ -2145,6 +2206,218 @@ class ShoppingListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Ad-Hoc Trip Management
+
+    /// Persist an item's ad-hoc flags, optionally alongside a status change.
+    private func setAdHocFlags(
+        _ item: GroceryItem,
+        adHoc: Bool,
+        pulled: Bool,
+        status: GroceryItem.ItemStatus? = nil
+    ) async {
+        // Optimistic update
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            var updated = item
+            updated.adHoc = adHoc
+            updated.adHocPulled = pulled
+            if let status { updated.status = status }
+            updated.version += 1
+            items[index] = updated
+            applySorting()
+        }
+
+        do {
+            var input: [String: Any] = [
+                "id": item.id,
+                "adHoc": adHoc,
+                "adHocPulled": pulled,
+                "version": item.version + 1
+            ]
+            if let status { input["status"] = status.rawValue }
+
+            let document = """
+            mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
+                updateGroceryItem(input: $input) {
+                    id status adHoc adHocPulled version
+                }
+            }
+            """
+
+            let request = GraphQLRequest<JSONValue>(
+                document: document,
+                variables: ["input": input],
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
+            )
+
+            _ = try await Amplify.API.mutate(request: request)
+        } catch {
+            // Revert on failure — a stuck ad-hoc flag would hide the item from both lists
+            if let index = items.firstIndex(where: { $0.id == item.id }) {
+                items[index] = item
+            }
+            logger.error("Failed to update ad-hoc flags: \(error)")
+        }
+    }
+
+    /// Start a store-less errand. Only allowed from IDLE, so it can never race a store trip.
+    func enterAdHocMode() async {
+        guard let householdId = householdId else {
+            showToast(message: "No household selected", type: .error)
+            return
+        }
+        guard let currentUserId = AmplifyService.shared.currentUser?.userId else {
+            showToast(message: "Not signed in", type: .error)
+            return
+        }
+        guard shoppingStatus == .idle else {
+            showToast(message: "Someone is already shopping", type: .warning)
+            return
+        }
+
+        do {
+            let iso8601Formatter = ISO8601DateFormatter()
+            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+            let document = """
+            mutation UpdateHousehold($input: UpdateHouseholdInput!) {
+                updateHousehold(input: $input) {
+                    id shoppingStatus activeShopperId shoppingStoreId shoppingStartedAt
+                }
+            }
+            """
+
+            // No store binding — that's the whole point of an errand
+            let input: [String: Any] = [
+                "id": householdId,
+                "shoppingStatus": "AD_HOC",
+                "activeShopperId": currentUserId,
+                "shoppingStoreId": NSNull(),
+                "shoppingStartedAt": iso8601Formatter.string(from: Date())
+            ]
+
+            let request = GraphQLRequest<JSONValue>(
+                document: document,
+                variables: ["input": input],
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
+            )
+
+            let response = try await Amplify.API.mutate(request: request)
+
+            switch response {
+            case .success:
+                shoppingStatus = .adHoc
+                activeShopperId = currentUserId
+                shoppingStoreId = nil
+                selectedHouseholdStore = nil
+                shoppingStartedAt = Date()
+                logger.info("Entered ad-hoc mode")
+            case .failure(let error):
+                showToast(message: "Couldn't start the errand", type: .error)
+                logger.error("Failed to enter ad-hoc mode: \(error)")
+            }
+        } catch {
+            showToast(message: "Couldn't start the errand", type: .error)
+            logger.error("Failed to enter ad-hoc mode: \(error)")
+        }
+    }
+
+    /// Move an item off the main list onto the errand. It keeps ACTIVE status but is
+    /// flagged as pulled, so it returns to the main list if the errand ends without it.
+    func pullItemToAdHoc(_ item: GroceryItem) async {
+        guard isAdHocMode else { return }
+        await setAdHocFlags(item, adHoc: true, pulled: true)
+        showToast(message: "\(item.name) moved to this trip")
+    }
+
+    /// Put a pulled item back on the main list mid-errand, undoing `pullItemToAdHoc`.
+    func returnItemToMainList(_ item: GroceryItem) async {
+        guard item.adHoc else { return }
+        await setAdHocFlags(item, adHoc: false, pulled: false, status: .active)
+        showToast(message: "\(item.name) back on the main list")
+    }
+
+    /// Finish the errand. Bought items are learned as suggestions; items pulled off the
+    /// main list are restored to it; freshly typed leftovers are discarded as one-offs.
+    func exitAdHocMode() async {
+        guard let householdId = householdId else {
+            showToast(message: "No household selected", type: .error)
+            return
+        }
+
+        let bought = adHocInCart
+        let leftoverPulled = adHocList.filter { $0.adHocPulled }
+        let leftoverFresh = adHocList.filter { !$0.adHocPulled }
+
+        let stats = ShoppingCompletionStats(
+            itemsPickedUp: bought.count,
+            itemsNotPickedUp: leftoverPulled.count + leftoverFresh.count,
+            itemsAddedDuringTrip: 0,
+            customItemsLearned: bought.filter { $0.isCustom }.count,
+            storeName: "Quick Trip",
+            startedAt: shoppingStartedAt ?? Date(),
+            endedAt: Date()
+        )
+
+        // Bought → learned as a suggestion for next time, and off the errand
+        for item in bought {
+            await setAdHocFlags(item, adHoc: false, pulled: false, status: .suggestion)
+        }
+
+        // Pulled but not found → back onto the main list, exactly where it came from
+        for item in leftoverPulled {
+            await setAdHocFlags(item, adHoc: false, pulled: false, status: .active)
+        }
+
+        // Typed fresh for this errand and not bought → a one-off, discard it
+        for item in leftoverFresh {
+            await deleteItem(item)
+        }
+
+        // Trip-scoped notes die with the trip, same as a store run
+        await clearEphemeralNotes()
+
+        do {
+            let document = """
+            mutation UpdateHousehold($input: UpdateHouseholdInput!) {
+                updateHousehold(input: $input) {
+                    id shoppingStatus activeShopperId shoppingStoreId
+                }
+            }
+            """
+
+            let input: [String: Any] = [
+                "id": householdId,
+                "shoppingStatus": "IDLE",
+                "activeShopperId": NSNull(),
+                "shoppingStoreId": NSNull(),
+                "shoppingStartedAt": NSNull()
+            ]
+
+            let request = GraphQLRequest<JSONValue>(
+                document: document,
+                variables: ["input": input],
+                responseType: JSONValue.self,
+                authMode: AWSAuthorizationType.amazonCognitoUserPools
+            )
+
+            _ = try await Amplify.API.mutate(request: request)
+        } catch {
+            logger.error("Failed to clear ad-hoc status: \(error)")
+        }
+
+        shoppingStatus = .idle
+        activeShopperId = nil
+        shoppingStoreId = nil
+        shoppingStartedAt = nil
+
+        shoppingCompletionStats = stats
+        showShoppingCompletedSheet = true
+
+        logger.info("Ended ad-hoc trip — \(bought.count) bought, \(leftoverPulled.count) restored, \(leftoverFresh.count) discarded")
+    }
+
     /// Fetch current household shopping status and restore state if current user was shopping
     /// Returns true if the current user is the active shopper and UI should show AtStoreModeView
     @discardableResult
@@ -2184,7 +2457,7 @@ class ShoppingListViewModel: ObservableObject {
                    case .object(let household) = root["getHousehold"] {
                     // Update local state
                     if case .string(let status) = household["shoppingStatus"] {
-                        shoppingStatus = status == "AT_STORE" ? .atStore : .idle
+                        shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
                     } else {
                         shoppingStatus = .idle
                     }
@@ -2203,7 +2476,7 @@ class ShoppingListViewModel: ObservableObject {
 
                     // Session start time — needed on non-shopper devices for the
                     // abandoned-session banner.
-                    if shoppingStatus == .atStore {
+                    if shoppingStatus != .idle {
                         if case .string(let startedAtString) = household["shoppingStartedAt"] {
                             let formatter = ISO8601DateFormatter()
                             formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -2793,6 +3066,12 @@ class ShoppingListViewModel: ObservableObject {
         var notesEphemeral = false
         if case .boolean(let value) = obj["notesEphemeral"] { notesEphemeral = value }
 
+        var adHoc = false
+        if case .boolean(let value) = obj["adHoc"] { adHoc = value }
+
+        var adHocPulled = false
+        if case .boolean(let value) = obj["adHocPulled"] { adHocPulled = value }
+
         var productId: String? = nil
         if case .string(let value) = obj["productId"] { productId = value }
 
@@ -2819,6 +3098,8 @@ class ShoppingListViewModel: ObservableObject {
             quantity: quantity,
             notes: notes,
             notesEphemeral: notesEphemeral,
+            adHoc: adHoc,
+            adHocPulled: adHocPulled,
             isCustom: isCustom,
             productId: productId,
             status: status,

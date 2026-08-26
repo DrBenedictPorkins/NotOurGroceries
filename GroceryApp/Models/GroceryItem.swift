@@ -51,6 +51,11 @@ struct GroceryItem: Identifiable, Codable, Hashable {
     var notes: String?
     /// When true, `notes` is trip-scoped and gets wiped when the shopping session finishes.
     var notesEphemeral: Bool = false
+    /// Item belongs to the current store-less ad-hoc trip rather than the main list.
+    var adHoc: Bool = false
+    /// Ad-hoc item pulled off the main list rather than typed fresh. If the trip ends
+    /// without it being bought, a pulled item returns to the main list; a fresh one is discarded.
+    var adHocPulled: Bool = false
     let isCustom: Bool
     let productId: String?
     var status: ItemStatus
@@ -75,6 +80,7 @@ struct GroceryItem: Identifiable, Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, householdId, name, normalizedName, quantity, notes, notesEphemeral
+        case adHoc, adHocPulled
         case isCustom, productId, status, lockedBy, addedBy, addedAt
         case version, images
         // isPendingRemoval and isOptimisticUpdate excluded
@@ -88,6 +94,8 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         quantity: String? = nil,
         notes: String? = nil,
         notesEphemeral: Bool = false,
+        adHoc: Bool = false,
+        adHocPulled: Bool = false,
         isCustom: Bool = false,
         productId: String? = nil,
         status: ItemStatus = .active,
@@ -104,6 +112,8 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         self.quantity = quantity
         self.notes = notes
         self.notesEphemeral = notesEphemeral
+        self.adHoc = adHoc
+        self.adHocPulled = adHocPulled
         self.isCustom = isCustom
         self.productId = productId
         self.status = status
@@ -125,6 +135,8 @@ struct GroceryItem: Identifiable, Codable, Hashable {
         quantity = try container.decodeIfPresent(String.self, forKey: .quantity)
         notes = try container.decodeIfPresent(String.self, forKey: .notes)
         notesEphemeral = (try? container.decode(Bool.self, forKey: .notesEphemeral)) ?? false
+        adHoc = (try? container.decode(Bool.self, forKey: .adHoc)) ?? false
+        adHocPulled = (try? container.decode(Bool.self, forKey: .adHocPulled)) ?? false
         isCustom = try container.decode(Bool.self, forKey: .isCustom)
         productId = try container.decodeIfPresent(String.self, forKey: .productId)
         status = try container.decode(ItemStatus.self, forKey: .status)

@@ -520,11 +520,21 @@ struct BulkImportSheet: View {
                         }
                     }
 
-                    if unresolvedCount > 0 {
+                    // A dish's ingredients arrive as one thought, so they should
+                    // be reviewed as one — a card you accept or trim, not eight
+                    // separate interrogations.
+                    ForEach(intentGroups, id: \.self) { intent in
+                        IntentGroupCard(
+                            intent: intent,
+                            ingredients: $ingredients
+                        )
+                    }
+
+                    if ungroupedUnresolvedCount > 0 {
                         needsInputHeader
 
                         ForEach($ingredients) { $item in
-                            if item.isUnresolved {
+                            if item.isUnresolved && !isGrouped(item) {
                                 NeedsInputRow(item: $item, viewModel: viewModel)
                             }
                         }
@@ -548,6 +558,23 @@ struct BulkImportSheet: View {
 
     private var unresolvedCount: Int {
         ingredients.filter(\.isUnresolved).count
+    }
+
+    /// An intent the parser expanded into several items — "for burritos". Only a
+    /// group of two or more is worth a card; a lone item reads better as a row.
+    private var intentGroups: [String] {
+        let counts = Dictionary(grouping: ingredients.filter { $0.isUnresolved && $0.heardAs != nil },
+                                by: { $0.heardAs! })
+        return counts.filter { $0.value.count >= 2 }.keys.sorted()
+    }
+
+    private func isGrouped(_ item: ParsedIngredient) -> Bool {
+        guard let h = item.heardAs else { return false }
+        return intentGroups.contains(h)
+    }
+
+    private var ungroupedUnresolvedCount: Int {
+        ingredients.filter { $0.isUnresolved && !isGrouped($0) }.count
     }
 
     private var needsInputHeader: some View {
@@ -1359,5 +1386,130 @@ struct FlowRow: Layout {
             x += size.width + spacing
             rowHeight = max(rowHeight, size.height)
         }
+    }
+}
+
+// MARK: - Intent Group Card
+
+/// The ingredients the parser inferred from one spoken intent — "I'm making
+/// burritos" — presented as the single thought they came from. Accept the lot,
+/// or uncheck the two you already have. Beats eight separate Yes/Skip rows for
+/// what was, to the speaker, one sentence.
+struct IntentGroupCard: View {
+    let intent: String
+    @Binding var ingredients: [ParsedIngredient]
+
+    private var accent: Color { DesignSystem.Colors.neonPurple }
+
+    private var members: [ParsedIngredient] {
+        ingredients.filter { $0.isUnresolved && $0.heardAs == intent }
+    }
+
+    /// "for burritos" → "Burritos". The parser phrases it for a sentence; the
+    /// card wants a title.
+    private var title: String {
+        var t = intent
+        for prefix in ["for the ", "for a ", "for ", "to make "] {
+            if t.lowercased().hasPrefix(prefix) {
+                t = String(t.dropFirst(prefix.count))
+                break
+            }
+        }
+        return t.prefix(1).uppercased() + t.dropFirst()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                Image(systemName: "fork.knife")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(accent)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    Text("You didn't name these — we guessed")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    for i in ingredients.indices where ingredients[i].heardAs == intent && ingredients[i].isUnresolved {
+                        ingredients[i].resolved = true
+                    }
+                } label: {
+                    Text("Add all \(members.count)")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(accent)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(accent.opacity(0.14))
+                                .overlay(Capsule().stroke(accent.opacity(0.45), lineWidth: 1))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(spacing: 0) {
+                ForEach(members) { member in
+                    HStack(spacing: 10) {
+                        Button {
+                            guard let i = ingredients.firstIndex(where: { $0.id == member.id }) else { return }
+                            ingredients[i].resolved = true
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 19))
+                                .foregroundColor(accent)
+                        }
+                        .buttonStyle(.plain)
+
+                        Text(member.name)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                        if let q = member.quantity, !q.isEmpty {
+                            Text(q)
+                                .font(.system(size: 12))
+                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        Button {
+                            guard let i = ingredients.firstIndex(where: { $0.id == member.id }) else { return }
+                            ingredients[i].isSelected = false
+                            ingredients[i].resolved = true
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 7)
+                }
+            }
+        }
+        .padding(15)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(accent.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(accent.opacity(0.35), lineWidth: 1)
+                )
+        )
+        .padding(.top, 14)
     }
 }

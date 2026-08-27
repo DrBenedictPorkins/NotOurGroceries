@@ -523,7 +523,6 @@ class ShoppingListViewModel: ObservableObject {
         // Check suggestions - reactivate existing item instead of creating duplicate
         if let suggestionItem = suggestions.first(where: { $0.normalizedName == normalizedName }) {
             await setAdHocFlags(suggestionItem, adHoc: isErrandAdd, pulled: false, status: .active)
-            showToast(message: "\(suggestionItem.name) added to list", type: .success)
             return
         }
 
@@ -706,8 +705,6 @@ class ShoppingListViewModel: ObservableObject {
 
             switch response {
             case .success(_):
-                print("moveToCart SUCCESS - showing toast for: \(item.name)")
-                showToast(message: "Added \(item.name) to cart")
                 bumpShopperActivity()
             case .failure(let error):
                 print("moveToCart FAILURE: \(error)")
@@ -823,7 +820,7 @@ class ShoppingListViewModel: ObservableObject {
 
             switch response {
             case .success:
-                showToast(message: "Moved \(item.name) to suggestions")
+                break
             case .failure(let error):
                 logger.error("Move to suggestion failed: \(error)")
                 await loadShoppingList()
@@ -929,7 +926,7 @@ class ShoppingListViewModel: ObservableObject {
 
             switch response {
             case .success:
-                showToast(message: "Restored \(item.name)")
+                break
             case .failure(let error):
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
                 await loadShoppingList()
@@ -2539,14 +2536,12 @@ class ShoppingListViewModel: ObservableObject {
     func pullItemToAdHoc(_ item: GroceryItem) async {
         guard isAdHocMode else { return }
         await setAdHocFlags(item, adHoc: true, pulled: true)
-        showToast(message: "\(item.name) moved to this trip")
     }
 
     /// Put a pulled item back on the main list mid-errand, undoing `pullItemToAdHoc`.
     func returnItemToMainList(_ item: GroceryItem) async {
         guard item.adHoc else { return }
         await setAdHocFlags(item, adHoc: false, pulled: false, status: .active)
-        showToast(message: "\(item.name) back on the main list")
     }
 
     /// Finish the errand. Bought items are learned as suggestions; items pulled off the

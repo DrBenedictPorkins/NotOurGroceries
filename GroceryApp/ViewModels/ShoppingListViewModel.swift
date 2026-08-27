@@ -1881,10 +1881,31 @@ class ShoppingListViewModel: ObservableObject {
         do {
             householdStores = try await StoreService.shared.fetchStores(householdId: householdId)
             logger.info("Loaded \(self.householdStores.count) stores for household")
+
+            if householdStores.isEmpty {
+                await createDefaultStore()
+            }
         } catch {
             logger.error("Failed to load stores: \(error)")
         }
     }
+
+    /// Every household gets one plain store so "At Store" is never blocked behind
+    /// setup. No aisles defined — the map fills itself in as items get assigned
+    /// while shopping, rather than being declared up front.
+    private func createDefaultStore() async {
+        guard !PaperMode.shared.blocksNetwork else { return }
+
+        logger.info("No stores for this household — creating the default one")
+        _ = await createStore(
+            name: Self.defaultStoreName,
+            chain: nil,
+            aisles: [],
+            layoutType: .noAisles
+        )
+    }
+
+    static let defaultStoreName = "My Store"
 
     /// Switch to a different store during shopping
     /// Updates the household's shoppingStoreId and reloads mappings

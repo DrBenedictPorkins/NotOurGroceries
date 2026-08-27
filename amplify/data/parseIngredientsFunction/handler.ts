@@ -10,6 +10,12 @@ interface ParsedIngredient {
   name: string;
   quantity?: string;
   qualifier?: string;
+  /** The speaker's own words, when the parsed name differs meaningfully from them. */
+  heardAs?: string;
+  /** Set when the transcript alone could not resolve this item. */
+  needsInput?: boolean;
+  /** Candidate names, best first, when the words support more than one product. */
+  alternatives?: string[];
 }
 
 // Amplify stores secrets in SSM and resolves them via a wrapper at build time.
@@ -62,6 +68,15 @@ export const handler: Handler = async (event) => {
             "Unsalted Butter" → name: "Butter", qualifier: "Unsalted"
             "Chicken Breast" → name: "Chicken Breast" (no qualifier — Breast defines the cut, not a modifier)
 - Normalize item names to simple grocery store form (e.g., "all-purpose flour" → name: "Flour", qualifier: "All-Purpose")
+- Do NOT split a compound that is its own distinct product just because part of it looks like a modifier. If you would buy it off the shelf under that whole name, keep the whole name:
+    "Iced Tea"     → name: "Iced Tea"     (NOT Tea + qualifier Iced — a different product from tea)
+    "Sour Cream"   → name: "Sour Cream"   (NOT Cream + qualifier Sour)
+    "Heavy Cream"  → name: "Heavy Cream"  (NOT Cream + qualifier Heavy)
+    "Cream Cheese" → name: "Cream Cheese" (NOT Cheese + qualifier Cream)
+    "Ground Beef"  → name: "Ground Beef"  (NOT Beef + qualifier Ground)
+  Ask yourself: would substituting the base item satisfy the shopper? If no, it is one item, not an item plus a qualifier.
+- Do NOT generalise a specific product up to its category. The shopper asked for a specific thing and will not find it otherwise:
+    "macaroni" → "Macaroni" (NOT "Pasta"),  "cheddar" → "Cheddar" (NOT "Cheese"),  "baguette" → "Baguette" (NOT "Bread")
 - Remove cooking instructions, temperatures, prep notes (e.g., "diced", "chopped", "at room temperature")
 - Each unique item should appear only once
 - Ignore non-grocery text like recipe titles, step numbers, comments
@@ -81,11 +96,24 @@ Dictated speech: this input is often a transcript of someone talking, so treat i
 - Transcription is imperfect. Repair obvious mis-hearings into the sensible grocery term when confident: "macaronis" → "Macaroni", "whole flour" → "Whole Wheat Flour", "do a orange juice" → "Orange Juice". Do not invent items you are not confident about.
 - Speakers repeat themselves when thinking aloud; collapse duplicates into a single item carrying the richest quantity/qualifier mentioned.
 ${knownTermsSection}
+Flagging what you are unsure about — this is as important as the extraction itself.
+The user sees confident items in one list and everything else in a "needs your input"
+list underneath. Being silently wrong is far worse than asking, but asking about
+everything makes the feature useless. So flag ONLY genuine uncertainty:
+- "heardAs": include the speaker's own words whenever your output differs meaningfully from what they said (a repaired mis-hearing, a normalisation, a guessed quantity). Omit it when you used their words as-is.
+- "needsInput": true when you could not resolve it from the transcript alone. Two cases:
+    (a) you repaired a probable mis-hearing and could be wrong — "macaronis" → Macaroni
+    (b) the words genuinely support more than one product and nothing decides between them — "tea" could be Tea or Iced Tea
+  Do NOT set it merely because an item is absent from the catalog. Unusual is not ambiguous.
+- "alternatives": for case (b), 2-4 candidate names, BEST FIRST. Prefer names from the catalog list below, because those are things this household actually buys — if one candidate is in the catalog and another is not, the catalog one goes first. Include your chosen "name" as one of the alternatives.
+
 Return ONLY a JSON array, no markdown, no explanation:
 [
   {"name": "Chicken Breast", "quantity": "2 lbs"},
   {"name": "Garlic", "quantity": "3 cloves"},
   {"name": "Bell Peppers", "quantity": "3", "qualifier": "Red"},
+  {"name": "Macaroni", "heardAs": "some macaronis", "needsInput": true},
+  {"name": "Iced Tea", "heardAs": "tea", "needsInput": true, "alternatives": ["Iced Tea", "Tea"]},
   {"name": "Olive Oil"}
 ]`;
 
@@ -137,6 +165,11 @@ Return ONLY a JSON array, no markdown, no explanation:
       name: item.name.trim(),
       ...(item.quantity && item.quantity.trim() ? { quantity: item.quantity.trim() } : {}),
       ...(item.qualifier && item.qualifier.trim() ? { qualifier: item.qualifier.trim() } : {}),
+      ...(item.heardAs && item.heardAs.trim() ? { heardAs: item.heardAs.trim() } : {}),
+      ...(item.needsInput === true ? { needsInput: true } : {}),
+      ...(Array.isArray(item.alternatives) && item.alternatives.length > 1
+        ? { alternatives: item.alternatives.filter((a: unknown) => typeof a === 'string' && a.trim()).slice(0, 4) }
+        : {}),
     }));
 
   console.log('[PARSE] result', JSON.stringify(cleaned));

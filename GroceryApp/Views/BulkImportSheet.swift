@@ -273,17 +273,50 @@ struct BulkImportSheet: View {
         .disabled(transcribing)
     }
 
+    /// Moves with your voice. This is the honest signal that the mic is live —
+    /// a flat bar while you're talking means recording actually stopped, which
+    /// a "Stop" button can never tell you.
+    private var levelMeter: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.white.opacity(0.08))
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonPurple],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(3, geo.size.width * dictation.level))
+                    .animation(.linear(duration: 0.1), value: dictation.level)
+            }
+        }
+        .frame(height: 4)
+        .opacity(dictation.isInterrupted ? 0.3 : 1)
+    }
+
     @ViewBuilder
     private var micStatusView: some View {
         if dictation.isRecording {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(DesignSystem.Colors.neonPink)
-                    .frame(width: 8, height: 8)
-                Text("Recording… speak items, tap Stop when done.")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                Spacer()
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(dictation.isInterrupted
+                              ? DesignSystem.Colors.warning
+                              : DesignSystem.Colors.neonPink)
+                        .frame(width: 8, height: 8)
+                    Text(dictation.isInterrupted
+                         ? "Paused — something else took the microphone."
+                         : "Recording… speak items, tap Stop when done.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Spacer()
+                }
+
+                levelMeter
             }
             .padding(.horizontal, 20)
             .padding(.top, 6)

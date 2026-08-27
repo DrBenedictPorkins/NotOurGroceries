@@ -6,6 +6,13 @@ Always use `AWS_PROFILE=mine` before any AWS CLI calls.
 
 ## Clear Backend Database (Fresh Start)
 
+> ⚠️ **These scripts target the dead sandbox tables (`nktezw3d…`) and therefore do
+> nothing.** Do NOT "fix" them by swapping in the prod suffix
+> (`vdsfrt2plzgwfdae2ucpxtwzh4`) — with no sandbox, that deletes the only real
+> household data there is. If a genuine wipe is wanted, the user must ask for it
+> explicitly, naming production.
+
+
 When schema changes require a fresh start, run this to clear all DynamoDB tables:
 
 ```bash
@@ -52,6 +59,10 @@ EOF
 ```
 
 ## Clear Shopping Data Only (Keep Users & Households)
+
+> ⚠️ Same warning as above — dead sandbox table names, and pointing them at prod
+> destroys live data.
+
 
 Clears shopping lists, history, and requests while preserving user accounts and household setup:
 
@@ -155,20 +166,30 @@ This approach requires no app redeployment — the live table name never changes
 
 Backend schema is defined in `amplify/data/resource.ts`.
 
-### Environments
+### Environment — there is only one
 
-| Environment | Config File | Cognito Pool | AppSync API |
-|-------------|-------------|--------------|-------------|
-| **Development** (Debug) | `amplify_outputs_dev.json` | `us-east-1_PWCfwCEUh` | `awxymvwkinht3dofuywc73phwy` |
-| **Production** (Release) | `amplify_outputs_prod.json` | `us-east-1_OIBNTn0XB` | `sve64qw4c5cu5jerw6gn2jrvd4` |
+**There is NO sandbox. Every build configuration talks to production.**
 
-### Build Configuration
+| | |
+|---|---|
+| Config file | `amplify_outputs_prod.json` |
+| Cognito pool | `us-east-1_OIBNTn0XB` |
+| AppSync API id | `vdsfrt2plzgwfdae2ucpxtwzh4` |
+| DynamoDB table suffix | `-vdsfrt2plzgwfdae2ucpxtwzh4-NONE` |
 
-The iOS app automatically selects the correct backend based on build configuration:
-- **Debug builds** (Simulator, development) → Sandbox backend
-- **Release builds** (Archive, TestFlight, App Store) → Production backend
+The app has **2 users** because it is an internal beta. A second environment cost
+money, went stale constantly, and every drift between the two schemas cost a
+debugging session. It was removed on 2026-08-26 along with the `#if DEBUG` branch
+in `AmplifyService.swift`.
 
-This is controlled in `AmplifyService.swift` via `#if DEBUG`.
+**Do not propose creating, deploying to, or "testing first on" a sandbox.**
+Schema changes go straight to prod by pushing `main`.
+
+Debug builds write to real household data. That is intentional — there is no
+"safe" environment, so think before running anything destructive.
+
+Dead artifacts that still exist and should be ignored: `amplify_outputs_dev.json`,
+the `nktezw3d6vcl5jbk7n44jku4e4` API, and its DynamoDB tables.
 
 ### Amplify Console
 
@@ -180,9 +201,6 @@ This is controlled in `AmplifyService.swift` via `#if DEBUG`.
 ### Deployment Commands
 
 ```bash
-# Development (sandbox) - local watch mode
-npx ampx sandbox
-
 # Fetch latest production config after Amplify Console deployment
 AWS_PROFILE=mine npx ampx generate outputs --app-id d2rsreno8nimo5 --branch main
 
@@ -192,9 +210,8 @@ git push origin main  # Amplify Console auto-deploys on push
 
 ### Important Notes
 
-- **Separate user pools**: Users must register separately in prod (different Cognito pool)
-- **Separate databases**: Prod DynamoDB tables are independent from sandbox
 - **Config files are gitignored**: `amplify_outputs*.json` files are in `.gitignore`
+- **No staging step**: pushing `main` deploys the live backend the phones use
 
 ### Lambda Secrets
 
@@ -215,7 +232,6 @@ Where to set:
   ```
   Read back with `aws ssm get-parameter --name ... --with-decryption`. Picked up on next Lambda cold start.
 - **Production (UI)**: Amplify Console → App → `main` branch → App settings → Secrets.
-- **Sandbox (local dev only)**: `AWS_PROFILE=mine npx ampx sandbox secret set NAME` — only applies while `npx ampx sandbox` is running.
 
 ## Release Order — CRITICAL
 

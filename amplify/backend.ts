@@ -37,6 +37,21 @@ const backend = defineBackend({
   adminMcpFunction,
 });
 
+// Password policy: 6 characters, no complexity rules. Cognito's own floor is 6,
+// so this is as permissive as AWS allows. Deliberate — this is a 2-user internal
+// beta and the default policy (8 + upper + lower + number + symbol) was pure
+// friction on a shopping list. Set here because defineAuth doesn't expose it.
+backend.auth.resources.cfnResources.cfnUserPool.policies = {
+  passwordPolicy: {
+    minimumLength: 6,
+    requireUppercase: false,
+    requireLowercase: false,
+    requireNumbers: false,
+    requireSymbols: false,
+    temporaryPasswordValidityDays: 7,
+  },
+};
+
 // Grant Lambda functions access to DynamoDB tables
 const groceryItemTable = backend.data.resources.tables['GroceryItem'];
 const householdTable = backend.data.resources.tables['Household'];

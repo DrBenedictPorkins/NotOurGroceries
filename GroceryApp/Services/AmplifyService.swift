@@ -42,16 +42,12 @@ class AmplifyService: ObservableObject {
             try Amplify.add(plugin: AWSAPIPlugin(modelRegistration: AmplifyModels()))
             try Amplify.add(plugin: AWSS3StoragePlugin())
 
-            // Debug/Simulator builds talk to the sandbox backend; Release (Archive,
-            // TestFlight, App Store) talks to production. Both config files are
-            // bundled as resources, so this is purely a build-configuration switch.
-            #if DEBUG
-            try Amplify.configure(with: .resource(named: "amplify_outputs_dev"))
-            print("Amplify configured for DEVELOPMENT (sandbox)")
-            #else
+            // One backend, all build configurations. With two users on an internal
+            // beta, a separate sandbox bought nothing but a second schema to keep
+            // in sync — and every drift between the two cost a debugging session.
+            // Debug builds write to the same data the phones use; that's the point.
             try Amplify.configure(with: .resource(named: "amplify_outputs_prod"))
             print("Amplify configured for PRODUCTION")
-            #endif
 
             isConfigured = true
 

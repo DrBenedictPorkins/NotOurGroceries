@@ -46,7 +46,7 @@ struct StoreSelectionSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .sheet(isPresented: $showCreateStore) {
@@ -191,19 +191,19 @@ struct StoreSelectionSheet: View {
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
+                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(
                                 LinearGradient(
-                                    colors: [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonCyan.opacity(0.3)],
+                                    colors: [DesignSystem.Colors.dillGreen, DesignSystem.Colors.dillGreen.opacity(0.3)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
                                 lineWidth: 1.5
                             )
                     )
-                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8, x: 0, y: 4)
+                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8, x: 0, y: 4)
             )
         }
         .padding(.bottom, 20)
@@ -232,7 +232,7 @@ private struct StoreRow: View {
                     if isLoading {
                         ProgressView()
                             .scaleEffect(0.8)
-                            .tint(DesignSystem.Colors.neonCyan)
+                            .tint(DesignSystem.Colors.dillGreen)
                     } else {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))

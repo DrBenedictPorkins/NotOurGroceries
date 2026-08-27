@@ -9,7 +9,7 @@ struct UserColorBadge: View {
     var size: CGFloat = 50
 
     private var profileColor: Color {
-        ProfileColor(rawValue: colorKey)?.color ?? DesignSystem.Colors.neonCyan
+        ProfileColor(rawValue: colorKey)?.color ?? DesignSystem.Colors.dillGreen
     }
 
     var body: some View {
@@ -46,7 +46,7 @@ struct UserColorDot: View {
     var size: CGFloat = 24
 
     private var profileColor: Color {
-        ProfileColor(rawValue: colorKey)?.color ?? DesignSystem.Colors.neonCyan
+        ProfileColor(rawValue: colorKey)?.color ?? DesignSystem.Colors.dillGreen
     }
 
     var body: some View {

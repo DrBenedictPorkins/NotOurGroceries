@@ -119,7 +119,7 @@ struct AdHocModeView: View {
                                         Image(systemName: isMainListExpanded ? "chevron.up" : "chevron.down")
                                             .font(.system(size: 13, weight: .semibold))
                                     }
-                                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                                    .foregroundColor(DesignSystem.Colors.dillGreen)
                                 }
                                 .buttonStyle(.plain)
 
@@ -137,13 +137,13 @@ struct AdHocModeView: View {
                                 } label: {
                                     Text("Add all")
                                         .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                                        .foregroundColor(DesignSystem.Colors.dillGreen)
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 5)
                                         .background(
                                             Capsule()
-                                                .fill(DesignSystem.Colors.neonCyan.opacity(0.12))
-                                                .overlay(Capsule().stroke(DesignSystem.Colors.neonCyan.opacity(0.4), lineWidth: 1))
+                                                .fill(DesignSystem.Colors.dillGreen.opacity(0.12))
+                                                .overlay(Capsule().stroke(DesignSystem.Colors.dillGreen.opacity(0.4), lineWidth: 1))
                                         )
                                 }
                                 .buttonStyle(.plain)
@@ -185,7 +185,7 @@ struct AdHocModeView: View {
                                     Image(systemName: isSuggestionsExpanded ? "chevron.up" : "chevron.down")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
-                                .foregroundColor(DesignSystem.Colors.neonYellow)
+                                .foregroundColor(DesignSystem.Colors.neonAmber)
                             }
                             .buttonStyle(.plain)
                             .listRowBackground(Color.clear)

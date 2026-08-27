@@ -49,7 +49,7 @@ struct ForgotPasswordView: View {
             Image(systemName: "key.fill")
                 .font(.system(size: 60))
                 .foregroundStyle(DesignSystem.Colors.accentGradient)
-                .neonGlow(color: DesignSystem.Colors.neonCyan)
+                .neonGlow(color: DesignSystem.Colors.dillGreen)
 
             Text("Reset Password")
                 .font(.system(size: 28, weight: .bold))
@@ -114,7 +114,7 @@ struct ForgotPasswordView: View {
                 onDismiss()
             }
             .font(.system(size: 14, weight: .medium))
-            .foregroundColor(DesignSystem.Colors.neonCyan)
+            .foregroundColor(DesignSystem.Colors.dillGreen)
         }
         .padding(24)
         .background(glassCard)
@@ -192,7 +192,7 @@ struct ForgotPasswordView: View {
                     requestResetCode()
                 }
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
                 .disabled(isLoading)
 
                 Text("|")
@@ -202,7 +202,7 @@ struct ForgotPasswordView: View {
                     onDismiss()
                 }
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
             }
         }
         .padding(24)

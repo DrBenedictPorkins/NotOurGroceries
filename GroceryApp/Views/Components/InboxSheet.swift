@@ -224,15 +224,15 @@ struct RequestRow: View {
     private func quantityBadge(_ quantity: String) -> some View {
         Text(quantity)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(DesignSystem.Colors.neonCyan)
+            .foregroundColor(DesignSystem.Colors.dillGreen)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
                 Capsule()
-                    .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
+                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
                     .overlay(
                         Capsule()
-                            .stroke(DesignSystem.Colors.neonCyan.opacity(0.3), lineWidth: 1)
+                            .stroke(DesignSystem.Colors.dillGreen.opacity(0.3), lineWidth: 1)
                     )
             )
     }
@@ -375,7 +375,7 @@ struct InboxBadge: View {
         ZStack(alignment: .topTrailing) {
             Image(systemName: "tray.fill")
                 .font(.system(size: 28))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             InboxBadge(count: 3)
                 .offset(x: 8, y: -8)

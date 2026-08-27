@@ -145,19 +145,19 @@ struct StoresView: View {
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
+                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(
                                 LinearGradient(
-                                    colors: [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonCyan.opacity(0.3)],
+                                    colors: [DesignSystem.Colors.dillGreen, DesignSystem.Colors.dillGreen.opacity(0.3)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
                                 lineWidth: 1.5
                             )
                     )
-                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8, x: 0, y: 4)
+                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8, x: 0, y: 4)
             )
         }
         .padding(.bottom, 20)

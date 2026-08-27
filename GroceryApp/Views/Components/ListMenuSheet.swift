@@ -42,7 +42,7 @@ struct ListMenuSheet: View {
                     section("Start shopping") {
                         row(
                             icon: "cart.fill",
-                            tint: DesignSystem.Colors.neonCyan,
+                            tint: DesignSystem.Colors.dillGreen,
                             title: "At Store",
                             detail: "Full trip, sorted by aisle. Everyone sees you're shopping.",
                             disabled: !canStartShopping
@@ -64,7 +64,7 @@ struct ListMenuSheet: View {
 
                         row(
                             icon: "doc.plaintext.fill",
-                            tint: DesignSystem.Colors.neonYellow,
+                            tint: DesignSystem.Colors.neonAmber,
                             title: paperMode.isActive ? "On paper list" : "Paper List",
                             detail: paperMode.isActive
                                 ? "Not talking to the server. Tap the banner to reconnect."

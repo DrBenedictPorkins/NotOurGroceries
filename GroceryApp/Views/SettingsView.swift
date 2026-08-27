@@ -169,7 +169,7 @@ struct SettingsView: View {
         VStack(spacing: 16) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 Text("About")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(DesignSystem.Colors.textPrimary)

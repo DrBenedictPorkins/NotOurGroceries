@@ -52,7 +52,7 @@ struct BatchAisleMappingSheet: View {
                         onCancel()
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .sheet(item: $selectedItemForDetail) { item in
@@ -439,7 +439,7 @@ private struct BatchMappingResultRow: View {
 
                 Text(result.suggestedAisle)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
             }
 
             // Reasoning

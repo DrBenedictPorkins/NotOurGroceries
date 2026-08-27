@@ -110,7 +110,7 @@ struct StatusSubtitleView: View {
     /// Color for the user name - cyan for other users to catch attention
     private var userNameColor: Color {
         if isOtherUser {
-            return DesignSystem.Colors.neonCyan
+            return DesignSystem.Colors.dillGreen
         }
         return notificationType.accentColor
     }

@@ -142,7 +142,7 @@ struct HouseholdSetupView: View {
         VStack(spacing: 16) {
             Image(systemName: "house.fill")
                 .font(.system(size: 40))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             Text("Create a new household")
                 .font(.system(size: 16, weight: .semibold))
@@ -162,7 +162,7 @@ struct HouseholdSetupView: View {
 
                 if isCheckingName {
                     ProgressView()
-                        .tint(DesignSystem.Colors.neonCyan)
+                        .tint(DesignSystem.Colors.dillGreen)
                 }
             }
             .onChange(of: householdName) { newValue in

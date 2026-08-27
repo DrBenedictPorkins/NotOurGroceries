@@ -78,7 +78,7 @@ async function sendEmail(recipientEmail: string, senderName: string, householdNa
     <body>
       <div class="container">
         <h1>You're invited to join a household!</h1>
-        <p><strong>${senderName}</strong> has invited you to join the <strong>"${householdName}"</strong> household on Got Dill.</p>
+        <p><strong>${senderName}</strong> has invited you to join the <strong>"${householdName}"</strong> household on Got Dill?</p>
 
         <p>Use this invite code to join:</p>
         <div class="code">${inviteCode}</div>
@@ -95,7 +95,7 @@ async function sendEmail(recipientEmail: string, senderName: string, householdNa
 
         <div class="footer">
           <p>If you didn't expect this invitation, you can safely ignore this email.</p>
-          <p>Got Dill - Shared shopping lists for households</p>
+          <p>Got Dill? - Shared shopping lists for households</p>
         </div>
       </div>
     </body>
@@ -105,7 +105,7 @@ async function sendEmail(recipientEmail: string, senderName: string, householdNa
   const textBody = `
 You're invited to join a household!
 
-${senderName} has invited you to join the "${householdName}" household on Got Dill.
+${senderName} has invited you to join the "${householdName}" household on Got Dill?
 
 Use this invite code to join: ${inviteCode}
 
@@ -127,7 +127,7 @@ If you didn't expect this invitation, you can safely ignore this email.
     },
     Message: {
       Subject: {
-        Data: `${senderName} invited you to join "${householdName}" on Got Dill`,
+        Data: `${senderName} invited you to join "${householdName}" on Got Dill?`,
       },
       Body: {
         Html: { Data: htmlBody },

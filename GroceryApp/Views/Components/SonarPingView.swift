@@ -5,7 +5,7 @@ import SwiftUI
 struct SonarPingView: View {
     let secondsUntilNextPoll: Int
     let progress: Double // 0.0 to 1.0
-    var accentColor: Color = DesignSystem.Colors.neonCyan
+    var accentColor: Color = DesignSystem.Colors.dillGreen
     var phase: Int = 1 // 1 = OCR (discovering), 2 = Matching (capturing), 3 = Applying (converging)
     var itemsFound: Int = 0 // Number of items discovered (for dot count)
 
@@ -456,7 +456,7 @@ struct CompactSonarView: View {
     @State private var ringScale: CGFloat = 0.5
     @State private var ringOpacity: Double = 0.8
 
-    private let sonarColor = DesignSystem.Colors.neonCyan
+    private let sonarColor = DesignSystem.Colors.dillGreen
 
     var body: some View {
         HStack(spacing: 8) {
@@ -507,7 +507,7 @@ struct CompactSonarView: View {
         SonarPingView(
             secondsUntilNextPoll: 2,
             progress: 0.3,
-            accentColor: DesignSystem.Colors.neonCyan,
+            accentColor: DesignSystem.Colors.dillGreen,
             phase: 1,
             itemsFound: 50
         )

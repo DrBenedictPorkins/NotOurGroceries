@@ -8,16 +8,16 @@ struct DesignSystem {
     // MARK: - Colors
     struct Colors {
         // Base colors
-        static let background = Color(hex: "0A0E1A")
-        static let secondaryBackground = Color(hex: "12161F")
-        static let cardBackground = Color(hex: "1A1F2E")
+        static let background = Color(hex: "0A100B")
+        static let secondaryBackground = Color(hex: "121810")
+        static let cardBackground = Color(hex: "18211A")
 
         // Metallic gradients
         static let metallicGradient = LinearGradient(
             colors: [
-                Color(hex: "2C3E50"),
-                Color(hex: "34495E"),
-                Color(hex: "2C3E50")
+                Color(hex: "2C4A32"),
+                Color(hex: "35573C"),
+                Color(hex: "2C4A32")
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -25,24 +25,24 @@ struct DesignSystem {
 
         static let darkMetallicGradient = LinearGradient(
             colors: [
-                Color(hex: "1A1F2E"),
-                Color(hex: "2C3E50"),
-                Color(hex: "1A1F2E")
+                Color(hex: "18211A"),
+                Color(hex: "2C4A32"),
+                Color(hex: "18211A")
             ],
             startPoint: .top,
             endPoint: .bottom
         )
 
         // Neon accents
-        static let neonCyan = Color(hex: "00F5FF")
+        static let dillGreen = Color(hex: "8CFF45")
         static let neonPurple = Color(hex: "B026FF")
         static let neonPink = Color(hex: "FF00E5")
         static let neonBlue = Color(hex: "0080FF")
-        static let neonYellow = Color(hex: "FFD60A")
+        static let neonAmber = Color(hex: "FFA62B")
 
         // Gradient accents
         static let accentGradient = LinearGradient(
-            colors: [neonCyan, neonPurple],
+            colors: [dillGreen, neonPurple],
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -59,7 +59,7 @@ struct DesignSystem {
         static let textTertiary = Color.white.opacity(0.5)
 
         // Status colors
-        static let success = Color(hex: "00FF88")
+        static let success = Color(hex: "00E0A4")
         static let warning = Color(hex: "FFB800")
         static let error = Color(hex: "FF3B30")
 
@@ -107,7 +107,7 @@ struct DesignSystem {
         static let medium = Color.black.opacity(0.2)
         static let large = Color.black.opacity(0.3)
 
-        static let neonCyanGlow = Color(hex: "00F5FF").opacity(0.3)
+        static let dillGreenGlow = Color(hex: "8CFF45").opacity(0.35)
         static let neonPurpleGlow = Color(hex: "B026FF").opacity(0.3)
     }
 }
@@ -219,9 +219,9 @@ struct DesignSystem_Previews: PreviewProvider {
 
             HStack(spacing: DesignSystem.Spacing.md) {
                 Circle()
-                    .fill(DesignSystem.Colors.neonCyan)
+                    .fill(DesignSystem.Colors.dillGreen)
                     .frame(width: 40, height: 40)
-                    .neonGlow(color: DesignSystem.Colors.neonCyan)
+                    .neonGlow(color: DesignSystem.Colors.dillGreen)
 
                 Circle()
                     .fill(DesignSystem.Colors.neonPurple)

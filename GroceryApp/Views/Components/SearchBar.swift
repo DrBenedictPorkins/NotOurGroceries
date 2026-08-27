@@ -73,7 +73,7 @@ struct SearchBar: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(isListening
                                              ? DesignSystem.Colors.neonPink
-                                             : DesignSystem.Colors.neonCyan)
+                                             : DesignSystem.Colors.dillGreen)
                             .symbolEffect(.variableColor, isActive: isListening)
                     }
                     .buttonStyle(.plain)

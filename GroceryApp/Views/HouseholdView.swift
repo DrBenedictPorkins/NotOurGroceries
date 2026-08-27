@@ -162,7 +162,7 @@ struct HouseholdView: View {
                     Text("Switch Household")
                 }
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
             }
 
             // Leave household option
@@ -185,10 +185,10 @@ struct HouseholdView: View {
             HStack(spacing: 6) {
                 Image(systemName: "person.3.fill")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 Text("MEMBERS")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                     .tracking(1.2)
             }
             .padding(.horizontal, 4)
@@ -242,7 +242,7 @@ struct HouseholdView: View {
                     if isCurrentUser {
                         Text("(you)")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.neonCyan)
+                            .foregroundColor(DesignSystem.Colors.dillGreen)
                     }
                 }
 
@@ -296,7 +296,7 @@ struct HouseholdView: View {
                 if let success = successMessage {
                     Text(success)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
                         .multilineTextAlignment(.center)
                 }
 
@@ -333,7 +333,7 @@ struct HouseholdView: View {
         VStack(spacing: 16) {
             Image(systemName: "house.fill")
                 .font(.system(size: 40))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             Text("Create a new household")
                 .font(.system(size: 16, weight: .semibold))
@@ -535,7 +535,7 @@ struct JoinHouseholdSheet: View {
                     Button("Cancel") {
                         isPresented = false
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .alert("Leave Current Household?", isPresented: $showWarning) {

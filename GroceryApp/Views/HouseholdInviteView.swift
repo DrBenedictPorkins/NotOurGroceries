@@ -47,7 +47,7 @@ struct HouseholdInviteView: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
         }
@@ -61,7 +61,7 @@ struct HouseholdInviteView: View {
     private var loadingView: some View {
         VStack(spacing: 16) {
             ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.neonCyan))
+                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.dillGreen))
                 .scaleEffect(1.5)
             Text("Loading household details...")
                 .font(.system(size: 14, weight: .medium))
@@ -89,7 +89,7 @@ struct HouseholdInviteView: View {
                 }
             }
             .font(.system(size: 14, weight: .medium))
-            .foregroundColor(DesignSystem.Colors.neonCyan)
+            .foregroundColor(DesignSystem.Colors.dillGreen)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
@@ -169,15 +169,15 @@ struct HouseholdInviteView: View {
                         Text("Copy")
                             .font(.system(size: 12, weight: .medium))
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(DesignSystem.Colors.neonCyan.opacity(0.1))
+                            .fill(DesignSystem.Colors.dillGreen.opacity(0.1))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(DesignSystem.Colors.neonCyan.opacity(0.3), lineWidth: 1)
+                                    .stroke(DesignSystem.Colors.dillGreen.opacity(0.3), lineWidth: 1)
                             )
                     )
                 }
@@ -344,7 +344,7 @@ struct HouseholdInviteView: View {
 
     private func shareMessage(for details: AmplifyService.HouseholdDetails) -> String {
         """
-        Join my household "\(details.name)" on \(AppIdentity.name)!
+        \(AppIdentity.name) — join my household "\(details.name)".
 
         Use this invite code: \(details.inviteCode)
 

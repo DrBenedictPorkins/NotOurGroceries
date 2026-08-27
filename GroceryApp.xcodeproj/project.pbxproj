@@ -712,7 +712,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill (Dev)";
+				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill? (Dev)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan store aisle directories for automatic product mapping.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone so you can dictate grocery items into the bulk import list.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library to select store aisle directory images.";
@@ -749,7 +749,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill";
+				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill?";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan store aisle directories for automatic product mapping.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone so you can dictate grocery items into the bulk import list.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library to select store aisle directory images.";

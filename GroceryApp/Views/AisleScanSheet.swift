@@ -66,7 +66,7 @@ struct AisleScanSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .sheet(isPresented: $isShowingCamera) {
@@ -123,7 +123,7 @@ struct AisleScanSheet: View {
             // Icon
             Image(systemName: "doc.viewfinder")
                 .font(.system(size: 64, weight: .thin))
-                .foregroundColor(DesignSystem.Colors.neonCyan.opacity(0.7))
+                .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.7))
 
             // Instructions
             VStack(spacing: 8) {
@@ -158,13 +158,13 @@ struct AisleScanSheet: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(DesignSystem.Colors.neonCyan.opacity(0.2))
+                            .fill(DesignSystem.Colors.dillGreen.opacity(0.2))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .stroke(DesignSystem.Colors.neonCyan, lineWidth: 1.5)
+                                    .stroke(DesignSystem.Colors.dillGreen, lineWidth: 1.5)
                             )
                     )
-                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8)
+                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8)
                 }
 
                 // Photo library picker - supports multiple selection
@@ -268,7 +268,7 @@ struct AisleScanSheet: View {
                 }) {
                     Text("Clear All")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .padding(.horizontal, 20)
@@ -318,7 +318,7 @@ struct AisleScanSheet: View {
                             Text("Add More")
                                 .font(.system(size: 12, weight: .medium))
                         }
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
                         .frame(width: 120, height: 160)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
@@ -328,7 +328,7 @@ struct AisleScanSheet: View {
                                         .strokeBorder(
                                             style: StrokeStyle(lineWidth: 2, dash: [8, 4])
                                         )
-                                        .foregroundColor(DesignSystem.Colors.neonCyan.opacity(0.5))
+                                        .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.5))
                                 )
                         )
                     }
@@ -360,7 +360,7 @@ struct AisleScanSheet: View {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(DesignSystem.Colors.accentGradient)
                     )
-                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8)
+                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8)
                 }
 
                 // Take another photo
@@ -388,13 +388,13 @@ struct AisleScanSheet: View {
     /// Color for current phase - changes to show visual progress
     private var phaseColor: Color {
         guard let phase = extractionService.currentJob?.phase else {
-            return DesignSystem.Colors.neonCyan
+            return DesignSystem.Colors.dillGreen
         }
         switch phase {
-        case 1: return DesignSystem.Colors.neonCyan    // OCR - Cyan
+        case 1: return DesignSystem.Colors.dillGreen    // OCR - Cyan
         case 2: return DesignSystem.Colors.neonPurple  // Matching - Purple
         case 3: return DesignSystem.Colors.success     // Applying - Green
-        default: return DesignSystem.Colors.neonCyan
+        default: return DesignSystem.Colors.dillGreen
         }
     }
 
@@ -537,10 +537,10 @@ struct AisleScanSheet: View {
     /// Returns color for a specific phase number (for dot indicators)
     private func colorForPhase(_ phase: Int) -> Color {
         switch phase {
-        case 1: return DesignSystem.Colors.neonCyan
+        case 1: return DesignSystem.Colors.dillGreen
         case 2: return DesignSystem.Colors.neonPurple
         case 3: return DesignSystem.Colors.success
-        default: return DesignSystem.Colors.neonCyan
+        default: return DesignSystem.Colors.dillGreen
         }
     }
 
@@ -590,7 +590,7 @@ struct AisleScanSheet: View {
                         Text("Add Aisles Manually Instead")
                             .font(.system(size: 15, weight: .medium))
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
                 .padding(.top, 8)
             }
@@ -606,7 +606,7 @@ struct AisleScanSheet: View {
             // Icon
             Image(systemName: "list.number")
                 .font(.system(size: 64, weight: .thin))
-                .foregroundColor(DesignSystem.Colors.neonCyan.opacity(0.7))
+                .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.7))
 
             // Instructions
             VStack(spacing: 8) {
@@ -636,7 +636,7 @@ struct AisleScanSheet: View {
                     }) {
                         Image(systemName: "minus.circle.fill")
                             .font(.system(size: 36))
-                            .foregroundColor(manualAisleCount > 1 ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textTertiary)
+                            .foregroundColor(manualAisleCount > 1 ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textTertiary)
                     }
                     .disabled(manualAisleCount <= 1)
 
@@ -653,7 +653,7 @@ struct AisleScanSheet: View {
                     }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 36))
-                            .foregroundColor(manualAisleCount < 30 ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textTertiary)
+                            .foregroundColor(manualAisleCount < 30 ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textTertiary)
                     }
                     .disabled(manualAisleCount >= 30)
                 }
@@ -674,12 +674,12 @@ struct AisleScanSheet: View {
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(manualAisleCount == count
-                                        ? DesignSystem.Colors.neonCyan.opacity(0.3)
+                                        ? DesignSystem.Colors.dillGreen.opacity(0.3)
                                         : DesignSystem.Colors.glassBackground)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
                                             .stroke(manualAisleCount == count
-                                                ? DesignSystem.Colors.neonCyan
+                                                ? DesignSystem.Colors.dillGreen
                                                 : DesignSystem.Colors.glassBorder, lineWidth: 1)
                                     )
                             )
@@ -715,7 +715,7 @@ struct AisleScanSheet: View {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(DesignSystem.Colors.accentGradient)
                     )
-                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8)
+                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8)
                 }
                 .disabled(isCreatingAisles)
 
@@ -799,7 +799,7 @@ struct AisleScanSheet: View {
             // Job stats
             VStack(spacing: 8) {
                 if let entries = job.entriesExtracted, entries > 0 {
-                    statRow(icon: "doc.text.viewfinder", color: DesignSystem.Colors.neonCyan, label: "Aisle entries found", value: entries)
+                    statRow(icon: "doc.text.viewfinder", color: DesignSystem.Colors.dillGreen, label: "Aisle entries found", value: entries)
                 }
 
                 if let created = job.mappingsCreated, created > 0 {
@@ -832,7 +832,7 @@ struct AisleScanSheet: View {
                         RoundedRectangle(cornerRadius: 16)
                             .fill(DesignSystem.Colors.accentGradient)
                     )
-                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8)
+                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 32)

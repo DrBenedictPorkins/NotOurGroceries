@@ -7,22 +7,33 @@ import Foundation
 enum AppIdentity {
 
     /// The name. Matches CFBundleDisplayName and the App Store listing.
-    static let name = "Got Dill"
+    ///
+    /// The question mark is part of the name, the way it is in "Got Milk?" —
+    /// without it the joke doesn't land, it just reads as a statement about
+    /// herbs. Bundle identifiers, file paths and table names never see it.
+    static let name = "Got Dill?"
+
+    /// The name for use *inside* a sentence, where a trailing "?" would read as
+    /// the end of the sentence ("open the Got Dill? app"). Same rule newspapers
+    /// use for Yahoo! — carry the punctuation when the name stands alone or
+    /// closes the sentence, drop it mid-clause.
+    static let nameInSentence = "Got Dill"
 
     /// Rotating subtitles for the splash and sign-in screens. The name is a
-    /// straight line; these are the punchlines. Add freely — nothing depends on
-    /// the count or the order.
+    /// straight line; these are the punchlines — and they're questions too, so
+    /// the whole screen reads in one voice. Add freely — nothing depends on the
+    /// count or the order.
     static let taglines = [
-        "Honey, get dill",
+        "Honey, get dill?",
         "Got Dill, Hon?",
-        "Fresh dill, please",
-        "We're out of dill",
-        "Dill with it",
-        "A whole dill bunch",
-        "Big dill energy",
-        "Some kind of dill",
-        "No dill, no deal",
-        "Wilted dill, sad night"
+        "Fresh dill, maybe?",
+        "We out of dill?",
+        "Dill with it?",
+        "A whole dill bunch?",
+        "Big dill energy?",
+        "Some kind of dill?",
+        "No dill, no deal?",
+        "Wilted dill, sad night?"
     ]
 
     /// A different one each launch. Deliberately random rather than sequential —

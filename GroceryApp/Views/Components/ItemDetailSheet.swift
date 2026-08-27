@@ -155,7 +155,7 @@ struct ItemDetailSheet: View {
                     Button("Done") {
                         saveNotesAndDismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .onAppear {
@@ -260,7 +260,7 @@ struct ItemDetailSheet: View {
             if item.lockedBy != nil {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(DesignSystem.Colors.neonYellow)
+                    .foregroundColor(DesignSystem.Colors.neonAmber)
             }
 
             Spacer()
@@ -284,7 +284,7 @@ struct ItemDetailSheet: View {
                 metadataRow(
                     label: "Locked by",
                     value: UserCache.shared.displayName(for: lockedBy),
-                    valueColor: DesignSystem.Colors.neonYellow
+                    valueColor: DesignSystem.Colors.neonAmber
                 )
             }
 
@@ -292,13 +292,13 @@ struct ItemDetailSheet: View {
                 metadataRow(
                     label: "Status",
                     value: "In Cart",
-                    valueColor: DesignSystem.Colors.neonCyan
+                    valueColor: DesignSystem.Colors.dillGreen
                 )
             } else if item.status == .suggestion {
                 metadataRow(
                     label: "Status",
                     value: "Suggestion",
-                    valueColor: DesignSystem.Colors.neonYellow
+                    valueColor: DesignSystem.Colors.neonAmber
                 )
             }
         }
@@ -359,7 +359,7 @@ struct ItemDetailSheet: View {
                     } label: {
                         Text("Save")
                             .font(DesignSystem.Typography.subheadline)
-                            .foregroundColor(DesignSystem.Colors.neonCyan)
+                            .foregroundColor(DesignSystem.Colors.dillGreen)
                     }
                 }
 
@@ -495,7 +495,7 @@ struct ItemDetailSheet: View {
             // Suggested aisle
             HStack(spacing: 8) {
                 Image(systemName: "mappin.circle.fill")
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 Text("Aisle \(cleanAisleName(result.suggestedAisle))")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
@@ -762,7 +762,7 @@ struct ItemDetailSheet: View {
                         .foregroundColor(DesignSystem.Colors.textTertiary)
                 }
             }
-            .tint(DesignSystem.Colors.neonCyan)
+            .tint(DesignSystem.Colors.dillGreen)
             .disabled(notesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .opacity(notesText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
         }
@@ -786,14 +786,14 @@ struct ItemDetailSheet: View {
                     HStack(spacing: 6) {
                         if isUploadingImage {
                             ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.neonCyan))
+                                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.dillGreen))
                                 .scaleEffect(0.8)
                         } else {
                             Image(systemName: "camera.fill")
                                 .font(.system(size: 14))
                         }
                     }
-                    .foregroundColor(currentImages.count >= 5 ? DesignSystem.Colors.textTertiary : DesignSystem.Colors.neonCyan)
+                    .foregroundColor(currentImages.count >= 5 ? DesignSystem.Colors.textTertiary : DesignSystem.Colors.dillGreen)
                     .frame(width: 36, height: 36)
                     .background(
                         Circle()
@@ -846,7 +846,7 @@ struct ItemDetailSheet: View {
             // Upload progress overlay
             VStack(spacing: DesignSystem.Spacing.sm) {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.neonCyan))
+                    .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.dillGreen))
                     .scaleEffect(1.5)
 
                 Text("Uploading...")
@@ -861,7 +861,7 @@ struct ItemDetailSheet: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                .stroke(DesignSystem.Colors.neonCyan.opacity(0.5), lineWidth: 2)
+                .stroke(DesignSystem.Colors.dillGreen.opacity(0.5), lineWidth: 2)
         )
         .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
     }
@@ -898,7 +898,7 @@ struct ItemDetailSheet: View {
                 HStack(spacing: DesignSystem.Spacing.sm) {
                     Image(systemName: "person.circle.fill")
                         .font(.system(size: 12))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
 
                     Text(UserCache.shared.displayName(for: itemImage.uploadedBy))
                         .font(DesignSystem.Typography.caption)

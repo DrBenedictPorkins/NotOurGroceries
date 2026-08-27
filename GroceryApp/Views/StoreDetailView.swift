@@ -92,7 +92,7 @@ struct StoreDetailView: View {
                             await saveChanges()
                         }
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
         }
@@ -190,12 +190,12 @@ struct StoreDetailView: View {
                     // Aisle icon
                     ZStack {
                         Circle()
-                            .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
+                            .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
                             .frame(width: 48, height: 48)
 
                         Image(systemName: "list.bullet.indent")
                             .font(.system(size: 20, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.neonCyan)
+                            .foregroundColor(DesignSystem.Colors.dillGreen)
                     }
 
                     // Content
@@ -246,14 +246,14 @@ struct StoreDetailView: View {
                     ZStack {
                         Circle()
                             .fill(hasActiveExtractionJob ?
-                                  DesignSystem.Colors.neonCyan.opacity(0.15) :
+                                  DesignSystem.Colors.dillGreen.opacity(0.15) :
                                   DesignSystem.Colors.neonPurple.opacity(0.15))
                             .frame(width: 48, height: 48)
 
                         if hasActiveExtractionJob {
                             ProgressView()
                                 .scaleEffect(0.8)
-                                .tint(DesignSystem.Colors.neonCyan)
+                                .tint(DesignSystem.Colors.dillGreen)
                         } else {
                             Image(systemName: "doc.viewfinder")
                                 .font(.system(size: 20, weight: .medium))
@@ -279,9 +279,9 @@ struct StoreDetailView: View {
                     // Arrow or pulse indicator
                     if hasActiveExtractionJob {
                         Circle()
-                            .fill(DesignSystem.Colors.neonCyan)
+                            .fill(DesignSystem.Colors.dillGreen)
                             .frame(width: 12, height: 12)
-                            .shadow(color: DesignSystem.Colors.neonCyan.opacity(0.5), radius: 4)
+                            .shadow(color: DesignSystem.Colors.dillGreen.opacity(0.5), radius: 4)
                     } else {
                         Image(systemName: "arrow.right.circle.fill")
                             .font(.system(size: 24))
@@ -295,7 +295,7 @@ struct StoreDetailView: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(hasActiveExtractionJob ?
-                                        DesignSystem.Colors.neonCyan.opacity(0.3) :
+                                        DesignSystem.Colors.dillGreen.opacity(0.3) :
                                         DesignSystem.Colors.neonPurple.opacity(0.3), lineWidth: 1)
                         )
                 )
@@ -407,11 +407,11 @@ struct StoreDetailView: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             Text(title)
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
                 .tracking(1.0)
         }
     }

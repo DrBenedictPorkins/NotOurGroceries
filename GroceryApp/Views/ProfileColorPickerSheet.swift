@@ -39,7 +39,7 @@ struct ProfileColorPickerSheet: View {
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                     .fontWeight(.semibold)
                 }
             }
@@ -178,12 +178,12 @@ private struct PatternOption: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                isSelected ? DesignSystem.Colors.neonCyan : Color.white.opacity(0.1),
+                                isSelected ? DesignSystem.Colors.dillGreen : Color.white.opacity(0.1),
                                 lineWidth: isSelected ? 2 : 1
                             )
                     }
                     .shadow(
-                        color: isSelected ? DesignSystem.Colors.neonCyan.opacity(0.3) : .clear,
+                        color: isSelected ? DesignSystem.Colors.dillGreen.opacity(0.3) : .clear,
                         radius: 8,
                         x: 0,
                         y: 4
@@ -191,7 +191,7 @@ private struct PatternOption: View {
 
                 Text(pattern.displayName)
                     .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textSecondary)
+                    .foregroundColor(isSelected ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textSecondary)
             }
         }
         .buttonStyle(.plain)

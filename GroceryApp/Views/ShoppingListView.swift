@@ -115,12 +115,12 @@ struct ShoppingListView: View {
                                         sectionHeader(
                                             title: "IN CART (\(viewModel.inCart.count))",
                                             icon: "checkmark.circle.fill",
-                                            color: DesignSystem.Colors.neonCyan
+                                            color: DesignSystem.Colors.dillGreen
                                         )
                                         Spacer()
                                         Image(systemName: isInCartExpanded ? "chevron.up" : "chevron.down")
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(DesignSystem.Colors.neonCyan)
+                                            .foregroundColor(DesignSystem.Colors.dillGreen)
                                     }
                                 }
                                 .buttonStyle(.plain)
@@ -162,12 +162,12 @@ struct ShoppingListView: View {
                                         sectionHeader(
                                             title: "SUGGESTIONS (\(viewModel.suggestions.count))",
                                             icon: "lightbulb.fill",
-                                            color: DesignSystem.Colors.neonYellow
+                                            color: DesignSystem.Colors.neonAmber
                                         )
                                         Spacer()
                                         Image(systemName: isCrossedOffExpanded ? "chevron.up" : "chevron.down")
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(DesignSystem.Colors.neonYellow)
+                                            .foregroundColor(DesignSystem.Colors.neonAmber)
                                     }
                                 }
                                 .buttonStyle(.plain)
@@ -341,10 +341,10 @@ struct ShoppingListView: View {
                 .padding(.vertical, 6)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.neonCyan.opacity(hintOn ? 0.16 : 0))
+                        .fill(DesignSystem.Colors.dillGreen.opacity(hintOn ? 0.16 : 0))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(DesignSystem.Colors.neonCyan.opacity(hintOn ? 0.5 : 0), lineWidth: 1.5)
+                                .stroke(DesignSystem.Colors.dillGreen.opacity(hintOn ? 0.5 : 0), lineWidth: 1.5)
                         )
                 )
                 .contentShape(Rectangle())
@@ -387,19 +387,19 @@ struct ShoppingListView: View {
             .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
+                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
                     .overlay(
                         Capsule().stroke(
                             LinearGradient(
-                                colors: [DesignSystem.Colors.neonCyan,
-                                         DesignSystem.Colors.neonCyan.opacity(0.3)],
+                                colors: [DesignSystem.Colors.dillGreen,
+                                         DesignSystem.Colors.dillGreen.opacity(0.3)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
                             lineWidth: 1.5
                         )
                     )
-                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8, x: 0, y: 4)
+                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8, x: 0, y: 4)
             )
         }
     }
@@ -435,10 +435,10 @@ struct ShoppingListView: View {
 
     private var headlineStyle: AnyShapeStyle {
         if paperMode.isActive {
-            return AnyShapeStyle(DesignSystem.Colors.neonYellow)
+            return AnyShapeStyle(DesignSystem.Colors.neonAmber)
         }
         if viewModel.isSomeoneElseShopping {
-            return AnyShapeStyle(DesignSystem.Colors.neonCyan)
+            return AnyShapeStyle(DesignSystem.Colors.dillGreen)
         }
         if viewModel.isSomeoneElseAdHocShopping {
             return AnyShapeStyle(DesignSystem.Colors.neonPurple)
@@ -461,7 +461,7 @@ struct ShoppingListView: View {
                     viewModel.enterPaperMode()
                 }
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.neonYellow)
+                .foregroundColor(DesignSystem.Colors.neonAmber)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 6)
@@ -536,7 +536,7 @@ struct ShoppingListView: View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.neonYellow)
+                .foregroundColor(DesignSystem.Colors.neonAmber)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Session idle \(viewModel.shoppingElapsedDescription ?? "")")
@@ -573,10 +573,10 @@ struct ShoppingListView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(DesignSystem.Colors.neonYellow.opacity(0.08))
+                .fill(DesignSystem.Colors.neonAmber.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(DesignSystem.Colors.neonYellow.opacity(0.4), lineWidth: 1)
+                        .stroke(DesignSystem.Colors.neonAmber.opacity(0.4), lineWidth: 1)
                 )
         )
     }
@@ -683,7 +683,7 @@ struct ShoppingListView: View {
 
     /// Subtle background for Suggestions section
     private var suggestionsSectionBackground: some View {
-        DesignSystem.Colors.neonYellow.opacity(0.03)
+        DesignSystem.Colors.neonAmber.opacity(0.03)
     }
 
     // MARK: - Sort Options Bar
@@ -740,13 +740,13 @@ struct ShoppingListView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 14)
                         .fill(isAlphabeticalSort
-                              ? DesignSystem.Colors.neonCyan.opacity(0.3)
+                              ? DesignSystem.Colors.dillGreen.opacity(0.3)
                               : Color.white.opacity(0.05))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(isAlphabeticalSort
-                                ? DesignSystem.Colors.neonCyan.opacity(0.5)
+                                ? DesignSystem.Colors.dillGreen.opacity(0.5)
                                 : Color.clear, lineWidth: 1)
                 )
             }
@@ -781,13 +781,13 @@ struct ShoppingListView: View {
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(viewModel.currentSort == option
-                          ? DesignSystem.Colors.neonCyan.opacity(0.3)
+                          ? DesignSystem.Colors.dillGreen.opacity(0.3)
                           : Color.white.opacity(0.05))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(viewModel.currentSort == option
-                            ? DesignSystem.Colors.neonCyan.opacity(0.5)
+                            ? DesignSystem.Colors.dillGreen.opacity(0.5)
                             : Color.clear, lineWidth: 1)
             )
         }
@@ -869,7 +869,7 @@ private struct InCartItemRow: View {
             // Checkmark indicator
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             // Item name with strikethrough
             Text(item.name)
@@ -900,7 +900,7 @@ private struct InCartItemRow: View {
                 .fill(Color.white.opacity(0.03))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(DesignSystem.Colors.neonCyan.opacity(0.15), lineWidth: 1)
+                        .stroke(DesignSystem.Colors.dillGreen.opacity(0.15), lineWidth: 1)
                 )
         )
     }
@@ -930,7 +930,7 @@ private struct ForceFinishHoldSheet: View {
         VStack(spacing: 20) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 36, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.neonYellow)
+                .foregroundColor(DesignSystem.Colors.neonAmber)
                 .padding(.top, 12)
 
             VStack(spacing: 6) {

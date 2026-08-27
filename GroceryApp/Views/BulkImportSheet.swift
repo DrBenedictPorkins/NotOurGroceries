@@ -233,7 +233,7 @@ struct BulkImportSheet: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
                                 GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 sourceTile(icon: "mic.fill", title: "Speak",
-                           detail: "Say the whole list", tint: DesignSystem.Colors.neonCyan) {
+                           detail: "Say the whole list", tint: DesignSystem.Colors.dillGreen) {
                     toggleDictation()
                 }
                 sourceTile(icon: "camera.fill", title: "Camera",
@@ -247,7 +247,7 @@ struct BulkImportSheet: View {
                     showPhotoPicker = true
                 }
                 sourceTile(icon: "doc.on.clipboard.fill", title: "Paste",
-                           detail: pasteDetail, tint: DesignSystem.Colors.neonYellow) {
+                           detail: pasteDetail, tint: DesignSystem.Colors.neonAmber) {
                     pasteFromClipboard()
                 }
             }
@@ -349,7 +349,7 @@ struct BulkImportSheet: View {
                     errorMessage = nil
                 }
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
             }
             .padding(.horizontal, 20)
 
@@ -377,7 +377,7 @@ struct BulkImportSheet: View {
                     .fill(Color.white.opacity(0.07))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(DesignSystem.Colors.neonCyan.opacity(editorFocused ? 0.5 : 0.2),
+                            .stroke(DesignSystem.Colors.dillGreen.opacity(editorFocused ? 0.5 : 0.2),
                                     lineWidth: editorFocused ? 1.5 : 1)
                     )
             )
@@ -404,7 +404,7 @@ struct BulkImportSheet: View {
                     if transcribing {
                         ProgressView()
                             .scaleEffect(0.7)
-                            .tint(DesignSystem.Colors.neonCyan)
+                            .tint(DesignSystem.Colors.dillGreen)
                     } else {
                         Image(systemName: recording ? "stop.circle.fill" : "mic.fill")
                             .font(.system(size: 16, weight: .medium))
@@ -414,7 +414,7 @@ struct BulkImportSheet: View {
                 Text(transcribing ? "Wait…" : (recording ? "Stop" : "Voice"))
                     .font(.system(size: 11, weight: .medium))
             }
-            .foregroundColor(recording ? DesignSystem.Colors.neonPink : (transcribing ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textSecondary))
+            .foregroundColor(recording ? DesignSystem.Colors.neonPink : (transcribing ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textSecondary))
             .frame(width: 68, height: 50)
             .background(
                 RoundedRectangle(cornerRadius: 10)
@@ -444,7 +444,7 @@ struct BulkImportSheet: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonPurple],
+                            colors: [DesignSystem.Colors.dillGreen, DesignSystem.Colors.neonPurple],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -483,7 +483,7 @@ struct BulkImportSheet: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .scaleEffect(0.7)
-                    .tint(DesignSystem.Colors.neonCyan)
+                    .tint(DesignSystem.Colors.dillGreen)
                 Text("Transcribing…")
                     .font(.system(size: 12, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
@@ -588,11 +588,11 @@ struct BulkImportSheet: View {
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(hasInput ? DesignSystem.Colors.neonCyan.opacity(0.2) : Color.white.opacity(0.05))
+                    .fill(hasInput ? DesignSystem.Colors.dillGreen.opacity(0.2) : Color.white.opacity(0.05))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(
-                                hasInput ? DesignSystem.Colors.neonCyan.opacity(0.6) : Color.white.opacity(0.1),
+                                hasInput ? DesignSystem.Colors.dillGreen.opacity(0.6) : Color.white.opacity(0.1),
                                 lineWidth: 1.5
                             )
                     )
@@ -617,18 +617,18 @@ struct BulkImportSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
-                            .stroke(DesignSystem.Colors.neonCyan.opacity(0.4), lineWidth: 1.5)
+                            .stroke(DesignSystem.Colors.dillGreen.opacity(0.4), lineWidth: 1.5)
                     )
             } else {
                 Image(systemName: "waveform")
                     .font(.system(size: 44, weight: .light))
-                    .foregroundColor(DesignSystem.Colors.neonCyan.opacity(0.6))
+                    .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.6))
             }
 
             VStack(spacing: 10) {
                 ProgressView()
                     .scaleEffect(1.2)
-                    .tint(DesignSystem.Colors.neonCyan)
+                    .tint(DesignSystem.Colors.dillGreen)
 
                 Text(selectedImage != nil ? "Reading the image…" : "Sorting out what you said…")
                     .font(.system(size: 16, weight: .semibold))
@@ -655,7 +655,7 @@ struct BulkImportSheet: View {
             HStack {
                 Text("\(ingredients.count) item\(ingredients.count == 1 ? "" : "s") found")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
 
                 Spacer()
 
@@ -775,14 +775,14 @@ struct BulkImportSheet: View {
                     .fill(
                         selectedCount == 0
                         ? Color.white.opacity(0.05)
-                        : DesignSystem.Colors.neonCyan.opacity(0.2)
+                        : DesignSystem.Colors.dillGreen.opacity(0.2)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(
                                 selectedCount == 0
                                 ? Color.white.opacity(0.1)
-                                : DesignSystem.Colors.neonCyan.opacity(0.6),
+                                : DesignSystem.Colors.dillGreen.opacity(0.6),
                                 lineWidth: 1.5
                             )
                     )
@@ -800,7 +800,7 @@ struct BulkImportSheet: View {
 
             VStack(spacing: 16) {
                 ProgressView(value: Double(done), total: Double(total))
-                    .tint(DesignSystem.Colors.neonCyan)
+                    .tint(DesignSystem.Colors.dillGreen)
                     .padding(.horizontal, 40)
 
                 Text("Adding \(done) of \(total) items...")
@@ -1076,7 +1076,7 @@ private struct IngredientReviewRow: View {
             Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 21))
                 .foregroundColor(item.isSelected
-                                 ? DesignSystem.Colors.neonCyan
+                                 ? DesignSystem.Colors.dillGreen
                                  : DesignSystem.Colors.textTertiary.opacity(0.5))
 
             nameLabel
@@ -1179,7 +1179,7 @@ private struct IngredientDetailSheet: View {
                         item.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                     .font(DesignSystem.Typography.headline)
                 }
             }

@@ -15,7 +15,7 @@ struct ReadyToShopSheet: View {
             // Icon
             Image(systemName: "cart.fill")
                 .font(.system(size: 72, weight: .thin))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             // Title
             VStack(spacing: 12) {
@@ -29,7 +29,7 @@ struct ReadyToShopSheet: View {
 
                 Text(store.name)
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
             }
 
             Spacer()

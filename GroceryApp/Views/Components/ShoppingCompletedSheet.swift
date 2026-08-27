@@ -106,7 +106,7 @@ struct ShoppingCompletedSheet: View {
                     icon: "clock.fill",
                     value: stats.formattedDuration,
                     label: "Duration",
-                    color: DesignSystem.Colors.neonCyan
+                    color: DesignSystem.Colors.dillGreen
                 )
 
                 statCard(
@@ -124,7 +124,7 @@ struct ShoppingCompletedSheet: View {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 14))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
 
                     Text("\(stats.customItemsLearned) new item\(stats.customItemsLearned == 1 ? "" : "s") learned")
                         .font(.system(size: 14, weight: .medium))

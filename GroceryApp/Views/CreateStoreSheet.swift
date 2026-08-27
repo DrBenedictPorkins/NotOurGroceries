@@ -56,7 +56,7 @@ struct CreateStoreSheet: View {
                     Button(step == .storeInfo ? "Cancel" : "Done") {
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .sheet(isPresented: $showAisleScanSheet) {
@@ -93,7 +93,7 @@ struct CreateStoreSheet: View {
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                            .fill(canSave ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.neonCyan.opacity(0.3))
+                            .fill(canSave ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.dillGreen.opacity(0.3))
                     )
                     .foregroundColor(canSave ? .black : .white.opacity(0.3))
                 }
@@ -137,7 +137,7 @@ struct CreateStoreSheet: View {
                 HStack(spacing: 12) {
                     if createdStore == nil {
                         ProgressView()
-                            .tint(DesignSystem.Colors.neonCyan)
+                            .tint(DesignSystem.Colors.dillGreen)
                     } else {
                         Image(systemName: "camera.viewfinder")
                             .font(.system(size: 20, weight: .medium))
@@ -157,14 +157,14 @@ struct CreateStoreSheet: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(DesignSystem.Colors.textTertiary)
                 }
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .fill(DesignSystem.Colors.neonCyan.opacity(0.08))
+                        .fill(DesignSystem.Colors.dillGreen.opacity(0.08))
                         .overlay(
                             RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .stroke(DesignSystem.Colors.neonCyan.opacity(0.3), lineWidth: 1)
+                                .stroke(DesignSystem.Colors.dillGreen.opacity(0.3), lineWidth: 1)
                         )
                 )
             }
@@ -191,7 +191,7 @@ struct CreateStoreSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("STORE INFORMATION")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
                 .tracking(1.2)
 
             VStack(spacing: 16) {
@@ -210,7 +210,7 @@ struct CreateStoreSheet: View {
                                 .fill(Color.white.opacity(0.05))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(focusedField == .storeName ? DesignSystem.Colors.neonCyan.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                                        .stroke(focusedField == .storeName ? DesignSystem.Colors.dillGreen.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
                                 )
                         )
                         .focused($focusedField, equals: .storeName)
@@ -231,7 +231,7 @@ struct CreateStoreSheet: View {
                                 .fill(Color.white.opacity(0.05))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(focusedField == .chainName ? DesignSystem.Colors.neonCyan.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                                        .stroke(focusedField == .chainName ? DesignSystem.Colors.dillGreen.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
                                 )
                         )
                         .focused($focusedField, equals: .chainName)
@@ -255,7 +255,7 @@ struct CreateStoreSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("STORE LAYOUT")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
                 .tracking(1.2)
 
             VStack(spacing: 12) {
@@ -295,7 +295,7 @@ struct CreateStoreSheet: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(isSelected ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textTertiary)
+                    .foregroundColor(isSelected ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textTertiary)
                     .frame(width: 28)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -313,15 +313,15 @@ struct CreateStoreSheet: View {
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 18))
-                    .foregroundColor(isSelected ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.textTertiary)
+                    .foregroundColor(isSelected ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textTertiary)
             }
             .padding(12)
             .background(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .fill(isSelected ? DesignSystem.Colors.neonCyan.opacity(0.08) : Color.white.opacity(0.03))
+                    .fill(isSelected ? DesignSystem.Colors.dillGreen.opacity(0.08) : Color.white.opacity(0.03))
                     .overlay(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                            .stroke(isSelected ? DesignSystem.Colors.neonCyan.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
+                            .stroke(isSelected ? DesignSystem.Colors.dillGreen.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
                     )
             )
         }

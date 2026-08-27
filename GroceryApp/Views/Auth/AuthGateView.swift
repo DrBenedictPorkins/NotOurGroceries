@@ -56,7 +56,7 @@ struct AuthGateView: View {
             Image(systemName: "cart.fill")
                 .font(.system(size: 70))
                 .foregroundStyle(DesignSystem.Colors.accentGradient)
-                .neonGlow(color: DesignSystem.Colors.neonCyan)
+                .neonGlow(color: DesignSystem.Colors.dillGreen)
 
             Text(AppIdentity.name)
                 .font(.system(size: 32, weight: .bold))
@@ -118,7 +118,7 @@ struct AuthGateView: View {
                         showForgotPassword = true
                     }
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
@@ -163,7 +163,7 @@ struct AuthGateView: View {
         VStack(spacing: 24) {
             Image(systemName: "envelope.badge.fill")
                 .font(.system(size: 50))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             Text("Check your email")
                 .font(.system(size: 24, weight: .bold))
@@ -215,7 +215,7 @@ struct AuthGateView: View {
                 errorMessage = nil
             }
             .font(.system(size: 14, weight: .medium))
-            .foregroundColor(DesignSystem.Colors.neonCyan)
+            .foregroundColor(DesignSystem.Colors.dillGreen)
         }
         .padding(24)
         .background(glassCard)

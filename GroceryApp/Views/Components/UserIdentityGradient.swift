@@ -11,11 +11,11 @@ enum ProfileColor: String, CaseIterable {
 
     var color: Color {
         switch self {
-        case .cyan: return DesignSystem.Colors.neonCyan
+        case .cyan: return DesignSystem.Colors.dillGreen
         case .purple: return DesignSystem.Colors.neonPurple
         case .pink: return DesignSystem.Colors.neonPink
         case .blue: return DesignSystem.Colors.neonBlue
-        case .yellow: return DesignSystem.Colors.neonYellow
+        case .yellow: return DesignSystem.Colors.neonAmber
         case .green: return DesignSystem.Colors.success
         }
     }
@@ -52,7 +52,7 @@ struct UserIdentityGradient: View {
             return color.color
         }
         print("UserIdentityGradient: Unknown color key '\(colorKey)', defaulting to cyan")
-        return DesignSystem.Colors.neonCyan
+        return DesignSystem.Colors.dillGreen
     }
 
     private var pattern: ProfilePattern {
@@ -142,9 +142,9 @@ struct UserIdentityGradient: View {
             case .cyan: return DesignSystem.Colors.neonBlue
             case .purple: return DesignSystem.Colors.neonPink
             case .pink: return DesignSystem.Colors.neonPurple
-            case .blue: return DesignSystem.Colors.neonCyan
+            case .blue: return DesignSystem.Colors.dillGreen
             case .yellow: return DesignSystem.Colors.success
-            case .green: return DesignSystem.Colors.neonYellow
+            case .green: return DesignSystem.Colors.neonAmber
             }
         }()
 

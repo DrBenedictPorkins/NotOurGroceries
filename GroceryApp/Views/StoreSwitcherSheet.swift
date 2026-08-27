@@ -35,7 +35,7 @@ struct StoreSwitcherSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
         }
@@ -117,7 +117,7 @@ private struct StoreSwitcherRow: View {
                     Circle()
                         .fill(
                             isCurrentStore
-                                ? DesignSystem.Colors.neonCyan.opacity(0.2)
+                                ? DesignSystem.Colors.dillGreen.opacity(0.2)
                                 : DesignSystem.Colors.glassBackground
                         )
                         .frame(width: 44, height: 44)
@@ -126,7 +126,7 @@ private struct StoreSwitcherRow: View {
                         .font(.system(size: 18, weight: .medium))
                         .foregroundColor(
                             isCurrentStore
-                                ? DesignSystem.Colors.neonCyan
+                                ? DesignSystem.Colors.dillGreen
                                 : DesignSystem.Colors.textSecondary
                         )
                 }
@@ -141,12 +141,12 @@ private struct StoreSwitcherRow: View {
                         if isCurrentStore {
                             Text("CURRENT")
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(DesignSystem.Colors.neonCyan)
+                                .foregroundColor(DesignSystem.Colors.dillGreen)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
                                     RoundedRectangle(cornerRadius: 4)
-                                        .fill(DesignSystem.Colors.neonCyan.opacity(0.2))
+                                        .fill(DesignSystem.Colors.dillGreen.opacity(0.2))
                                 )
                         }
                     }
@@ -176,7 +176,7 @@ private struct StoreSwitcherRow: View {
                 if isCurrentStore {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 22))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .semibold))
@@ -188,14 +188,14 @@ private struct StoreSwitcherRow: View {
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
                     .fill(
                         isCurrentStore
-                            ? DesignSystem.Colors.neonCyan.opacity(0.05)
+                            ? DesignSystem.Colors.dillGreen.opacity(0.05)
                             : DesignSystem.Colors.glassBackground
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
                             .stroke(
                                 isCurrentStore
-                                    ? DesignSystem.Colors.neonCyan.opacity(0.5)
+                                    ? DesignSystem.Colors.dillGreen.opacity(0.5)
                                     : DesignSystem.Colors.glassBorder,
                                 lineWidth: isCurrentStore ? 1.5 : 1
                             )

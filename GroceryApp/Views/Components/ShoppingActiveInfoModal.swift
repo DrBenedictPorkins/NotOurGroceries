@@ -109,13 +109,13 @@ struct ShoppingActiveInfoModal: View {
     }
 
     private var accentColor: Color {
-        isCurrentUserShopping ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.neonPink
+        isCurrentUserShopping ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink
     }
 
     private var accentGradient: LinearGradient {
         if isCurrentUserShopping {
             return LinearGradient(
-                colors: [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonCyan.opacity(0.7)],
+                colors: [DesignSystem.Colors.dillGreen, DesignSystem.Colors.dillGreen.opacity(0.7)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -131,7 +131,7 @@ struct ShoppingActiveInfoModal: View {
     private var borderGradient: LinearGradient {
         if isCurrentUserShopping {
             return LinearGradient(
-                colors: [DesignSystem.Colors.neonCyan.opacity(0.5), DesignSystem.Colors.neonCyan.opacity(0.2)],
+                colors: [DesignSystem.Colors.dillGreen.opacity(0.5), DesignSystem.Colors.dillGreen.opacity(0.2)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

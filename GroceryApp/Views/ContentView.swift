@@ -45,7 +45,7 @@ struct ContentView: View {
                             Label("Settings", systemImage: "gearshape.fill")
                         }
                 }
-                .tint(DesignSystem.Colors.neonCyan)
+                .tint(DesignSystem.Colors.dillGreen)
                 .metallicBackground()
                 .environmentObject(viewModel)
                 .environmentObject(amplifyService)

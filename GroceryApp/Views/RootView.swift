@@ -116,7 +116,7 @@ struct SplashView: View {
                 Image(systemName: "cart.fill")
                     .font(.system(size: 80))
                     .foregroundStyle(DesignSystem.Colors.accentGradient)
-                    .neonGlow(color: DesignSystem.Colors.neonCyan)
+                    .neonGlow(color: DesignSystem.Colors.dillGreen)
 
                 Text(AppIdentity.name)
                     .font(.system(size: 28, weight: .bold))
@@ -155,7 +155,7 @@ struct SplashView: View {
                                 .background(
                                     RoundedRectangle(cornerRadius: 16)
                                         .fill(DesignSystem.Colors.accentGradient)
-                                        .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 12, x: 0, y: 6)
+                                        .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 12, x: 0, y: 6)
                                 )
                         }
                         .transition(.asymmetric(
@@ -193,7 +193,7 @@ struct SplashView: View {
                                 ForEach(LoadingStep.allCases.filter { $0 != .ready }, id: \.rawValue) { step in
                                     Circle()
                                         .fill(step.rawValue <= loadingState.currentStep.rawValue
-                                              ? DesignSystem.Colors.neonCyan
+                                              ? DesignSystem.Colors.dillGreen
                                               : Color.white.opacity(0.2))
                                         .frame(width: 8, height: 8)
                                         .animation(.easeInOut, value: loadingState.currentStep)
@@ -255,7 +255,7 @@ struct ErrorModalView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Debug Information")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(DesignSystem.Colors.neonCyan)
+                                .foregroundColor(DesignSystem.Colors.dillGreen)
 
                             Text(error.formattedDetails)
                                 .font(.system(size: 12, weight: .regular, design: .monospaced))
@@ -314,7 +314,7 @@ struct ErrorModalView: View {
                     Button("Dismiss") {
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
         }

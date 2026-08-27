@@ -300,7 +300,7 @@ struct AtStoreModeView: View {
                             .foregroundStyle(DesignSystem.Colors.accentGradient)
                         Image(systemName: "chevron.down")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.neonCyan)
+                            .foregroundColor(DesignSystem.Colors.dillGreen)
                     }
                 }
 
@@ -458,7 +458,7 @@ struct AtStoreModeView: View {
                 } else {
                     Text("\(Int(progressPercentage * 100))%")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: viewModel.undoCartItem?.id)
@@ -473,11 +473,11 @@ struct AtStoreModeView: View {
         HStack(spacing: 8) {
             Image(systemName: "arrow.right")
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             Text(aisleGroup.displayName.uppercased())
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
                 .tracking(1.2)
 
             Spacer()
@@ -502,11 +502,11 @@ struct AtStoreModeView: View {
             HStack(spacing: 8) {
                 Image(systemName: storeHasNoAisles ? "cart.fill" : "questionmark.circle.fill")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.neonPink)
+                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
 
                 Text(storeHasNoAisles ? "TO GET" : "UNKNOWN AISLE")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.neonCyan : DesignSystem.Colors.neonPink)
+                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
                     .tracking(1.2)
 
                 Spacer()
@@ -578,7 +578,7 @@ struct AtStoreModeView: View {
             .stroke(
                 LinearGradient(
                     colors: [
-                        DesignSystem.Colors.neonCyan.opacity(0.6),
+                        DesignSystem.Colors.dillGreen.opacity(0.6),
                         DesignSystem.Colors.neonPurple.opacity(0.4)
                     ],
                     startPoint: .topLeading,
@@ -587,7 +587,7 @@ struct AtStoreModeView: View {
                 lineWidth: 3
             )
             .ignoresSafeArea()
-            .shadow(color: DesignSystem.Colors.neonCyan.opacity(0.5), radius: 10)
+            .shadow(color: DesignSystem.Colors.dillGreen.opacity(0.5), radius: 10)
             .allowsHitTesting(false)
     }
 

@@ -133,7 +133,7 @@ struct GroceryItemRow: View {
                     } label: {
                         Label("Add to List", systemImage: "plus.circle.fill")
                     }
-                    .tint(DesignSystem.Colors.neonCyan)
+                    .tint(DesignSystem.Colors.dillGreen)
                 }
             }
             .offset(x: shakeOffset)
@@ -258,7 +258,7 @@ struct GroceryItemRow: View {
     private var itemNameColor: Color {
         switch item.status {
         case .suggestion:
-            return DesignSystem.Colors.neonYellow.opacity(0.85)
+            return DesignSystem.Colors.neonAmber.opacity(0.85)
         case .inCart:
             return DesignSystem.Colors.success.opacity(0.6)
         default:
@@ -330,12 +330,12 @@ struct GroceryItemRow: View {
     private var animatingInGlow: some View {
         if item.isAnimatingIn {
             RoundedRectangle(cornerRadius: 16)
-                .stroke(DesignSystem.Colors.neonCyan.opacity(0.6), lineWidth: 2)
+                .stroke(DesignSystem.Colors.dillGreen.opacity(0.6), lineWidth: 2)
                 .blur(radius: 4)
         } else if showRemoteAddedBadge && isPulsing {
             // Pulsing glow for remotely-added items during shopping mode
             RoundedRectangle(cornerRadius: 16)
-                .stroke(DesignSystem.Colors.neonCyan.opacity(0.5), lineWidth: 2)
+                .stroke(DesignSystem.Colors.dillGreen.opacity(0.5), lineWidth: 2)
                 .blur(radius: 6)
         }
     }
@@ -348,16 +348,16 @@ struct GroceryItemRow: View {
         case .suggestion:
             ZStack {
                 Circle()
-                    .fill(DesignSystem.Colors.neonYellow.opacity(0.15))
+                    .fill(DesignSystem.Colors.neonAmber.opacity(0.15))
                     .frame(width: 24, height: 24)
                     .overlay(
                         Circle()
-                            .strokeBorder(DesignSystem.Colors.neonYellow.opacity(0.4), lineWidth: 1)
+                            .strokeBorder(DesignSystem.Colors.neonAmber.opacity(0.4), lineWidth: 1)
                     )
 
                 Image(systemName: "lightbulb.fill")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.neonYellow)
+                    .foregroundColor(DesignSystem.Colors.neonAmber)
             }
         case .inCart:
             ZStack {
@@ -383,15 +383,15 @@ struct GroceryItemRow: View {
     private func quantityBadge(_ quantity: String) -> some View {
         Text(quantity)
             .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(DesignSystem.Colors.neonCyan)
+            .foregroundColor(DesignSystem.Colors.dillGreen)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(
                 Capsule()
-                    .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
+                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
                     .overlay(
                         Capsule()
-                            .stroke(DesignSystem.Colors.neonCyan.opacity(0.3), lineWidth: 1)
+                            .stroke(DesignSystem.Colors.dillGreen.opacity(0.3), lineWidth: 1)
                     )
             )
     }
@@ -423,7 +423,7 @@ struct GroceryItemRow: View {
     private var photoBadge: some View {
         Image(systemName: "photo.fill")
             .font(.system(size: 10, weight: .bold))
-            .foregroundColor(DesignSystem.Colors.neonCyan)
+            .foregroundColor(DesignSystem.Colors.dillGreen)
     }
 
     // MARK: - Remote Added Badge (sparkle)
@@ -481,7 +481,7 @@ struct GroceryItemRow: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                DesignSystem.Colors.neonCyan.opacity(0.4),
+                                DesignSystem.Colors.dillGreen.opacity(0.4),
                                 DesignSystem.Colors.neonPurple.opacity(0.2)
                             ],
                             startPoint: .topLeading,
@@ -498,22 +498,22 @@ struct GroceryItemRow: View {
         let isSuggestion = item.status == .suggestion
         let borderColor: Color = {
             if isSuggestion {
-                return DesignSystem.Colors.neonYellow.opacity(0.35)
+                return DesignSystem.Colors.neonAmber.opacity(0.35)
             } else if item.isCustom {
                 return DesignSystem.Colors.neonPink.opacity(0.5)
             } else {
-                return DesignSystem.Colors.neonCyan.opacity(0.3)
+                return DesignSystem.Colors.dillGreen.opacity(0.3)
             }
         }()
 
         return RoundedRectangle(cornerRadius: 16)
-            .fill(isSuggestion ? DesignSystem.Colors.neonYellow.opacity(0.04) : Color.white.opacity(0.05))
+            .fill(isSuggestion ? DesignSystem.Colors.neonAmber.opacity(0.04) : Color.white.opacity(0.05))
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
                         LinearGradient(
                             colors: [
-                                isSuggestion ? DesignSystem.Colors.neonYellow.opacity(0.08) : Color.white.opacity(0.1),
+                                isSuggestion ? DesignSystem.Colors.neonAmber.opacity(0.08) : Color.white.opacity(0.1),
                                 Color.white.opacity(0.05)
                             ],
                             startPoint: .topLeading,
@@ -581,11 +581,11 @@ struct GroceryItemRow: View {
             let glowColor: Color = {
                 switch transitionDirection {
                 case .toActive, .toCart:
-                    return DesignSystem.Colors.neonCyan
+                    return DesignSystem.Colors.dillGreen
                 case .toSuggestions:
-                    return DesignSystem.Colors.neonYellow
+                    return DesignSystem.Colors.neonAmber
                 case .none:
-                    return DesignSystem.Colors.neonCyan
+                    return DesignSystem.Colors.dillGreen
                 }
             }()
 

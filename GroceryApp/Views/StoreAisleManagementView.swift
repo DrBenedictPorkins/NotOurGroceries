@@ -208,7 +208,7 @@ struct StoreAisleManagementView: View {
         } header: {
             Text("AISLE ORDER")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
                 .tracking(1.0)
                 .textCase(nil)
                 .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 6, trailing: 20))
@@ -355,10 +355,10 @@ struct StoreAisleManagementView: View {
                 .padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.neonCyan.opacity(0.2))
+                        .fill(DesignSystem.Colors.dillGreen.opacity(0.2))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(DesignSystem.Colors.neonCyan, lineWidth: 1)
+                                .stroke(DesignSystem.Colors.dillGreen, lineWidth: 1)
                         )
                 )
             }
@@ -501,7 +501,7 @@ struct StoreAisleManagementView: View {
 
     private var statsFooterView: some View {
         HStack(spacing: 16) {
-            StatBadge(count: mappedCount, label: "mapped", color: DesignSystem.Colors.neonCyan)
+            StatBadge(count: mappedCount, label: "mapped", color: DesignSystem.Colors.dillGreen)
             StatBadge(count: unmappedCount, label: "unmapped", color: DesignSystem.Colors.neonPink)
             StatBadge(count: lowConfidenceCount, label: "low conf.", color: DesignSystem.Colors.warning)
         }
@@ -526,15 +526,15 @@ struct StoreAisleManagementView: View {
         } else if let aisle = currentStore.aisleLayout.first(where: { $0.id == aisleId }) {
             // Use store's custom aisle name if defined
             displayName = aisleDisplayName(aisle)
-            headerColor = DesignSystem.Colors.neonCyan
+            headerColor = DesignSystem.Colors.dillGreen
         } else if let aisleNum = Int(aisleId) {
             // Numeric aisle - format as "Aisle X"
             displayName = "Aisle \(aisleNum)"
-            headerColor = DesignSystem.Colors.neonCyan
+            headerColor = DesignSystem.Colors.dillGreen
         } else {
             // Named aisle (Dairy, Meat, Deli, etc.) - use as-is
             displayName = aisleId
-            headerColor = DesignSystem.Colors.neonCyan
+            headerColor = DesignSystem.Colors.dillGreen
         }
         let count = itemsGroupedByAisle[aisleId]?.count ?? 0
 
@@ -645,12 +645,12 @@ private struct DisplayItemRow: View {
                     if let quantity = displayItem.quantity, !quantity.isEmpty {
                         Text(quantity)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.neonCyan.opacity(0.8))
+                            .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.8))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(
                                 Capsule()
-                                    .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
+                                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
                             )
                     }
                 }
@@ -935,7 +935,7 @@ private struct MappingEditSheet: View {
                             Button(action: clearOverride) {
                                 Text("Reset to LLM suggestion (\(mapping.aisleId))")
                                     .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                                    .foregroundColor(DesignSystem.Colors.dillGreen)
                             }
                             .padding(.top, 4)
                         }
@@ -974,7 +974,7 @@ private struct MappingEditSheet: View {
                                                 .fill(DesignSystem.Colors.glassBackground)
                                                 .overlay(
                                                     RoundedRectangle(cornerRadius: 12)
-                                                        .stroke(DesignSystem.Colors.neonCyan, lineWidth: 1.5)
+                                                        .stroke(DesignSystem.Colors.dillGreen, lineWidth: 1.5)
                                                 )
                                         )
 
@@ -987,7 +987,7 @@ private struct MappingEditSheet: View {
                                     }) {
                                         Image(systemName: "checkmark.circle.fill")
                                             .font(.system(size: 24))
-                                            .foregroundColor(DesignSystem.Colors.neonCyan)
+                                            .foregroundColor(DesignSystem.Colors.dillGreen)
                                     }
                                 }
                             } else {
@@ -1000,7 +1000,7 @@ private struct MappingEditSheet: View {
                                         Text("Add Custom Aisle")
                                             .font(.system(size: 15, weight: .medium))
                                     }
-                                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                                    .foregroundColor(DesignSystem.Colors.dillGreen)
                                     .frame(maxWidth: .infinity)
                                     .padding(16)
                                     .background(
@@ -1008,7 +1008,7 @@ private struct MappingEditSheet: View {
                                             .strokeBorder(
                                                 style: StrokeStyle(lineWidth: 1, dash: [6, 3])
                                             )
-                                            .foregroundColor(DesignSystem.Colors.neonCyan.opacity(0.5))
+                                            .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.5))
                                     )
                                 }
                             }
@@ -1050,7 +1050,7 @@ private struct MappingEditSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                     .disabled(isSaving)
                 }
             }
@@ -1140,21 +1140,21 @@ private struct AisleSelectionRowSimple: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(isSelected
-                        ? DesignSystem.Colors.neonCyan.opacity(0.1)
+                        ? DesignSystem.Colors.dillGreen.opacity(0.1)
                         : DesignSystem.Colors.glassBackground
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
                                 isSelected
-                                    ? DesignSystem.Colors.neonCyan
+                                    ? DesignSystem.Colors.dillGreen
                                     : DesignSystem.Colors.glassBorder,
                                 lineWidth: isSelected ? 1.5 : 1
                             )
@@ -1192,21 +1192,21 @@ private struct AisleSelectionRow: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(isSelected
-                        ? DesignSystem.Colors.neonCyan.opacity(0.1)
+                        ? DesignSystem.Colors.dillGreen.opacity(0.1)
                         : DesignSystem.Colors.glassBackground
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
                                 isSelected
-                                    ? DesignSystem.Colors.neonCyan
+                                    ? DesignSystem.Colors.dillGreen
                                     : DesignSystem.Colors.glassBorder,
                                 lineWidth: isSelected ? 1.5 : 1
                             )

@@ -9,7 +9,7 @@ struct PaperModeBanner: View {
 
     var onReconnect: () -> Void
 
-    private var accent: Color { DesignSystem.Colors.neonYellow }
+    private var accent: Color { DesignSystem.Colors.neonAmber }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -42,15 +42,15 @@ struct PaperModeBanner: View {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .bold))
                     }
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 8)
                     .background(
                         RoundedRectangle(cornerRadius: 9)
-                            .fill(DesignSystem.Colors.neonCyan.opacity(0.12))
+                            .fill(DesignSystem.Colors.dillGreen.opacity(0.12))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 9)
-                                    .stroke(DesignSystem.Colors.neonCyan.opacity(0.4), lineWidth: 1)
+                                    .stroke(DesignSystem.Colors.dillGreen.opacity(0.4), lineWidth: 1)
                             )
                     )
                 }

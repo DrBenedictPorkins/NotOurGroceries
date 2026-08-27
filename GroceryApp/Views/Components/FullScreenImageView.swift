@@ -88,7 +88,7 @@ struct FullScreenImageView: View {
         HStack(spacing: DesignSystem.Spacing.sm) {
             Image(systemName: "person.circle.fill")
                 .font(.system(size: 14))
-                .foregroundColor(DesignSystem.Colors.neonCyan)
+                .foregroundColor(DesignSystem.Colors.dillGreen)
 
             Text(UserCache.shared.displayName(for: itemImage.uploadedBy))
                 .font(DesignSystem.Typography.footnote)

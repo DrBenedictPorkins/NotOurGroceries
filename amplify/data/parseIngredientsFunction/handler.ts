@@ -67,6 +67,19 @@ export const handler: Handler = async (event) => {
 - Ignore non-grocery text like recipe titles, step numbers, comments
 - Keep names concise but recognizable (Title Case)
 - Word grouping: when adjacent words in the input could form a single known catalog term (see list below), prefer the multi-word interpretation and do NOT split it. Example: input "tomato soup" → one item "Tomato Soup" if it appears in the catalog (or is a common dish), not two items "Tomato" + "Soup". This matters especially for voice/dictated input where commas may be missing.
+
+Dictated speech: this input is often a transcript of someone talking, so treat it as one side of a conversation rather than a written list.
+- Strip conversational framing entirely: "ok", "so", "um", "let's see", "I need", "I want you to add", "we'll get some", "don't forget", "oh and". These are never items.
+- Honour self-corrections — the LAST thing said about an item wins:
+    "milk, actually make that two gallons" → one item, Milk, quantity "2 gallons"
+    "get cheddar, no wait, mozzarella"     → one item, Mozzarella (NOT cheddar)
+    "apples, the green ones"               → name: "Apples", qualifier: "Green"
+- Honour retractions — if the speaker takes an item back, omit it completely:
+    "add eggs... actually skip the eggs, we have plenty" → no Eggs item at all
+    Watch for: "never mind", "forget the", "skip", "we already have", "cancel that", "not the".
+- A qualifier or quantity mentioned after the item still belongs to it, even sentences later, as long as the speaker is clearly still referring to it.
+- Transcription is imperfect. Repair obvious mis-hearings into the sensible grocery term when confident: "macaronis" → "Macaroni", "whole flour" → "Whole Wheat Flour", "do a orange juice" → "Orange Juice". Do not invent items you are not confident about.
+- Speakers repeat themselves when thinking aloud; collapse duplicates into a single item carrying the richest quantity/qualifier mentioned.
 ${knownTermsSection}
 Return ONLY a JSON array, no markdown, no explanation:
 [

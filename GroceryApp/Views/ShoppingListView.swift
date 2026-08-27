@@ -15,6 +15,12 @@ struct ShoppingListView: View {
     @State private var showBulkImport = false
     @State private var showForceFinishAlert = false
     @State private var showForceFinishHoldSheet = false
+    @State private var showPaperModeAlert = false
+    @State private var showListMenu = false
+    @State private var hintOn = false
+    @State private var hasHinted = false
+    @AppStorage("hasOpenedListMenu") private var hasOpenedListMenu = false
+    @ObservedObject private var paperMode = PaperMode.shared
 
     var body: some View {
         ZStack {
@@ -29,6 +35,18 @@ struct ShoppingListView: View {
             VStack(spacing: 0) {
                 // Custom Header
                 headerView
+
+                reconnectingLine
+
+                // Paper mode is never a subtle state — it sits above the list.
+                if paperMode.isActive {
+                    PaperModeBanner(onReconnect: {
+                        Task { await viewModel.exitPaperMode() }
+                    })
+                    .environmentObject(viewModel)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
 
                 // Sort Options - show when list has items, or keep visible while undo is pending
                 if !viewModel.shoppingList.isEmpty || viewModel.undoSuggestionItem != nil {
@@ -229,6 +247,38 @@ struct ShoppingListView: View {
             .presentationDetents([.height(320)])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showListMenu) {
+            ListMenuSheet(
+                isPresented: $showListMenu,
+                onAtStore: { showStoreSelection = true },
+                onQuickTrip: { Task { await viewModel.enterAdHocMode() } },
+                onPaperList: { showPaperModeAlert = true },
+                onSignOut: { Task { try? await amplifyService.signOut() } }
+            )
+            .environmentObject(viewModel)
+            .environmentObject(amplifyService)
+            .presentationDragIndicator(.visible)
+        }
+        .alert("Can't reach the server", isPresented: $viewModel.showOfflinePrompt) {
+            Button("Use paper list") {
+                viewModel.enterPaperMode()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            Button("Keep trying", role: .cancel) {
+                viewModel.keepTryingToReconnect()
+            }
+        } message: {
+            Text("Your saved list is here and ready to shop from. Paper list stops the app calling the server at all — no waiting, no spinners. Changes stay on this phone until you reconnect.")
+        }
+        .alert("Switch to paper list?", isPresented: $showPaperModeAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Use paper list") {
+                viewModel.enterPaperMode()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        } message: {
+            Text("The app will stop talking to the server completely — no waiting, no spinners. You can cross things off and add items, but the changes stay on this phone until you reconnect.")
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 viewModel.lockInteractionsOnWakeup()
@@ -262,155 +312,185 @@ struct ShoppingListView: View {
 
     // MARK: - Header View
 
+    /// Title only. It is also the control — everything that used to crowd this
+    /// row now lives one tap away, behind the chevron.
     private var headerView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Shopping List")
-                        .font(.system(size: 32, weight: .bold, design: .default))
-                        .foregroundStyle(DesignSystem.Colors.accentGradient)
+        HStack(alignment: .center, spacing: 12) {
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                hasOpenedListMenu = true
+                showListMenu = true
+            } label: {
+                HStack(spacing: 7) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(headline)
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(headlineStyle)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
 
-                    // Inline notification / item count
-                    statusLine
-                }
-
-                Spacer()
-
-                // Right side: username/version + At Store button
-                VStack(alignment: .trailing, spacing: 4) {
-                    // Logged-in user label + version on single line
-                    HStack(spacing: 4) {
-                        if let userId = amplifyService.currentUser?.userId {
-                            Text(UserCache.shared.displayName(for: userId))
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
-                            Text("•")
-                                .font(.system(size: 9, weight: .regular))
-                                .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
-                        }
-                        Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"))")
-                            .font(.system(size: 9, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.5))
+                        statusLine
                     }
 
-                    // At Store Button
-                    Button(action: {
-                        guard !viewModel.isSomeoneElseShopping else { return }
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            showStoreSelection = true
-                        }
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: viewModel.isSomeoneElseShopping ? "cart.fill.badge.questionmark" : "cart.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text(viewModel.isSomeoneElseShopping ? "Shopping Active" : "At Store")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundColor(viewModel.isSomeoneElseShopping ? .white.opacity(0.5) : .white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(viewModel.isSomeoneElseShopping
-                                      ? Color.white.opacity(0.05)
-                                      : DesignSystem.Colors.neonCyan.opacity(0.15))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 20)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: viewModel.isSomeoneElseShopping
-                                                    ? [Color.white.opacity(0.2)]
-                                                    : [DesignSystem.Colors.neonCyan, DesignSystem.Colors.neonCyan.opacity(0.3)],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 1.5
-                                        )
-                                )
-                                .shadow(color: viewModel.isSomeoneElseShopping
-                                        ? .clear
-                                        : DesignSystem.Shadows.neonCyanGlow,
-                                        radius: 8, x: 0, y: 4)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .padding(.top, 4)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(DesignSystem.Colors.neonCyan.opacity(hintOn ? 0.16 : 0))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(DesignSystem.Colors.neonCyan.opacity(hintOn ? 0.5 : 0), lineWidth: 1.5)
                         )
-                    }
-                    .disabled(viewModel.isSomeoneElseShopping)
-
-                    // Quick Trip — a store-less errand that leaves this list alone
-                    quickTripButton
-                }
+                )
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
-            // Compact shopping status line
-            if viewModel.isSomeoneElseShopping {
-                shoppingStatusLine
-            }
+            Spacer(minLength: 0)
 
-            // Someone is out on an errand — this list is intact, just paused
-            if viewModel.isSomeoneElseAdHocShopping {
-                errandStatusLine
+            // Primary action stays visible. The other modes live in the title
+            // panel — nothing here for a thumb to confuse it with.
+            if canStartShopping {
+                atStoreButton
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 12)
         .padding(.top, 60)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
+        .onAppear(perform: runHintIfNeeded)
     }
 
-    // MARK: - Quick Trip
+    private var canStartShopping: Bool {
+        viewModel.shoppingStatus == .idle && !paperMode.isActive
+    }
 
-    /// Starts a store-less errand. Only offered when nobody is mid-session, which is
-    /// what keeps the whole feature free of concurrency questions.
-    private var quickTripButton: some View {
+    private var atStoreButton: some View {
         Button(action: {
-            guard viewModel.shoppingStatus == .idle else { return }
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            Task { await viewModel.enterAdHocMode() }
-        }) {
-            HStack(spacing: 5) {
-                Image(systemName: "figure.walk.motion")
-                    .font(.system(size: 11, weight: .semibold))
-                Text("Quick Trip")
-                    .font(.system(size: 12, weight: .semibold))
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                showStoreSelection = true
             }
-            .foregroundColor(viewModel.shoppingStatus == .idle
-                             ? DesignSystem.Colors.neonPurple
-                             : DesignSystem.Colors.textTertiary.opacity(0.5))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "cart.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("At Store")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(viewModel.shoppingStatus == .idle
-                          ? DesignSystem.Colors.neonPurple.opacity(0.12)
-                          : Color.white.opacity(0.04))
+                    .fill(DesignSystem.Colors.neonCyan.opacity(0.15))
                     .overlay(
-                        Capsule()
-                            .stroke(viewModel.shoppingStatus == .idle
-                                    ? DesignSystem.Colors.neonPurple.opacity(0.45)
-                                    : Color.white.opacity(0.12),
-                                    lineWidth: 1)
+                        Capsule().stroke(
+                            LinearGradient(
+                                colors: [DesignSystem.Colors.neonCyan,
+                                         DesignSystem.Colors.neonCyan.opacity(0.3)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
                     )
+                    .shadow(color: DesignSystem.Shadows.neonCyanGlow, radius: 8, x: 0, y: 4)
             )
         }
-        .disabled(viewModel.shoppingStatus != .idle)
     }
 
-    /// Shown to everyone who is not the errand runner.
-    private var errandStatusLine: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "figure.walk.motion")
-                .font(.system(size: 11, weight: .semibold))
-            Text("\(viewModel.activeShopperDisplayName ?? "Someone") is out on a quick trip — your list is untouched")
-                .font(.system(size: 11, weight: .medium))
-                .lineLimit(2)
+    /// Pulses the title a few times the first time you land here, so the chevron
+    /// isn't the only thing telling you it's tappable. Stops for good once used.
+    private func runHintIfNeeded() {
+        guard !hasOpenedListMenu, !hasHinted else { return }
+        hasHinted = true
+
+        Task { @MainActor in
+            for _ in 0..<3 {
+                withAnimation(.easeInOut(duration: 0.45)) { hintOn = true }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                withAnimation(.easeInOut(duration: 0.45)) { hintOn = false }
+                try? await Task.sleep(nanoseconds: 350_000_000)
+            }
         }
-        .foregroundColor(DesignSystem.Colors.neonPurple.opacity(0.9))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(DesignSystem.Colors.neonPurple.opacity(0.1))
-        )
+    }
+
+    /// The one line that changes with what's actually happening.
+    private var headline: String {
+        if paperMode.isActive { return "Paper list" }
+        if viewModel.isSomeoneElseShopping {
+            return "\(viewModel.activeShopperDisplayName ?? "Someone") is shopping"
+        }
+        if viewModel.isSomeoneElseAdHocShopping {
+            return "\(viewModel.activeShopperDisplayName ?? "Someone") is out"
+        }
+        if viewModel.shoppingList.isEmpty { return "Nothing to buy" }
+        return "Shopping list"
+    }
+
+    private var headlineStyle: AnyShapeStyle {
+        if paperMode.isActive {
+            return AnyShapeStyle(DesignSystem.Colors.neonYellow)
+        }
+        if viewModel.isSomeoneElseShopping {
+            return AnyShapeStyle(DesignSystem.Colors.neonCyan)
+        }
+        if viewModel.isSomeoneElseAdHocShopping {
+            return AnyShapeStyle(DesignSystem.Colors.neonPurple)
+        }
+        return AnyShapeStyle(DesignSystem.Colors.textPrimary)
+    }
+
+    /// Quiet "still trying" line so the user knows the app hasn't given up.
+    @ViewBuilder
+    private var reconnectingLine: some View {
+        if viewModel.isRetryingConnection {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .tint(DesignSystem.Colors.textTertiary)
+                Text("Reconnecting…")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                Button("Use paper list") {
+                    viewModel.enterPaperMode()
+                }
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.neonYellow)
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
+        }
+    }
+
+    /// What the line under the headline says at rest.
+    private var idleStatusText: String {
+        if paperMode.isActive {
+            if let savedAt = viewModel.localSnapshotSavedAt {
+                return "As of \(LocalListStore.savedAtDescription(savedAt)) · changes stay on this phone"
+            }
+            return "Changes stay on this phone"
+        }
+        if viewModel.isSomeoneElseShopping {
+            let done = viewModel.inCart.count
+            let total = done + viewModel.shoppingList.count
+            let store = viewModel.householdStores.first(where: { $0.id == viewModel.shoppingStoreId })?.name
+            let where_ = store.map { "at \($0)" } ?? "shopping"
+            return total > 0 ? "\(where_) · \(done) of \(total) in cart" : where_
+        }
+        if viewModel.isSomeoneElseAdHocShopping {
+            return "Quick trip · your list is untouched"
+        }
+        if viewModel.shoppingList.isEmpty {
+            return "Add something below to get started"
+        }
+        // Nothing useful to report — say nothing rather than count what's visible.
+        return ""
     }
 
     // MARK: - Compact Shopping Status Line
@@ -548,10 +628,12 @@ struct ShoppingListView: View {
 
     private var statusLine: some View {
         ZStack(alignment: .leading) {
-            // Item count - shown when no toast
-            Text(viewModel.shoppingList.isEmpty ? "No items" : "\(viewModel.shoppingList.count) items")
-                .font(.system(size: 14, weight: .medium))
+            // Reports only what the eye can't already see. Counting items you
+            // are looking at is noise; progress mid-trip is not.
+            Text(idleStatusText)
+                .font(.system(size: 13, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
+                .lineLimit(1)
                 .opacity(viewModel.showToast ? 0 : 1)
 
             // Notification message - shown when toast active

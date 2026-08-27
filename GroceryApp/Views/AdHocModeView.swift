@@ -11,7 +11,7 @@ struct AdHocModeView: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @State private var searchText = ""
     @State private var showFinishAlert = false
-    @State private var showPullSheet = false
+    @State private var isSuggestionsExpanded = true
     @FocusState private var searchFieldFocused: Bool
 
     private var accent: Color { DesignSystem.Colors.neonPurple }
@@ -49,41 +49,6 @@ struct AdHocModeView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-
-                    // Pull-from-main-list affordance
-                    if !viewModel.shoppingList.isEmpty {
-                        Section {
-                            Button {
-                                showPullSheet = true
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "arrow.down.doc.fill")
-                                        .font(.system(size: 13, weight: .semibold))
-                                    Text("Pull from main list (\(viewModel.shoppingList.count))")
-                                        .font(.system(size: 14, weight: .medium))
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                                .foregroundColor(accent)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(accent.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 14)
-                                                .stroke(accent.opacity(0.3), lineWidth: 1)
-                                        )
-                                )
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 8, trailing: 20))
-                    }
 
                     // To grab
                     Section {
@@ -131,6 +96,46 @@ struct AdHocModeView: View {
                         }
                         .listSectionSeparator(.hidden)
                     }
+
+                    // Suggestions, exactly as they appear on the main list —
+                    // tapping one adds it to this trip.
+                    if !viewModel.suggestions.isEmpty {
+                        Section {
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    isSuggestionsExpanded.toggle()
+                                }
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "lightbulb.fill")
+                                        .font(.system(size: 13, weight: .semibold))
+                                    Text("SUGGESTIONS (\(viewModel.suggestions.count))")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .tracking(0.5)
+                                    Spacer()
+                                    Image(systemName: isSuggestionsExpanded ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 13, weight: .semibold))
+                                }
+                                .foregroundColor(DesignSystem.Colors.neonYellow)
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 14, leading: 20, bottom: 4, trailing: 20))
+
+                            if isSuggestionsExpanded {
+                                ForEach(viewModel.suggestions) { item in
+                                    GroceryItemRow(item: item)
+                                        .environmentObject(viewModel)
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                }
+                            }
+                        }
+                        .listSectionSeparator(.hidden)
+                    }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -140,9 +145,12 @@ struct AdHocModeView: View {
             errandBorderOverlay
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $showPullSheet) {
-            AdHocPullSheet(isPresented: $showPullSheet)
-                .environmentObject(viewModel)
+        .onChange(of: viewModel.isAdHocMode) { _, stillOnTrip in
+            // Empty cancel produces no completion sheet, so nothing else would
+            // take us back to the list.
+            if !stillOnTrip && !viewModel.showShoppingCompletedSheet {
+                isPresented = false
+            }
         }
         .sheet(isPresented: $viewModel.showShoppingCompletedSheet) {
             if let stats = viewModel.shoppingCompletionStats {
@@ -210,13 +218,19 @@ struct AdHocModeView: View {
                 Spacer()
 
                 Button {
-                    showFinishAlert = true
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    if total == 0 {
+                        // Nothing happened, so there's nothing to confirm or
+                        // report — finishing an empty trip is just backing out.
+                        Task { await viewModel.exitAdHocMode() }
+                    } else {
+                        showFinishAlert = true
+                    }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
+                        Image(systemName: total == 0 ? "xmark.circle.fill" : "checkmark.circle.fill")
                             .font(.system(size: 14, weight: .semibold))
-                        Text("Finish")
+                        Text(total == 0 ? "Cancel" : "Finish")
                             .font(.system(size: 14, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -263,7 +277,7 @@ struct AdHocModeView: View {
             Text("Nothing on this trip yet")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
-            Text("Search above to add, or pull something off your main list")
+            Text("Search above, or tap a suggestion below")
                 .font(.system(size: 12))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .multilineTextAlignment(.center)
@@ -272,12 +286,15 @@ struct AdHocModeView: View {
         .padding(.vertical, 40)
     }
 
+    /// Inset and corner-radiused to match the display, so the dashes sit evenly
+    /// inside the screen instead of being clipped by its rounded corners.
     private var errandBorderOverlay: some View {
-        RoundedRectangle(cornerRadius: 0)
+        RoundedRectangle(cornerRadius: 46, style: .continuous)
             .strokeBorder(
-                accent.opacity(0.55),
-                style: StrokeStyle(lineWidth: 3, dash: [10, 6])
+                accent.opacity(0.6),
+                style: StrokeStyle(lineWidth: 3, dash: [9, 7], dashPhase: 0)
             )
+            .padding(3)
             .ignoresSafeArea()
             .allowsHitTesting(false)
     }
@@ -297,82 +314,6 @@ struct AdHocModeView: View {
         Task {
             await viewModel.addItem(name: product.name, productId: product.id)
             searchText = ""
-        }
-    }
-}
-
-/// Picks items off the main list to bring along on the errand. Anything pulled here
-/// returns to the main list automatically if the trip ends without it being bought.
-struct AdHocPullSheet: View {
-    @Binding var isPresented: Bool
-    @EnvironmentObject var viewModel: ShoppingListViewModel
-
-    private var accent: Color { DesignSystem.Colors.neonPurple }
-
-    var body: some View {
-        NavigationView {
-            ZStack {
-                DesignSystem.Colors.background.ignoresSafeArea()
-
-                if viewModel.shoppingList.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle")
-                            .font(.system(size: 34, weight: .light))
-                            .foregroundColor(accent.opacity(0.5))
-                        Text("Everything's already on the trip")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
-                } else {
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            ForEach(viewModel.shoppingList) { item in
-                                Button {
-                                    Task { await viewModel.pullItemToAdHoc(item) }
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                } label: {
-                                    HStack(spacing: 10) {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.name)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(DesignSystem.Colors.textPrimary)
-                                            if let notes = item.notes, !notes.isEmpty {
-                                                Text(notes)
-                                                    .font(.system(size: 12))
-                                                    .foregroundColor(DesignSystem.Colors.textTertiary)
-                                            }
-                                        }
-                                        Spacer()
-                                        Image(systemName: "plus.circle.fill")
-                                            .font(.system(size: 20))
-                                            .foregroundColor(accent)
-                                    }
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 14)
-                                            .fill(Color.white.opacity(0.05))
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 14)
-                                                    .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                                            )
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(20)
-                    }
-                }
-            }
-            .navigationTitle("Pull from main list")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { isPresented = false }
-                        .foregroundColor(accent)
-                }
-            }
         }
     }
 }

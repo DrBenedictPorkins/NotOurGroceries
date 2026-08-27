@@ -211,7 +211,37 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Initialization
     init() {
+        // Load the local copy first, synchronously, before anything that can
+        // fail. If Amplify never configures and the network never answers, the
+        // list is already on screen by the time either of those matters.
+        restoreLocalSnapshot()
         setupHouseholdChangeObserver()
+        setupLocalSnapshotSaving()
+    }
+
+    // MARK: - Local Snapshot
+
+    /// True when the list on screen came from disk and hasn't been refreshed
+    /// from the server yet — the cue for telling the user what they're looking at.
+    @Published private(set) var isShowingLocalSnapshot = false
+    @Published private(set) var localSnapshotSavedAt: Date?
+
+    private func restoreLocalSnapshot() {
+        guard let snapshot = LocalListStore.load(), !snapshot.items.isEmpty else { return }
+        items = snapshot.items
+        localSnapshotSavedAt = snapshot.savedAt
+        isShowingLocalSnapshot = true
+        logger.info("Restored \(snapshot.items.count) items from local snapshot")
+    }
+
+    private func setupLocalSnapshotSaving() {
+        // Debounced so a burst of edits writes once, not once per keystroke.
+        $items
+            .debounce(for: .milliseconds(600), scheduler: DispatchQueue.main)
+            .sink { [weak self] items in
+                LocalListStore.save(items: items, householdId: self?.householdId)
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -255,8 +285,30 @@ class ShoppingListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Network Gate
+
+    /// Every network call in this view model goes through these two wrappers, so
+    /// paper mode has exactly one place to stop them. Twenty scattered guards
+    /// would drift apart the first time someone adds a mutation and forgets one.
+    private func apiMutate(_ request: GraphQLRequest<JSONValue>) async throws -> GraphQLResponse<JSONValue> {
+        guard !PaperMode.shared.blocksNetwork else { throw PaperModeActive() }
+        return try await Amplify.API.mutate(request: request)
+    }
+
+    private func apiQuery(_ request: GraphQLRequest<JSONValue>) async throws -> GraphQLResponse<JSONValue> {
+        guard !PaperMode.shared.blocksNetwork else { throw PaperModeActive() }
+        return try await Amplify.API.query(request: request)
+    }
+
     // MARK: - Data Loading
     func loadShoppingList(forceRefresh: Bool = false) async {
+        // Paper mode: the local copy is the list. Don't fetch, don't wait, don't
+        // spin — just keep showing what's already on screen.
+        if PaperMode.shared.blocksNetwork {
+            hasLoadedInitialData = true
+            return
+        }
+
         // Skip if already loaded (prevents jerky redraws on tab switch)
         if hasLoadedInitialData && !forceRefresh {
             return
@@ -317,7 +369,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.query(request: request)
+            let response = try await apiQuery(request)
 
             switch response {
             case .success(let json):
@@ -326,6 +378,7 @@ class ShoppingListViewModel: ObservableObject {
                    case .array(let itemsJson) = listResult["items"] {
                     self.items = itemsJson.compactMap { parseGroceryItem($0) }
                     applySorting()
+                    isShowingLocalSnapshot = false
 
                     logger.info("Loaded \(self.items.count) items: \(self.shoppingList.count) active, \(self.inCart.count) in cart, \(self.suggestions.count) suggestions")
                 } else {
@@ -338,12 +391,14 @@ class ShoppingListViewModel: ObservableObject {
                     try? await AmplifyService.shared.signOut()
                     return
                 }
+                handleServerUnreachable()
             }
 
         } catch {
             logger.error("Error loading shopping list: \(error)")
             errorMessage = error.localizedDescription
             AmplifyService.shared.handleAuthError(error)
+            handleServerUnreachable()
         }
 
         // Populate caches in parallel
@@ -516,7 +571,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success(let json):
@@ -546,6 +601,12 @@ class ShoppingListViewModel: ObservableObject {
                 }
             }
         } catch {
+            // On paper the item stays. Deleting what the user just typed because
+            // we couldn't reach a server would be the worst bug in the mode.
+            if error is PaperModeActive {
+                pendingOptimisticIds.remove(itemId)
+                return
+            }
             // Remove optimistic item on error
             items.removeAll { $0.id == itemId }
             pendingOptimisticIds.remove(itemId)
@@ -627,7 +688,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success(_):
@@ -641,6 +702,8 @@ class ShoppingListViewModel: ObservableObject {
                 showToast(message: "Failed to add item to cart", type: .error)
             }
         } catch {
+            // On paper the cross-off stands — no error buzz, no resync.
+            if error is PaperModeActive { return }
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             await loadShoppingList()
             showToast(message: "Failed to add item to cart", type: .error)
@@ -742,7 +805,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -764,6 +827,12 @@ class ShoppingListViewModel: ObservableObject {
     func restoreItem(_ item: GroceryItem) async {
         // Adding a suggestion back onto the ACTIVE list is allowed even while
         // someone else is shopping — the shopper sees the item appear live.
+
+        // On an errand, a suggestion joins the errand rather than the main list.
+        if isCurrentUserAdHocShopping && !item.adHoc {
+            await setAdHocFlags(item, adHoc: true, pulled: false, status: .active)
+            return
+        }
 
         let currentUserId = AmplifyService.shared.currentUser?.userId ?? ""
 
@@ -832,7 +901,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -902,7 +971,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -992,7 +1061,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -1006,6 +1075,8 @@ class ShoppingListViewModel: ObservableObject {
                 logger.error("Update notes failed: \(error)")
             }
         } catch {
+            // On paper the local edit stands — it's the whole point of the mode.
+            if error is PaperModeActive { return }
             // Revert optimistic update
             if let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index] = item
@@ -1079,7 +1150,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success(let json):
@@ -1168,7 +1239,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success(let json):
@@ -1321,6 +1392,9 @@ class ShoppingListViewModel: ObservableObject {
     // MARK: - Subscriptions
 
     func setupSubscriptions() {
+        // A GraphQL socket retrying its handshake forever is exactly the hang
+        // paper mode exists to prevent, so don't open one.
+        guard !PaperMode.shared.blocksNetwork else { return }
         guard let householdId = householdId else { return }
 
         // Clear any existing cancellables to avoid duplicate handlers
@@ -1382,6 +1456,90 @@ class ShoppingListViewModel: ObservableObject {
         subscriptionCancellables.removeAll()
         SubscriptionService.shared.unsubscribeAll()
         logger.info("Subscriptions torn down")
+    }
+
+    // MARK: - Server Unreachable
+
+    /// Set when we couldn't reach the server but do have a local copy to shop from.
+    @Published var showOfflinePrompt = false
+    /// True while quietly retrying after the user declined paper mode.
+    @Published private(set) var isRetryingConnection = false
+
+    private var offeredPaperThisLaunch = false
+    private var reconnectTask: Task<Void, Never>?
+
+    /// The crash-at-the-store case: we came up, couldn't reach anything, but the
+    /// local snapshot means there IS a list to shop from. Offer it rather than
+    /// leaving the user staring at an empty screen.
+    private func handleServerUnreachable() {
+        guard !PaperMode.shared.blocksNetwork else { return }
+        guard !offeredPaperThisLaunch else { return }
+        guard !items.isEmpty else { return }   // nothing to offer
+
+        offeredPaperThisLaunch = true
+        showOfflinePrompt = true
+    }
+
+    /// User said no to paper. Keep trying — store wifi often shows up a minute
+    /// later, and they shouldn't have to think about it again.
+    func keepTryingToReconnect() {
+        guard reconnectTask == nil else { return }
+        isRetryingConnection = true
+
+        reconnectTask = Task { @MainActor in
+            while !Task.isCancelled && isRetryingConnection {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                if Task.isCancelled || PaperMode.shared.blocksNetwork { break }
+
+                await loadShoppingList(forceRefresh: true)
+
+                if !isShowingLocalSnapshot {
+                    // A real fetch landed — we're back.
+                    isRetryingConnection = false
+                    showToast(message: "Back online", type: .success)
+                    setupSubscriptions()
+                    break
+                }
+            }
+            reconnectTask = nil
+        }
+    }
+
+    func stopRetryingToReconnect() {
+        isRetryingConnection = false
+        reconnectTask?.cancel()
+        reconnectTask = nil
+    }
+
+    // MARK: - Paper List Mode
+
+    /// Go to paper. Everything that reaches the network stops here — not just
+    /// mutations, but the live sockets and the interval timers behind them.
+    func enterPaperMode() {
+        PaperMode.shared.enter()
+        stopRetryingToReconnect()
+
+        teardownSubscriptions()
+        stopReminderTimer()
+        stopAbandonedCheckTimer()
+        ShopperReminderService.shared.cancel()
+
+        // Whatever is on screen right now becomes the paper list.
+        LocalListStore.save(items: items, householdId: householdId)
+        localSnapshotSavedAt = Date()
+
+        logger.info("Entered paper mode with \(self.items.count) items")
+    }
+
+    /// Come back to normal operation. Deliberately does not push anything —
+    /// applying a paper trip is a separate, user-approved step.
+    func exitPaperMode() async {
+        PaperMode.shared.exit()
+        logger.info("Left paper mode")
+
+        await loadShoppingList(forceRefresh: true)
+        await loadStores(forceRefresh: true)
+        setupSubscriptions()
     }
 
     // MARK: - Remote Update Helpers
@@ -1601,7 +1759,7 @@ class ShoppingListViewModel: ObservableObject {
         )
 
         do {
-            let response = try await Amplify.API.query(request: request)
+            let response = try await apiQuery(request)
             switch response {
             case .success(let json):
                 if case .object(let root) = json,
@@ -1638,6 +1796,11 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Helpers
     private func showToast(message: String, userName: String = "", type: ToastType = .success) {
+        // On paper, a write never reaching the server is the design, not a fault.
+        // Reporting it as an error would tell the user something broke when
+        // nothing did — and it would fire on essentially every tap.
+        if PaperMode.shared.blocksNetwork && type == .error { return }
+
         print("showToast called: '\(message)' userName: '\(userName)' type: \(type)")
         toastMessage = message
         toastUserName = userName
@@ -1760,7 +1923,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -1791,6 +1954,7 @@ class ShoppingListViewModel: ObservableObject {
 
     /// Start reminder timer for pending shopping requests (plays notification every 45 seconds)
     func startReminderTimer() {
+        guard !PaperMode.shared.blocksNetwork else { return }
         reminderTimer?.invalidate()
         reminderTimer = Timer.scheduledTimer(withTimeInterval: 45.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -1885,7 +2049,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success(let json):
@@ -1994,7 +2158,8 @@ class ShoppingListViewModel: ObservableObject {
             // Create completion stats
             let stats = ShoppingCompletionStats(
                 itemsPickedUp: itemsInCart.count,
-                itemsNotPickedUp: discardUncrossed ? itemsOnList.count : 0,
+                // Left behind either way — keeping them doesn't make them bought.
+                itemsNotPickedUp: itemsOnList.count,
                 itemsAddedDuringTrip: 0, // TODO: Track this separately if needed
                 customItemsLearned: customItemsInCart.count,
                 storeName: storeName,
@@ -2043,7 +2208,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success(let json):
@@ -2128,7 +2293,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -2200,7 +2365,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            _ = try await Amplify.API.mutate(request: request)
+            _ = try await apiMutate(request)
         } catch {
             logger.error("Failed to update item status: \(error)")
         }
@@ -2250,8 +2415,9 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            _ = try await Amplify.API.mutate(request: request)
+            _ = try await apiMutate(request)
         } catch {
+            if error is PaperModeActive { return }
             // Revert on failure — a stuck ad-hoc flag would hide the item from both lists
             if let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index] = item
@@ -2303,7 +2469,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -2402,7 +2568,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            _ = try await Amplify.API.mutate(request: request)
+            _ = try await apiMutate(request)
         } catch {
             logger.error("Failed to clear ad-hoc status: \(error)")
         }
@@ -2411,6 +2577,12 @@ class ShoppingListViewModel: ObservableObject {
         activeShopperId = nil
         shoppingStoreId = nil
         shoppingStartedAt = nil
+
+        // A trip where nothing was added and nothing bought has no story to tell.
+        if bought.isEmpty && leftoverPulled.isEmpty && leftoverFresh.isEmpty {
+            logger.info("Cancelled an empty ad-hoc trip")
+            return
+        }
 
         shoppingCompletionStats = stats
         showShoppingCompletedSheet = true
@@ -2449,7 +2621,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.query(request: request)
+            let response = try await apiQuery(request)
 
             switch response {
             case .success(let json):
@@ -2627,7 +2799,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -2701,7 +2873,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
+            let response = try await apiMutate(request)
 
             switch response {
             case .success:
@@ -2757,7 +2929,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.query(request: request)
+            let response = try await apiQuery(request)
 
             switch response {
             case .success(let json):
@@ -2839,7 +3011,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: graphQLRequest)
+            let response = try await apiMutate(graphQLRequest)
 
             switch response {
             case .success:
@@ -3011,7 +3183,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        let response = try await apiMutate(request)
 
         switch response {
         case .success:

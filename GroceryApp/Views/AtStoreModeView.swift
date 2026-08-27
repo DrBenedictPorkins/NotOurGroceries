@@ -256,17 +256,28 @@ struct AtStoreModeView: View {
                 }
             }
         }
-        .alert("Items Not Picked Up", isPresented: $showDoneShoppingAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("I'm Done Shopping", role: .destructive) {
-                Task {
-                    await viewModel.exitShoppingMode(discardUncrossed: true)
-                    // Completion sheet will handle dismissal
-                }
+        .confirmationDialog(
+            uncrossedTitle,
+            isPresented: $showDoneShoppingAlert,
+            titleVisibility: .visible
+        ) {
+            // Two genuinely different situations, so make the user say which:
+            // the store didn't have it, or they just stopped ticking things off.
+            Button("Keep them on the list") {
+                Task { await viewModel.exitShoppingMode(discardUncrossed: false) }
             }
+            Button("Clear them", role: .destructive) {
+                Task { await viewModel.exitShoppingMode(discardUncrossed: true) }
+            }
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("You still have \(viewModel.shoppingList.count) items on your list. These will be removed if you finish.")
+            Text("Keep them if the store didn't have them and you still need them — they'll be waiting on your list next time. Clear them if you actually got them and didn't tick them off.")
         }
+    }
+
+    private var uncrossedTitle: String {
+        let n = viewModel.shoppingList.count
+        return "\(n) item\(n == 1 ? "" : "s") still on your list"
     }
 
     // MARK: - Header View

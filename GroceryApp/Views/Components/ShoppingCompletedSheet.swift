@@ -94,7 +94,7 @@ struct ShoppingCompletedSheet: View {
                     statCard(
                         icon: "xmark.circle",
                         value: "\(stats.itemsNotPickedUp)",
-                        label: "Skipped",
+                        label: "Not found",
                         color: DesignSystem.Colors.warning
                     )
                 }

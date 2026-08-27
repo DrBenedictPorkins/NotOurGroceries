@@ -133,21 +133,41 @@ Dictated speech: this input is often a transcript of someone talking, so treat i
 - Transcription is imperfect. Repair obvious mis-hearings into the sensible grocery term when confident: "macaronis" → "Macaroni", "whole flour" → "Whole Wheat Flour", "do a orange juice" → "Orange Juice". Do not invent items you are not confident about.
 - Speakers repeat themselves when thinking aloud; collapse duplicates into a single item carrying the richest quantity/qualifier mentioned.
 ${knownTermsSection}
-Cooking intent: people mix a list with what they are planning to cook — "eggs, milk,
-butter... oh and I'm making burritos tonight, add whatever burritos need". Expand that
-into ingredients, but treat every expanded item as inferred rather than requested:
-- Include the ingredients a typical version of the dish needs, as separate items.
-- Set "needsInput": true on ALL of them, and set "heardAs" to the intent, e.g. "for burritos".
-  The user never said "cumin" — they said "burritos" — so it must be confirmed, not assumed.
-  Silently adding a dozen unrequested items is the single worst failure this feature has.
-- Keep the list to the ~6-10 things that actually define the dish. Do not pad it with
-  salt, pepper, oil, or water, which every kitchen already has.
+Cooking intent — apply this ONLY when the speaker states they are cooking or serving
+something. It is off by default. Getting this wrong produces absurd results, so the
+gate is deliberately narrow.
+
+EXPAND only when BOTH are true:
+  (a) There is an explicit intent phrase: "I'm making X", "I'm cooking X", "we're
+      having X tonight", "X night", "for the X party", "add what X needs", "whatever
+      goes in X". A bare mention of a food is NEVER an intent phrase.
+  (b) X is a prepared dish or meal, not something sold ready-made on a shelf.
+
+DO NOT EXPAND — these are items to buy, even though each has a recipe:
+  salsa, hummus, guacamole, pesto, soup, bread, tortillas, yoghurt, ice cream,
+  salad dressing, jam, pasta sauce, cake, cookies, pizza (unless they say they are
+  MAKING it from scratch).
+  If a shopper could pick it off a shelf, they want the product, not its ingredients.
+  "Get some salsa" → one item: Salsa. NEVER tomatoes + onions + garlic + cilantro.
+
+When you do expand:
+- Expand ONLY the dish named in the intent phrase. If they say "I'm making burritos"
+  and also list salsa, expand burritos — never salsa.
+- Give the 6-10 components that define that dish as a shopping list. For burritos:
+  tortillas, ground beef or chicken, rice, beans, cheese, sour cream, salsa, lettuce.
+  Not spices, not oil, not water.
+- Set "needsInput": true on every expanded item, with "heardAs" set to the intent —
+  "for burritos". The user said "burritos", not "cumin"; the distance between those
+  is why each must be confirmed. Quietly adding a dozen unrequested items is the
+  worst failure this feature has.
 - Anything they named explicitly is NOT inferred, even if it also belongs to the dish.
-  If they said "onion" and then "burritos", onion is a confident item, listed once.
-- Hedged possession — "I don't think I have rice", "we might be out of sour cream" —
-  means include it, flagged with needsInput, using their words as heardAs. Uncertainty
-  about what is in the cupboard is exactly what they want the list to resolve.
-- Do not invent a dish. Only expand when they actually name one.
+  "onion... and burritos" → Onion is confident, listed once, not repeated in the group.
+- Never expand a dish they did not name. Never invent an intent that is not stated.
+
+Hedged possession — "I don't think I have rice", "we might be out of sour cream" —
+include the item, flagged needsInput, using their words as heardAs. Resolving that
+uncertainty is the whole point of the list. This is separate from cooking intent and
+applies whether or not a dish was named.
 
 Flagging what you are unsure about — this is as important as the extraction itself.
 The user sees confident items in one list and everything else in a "needs your input"

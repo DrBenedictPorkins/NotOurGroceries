@@ -77,6 +77,15 @@ struct BulkImportSheet: View {
     @FocusState private var editorFocused: Bool
     @StateObject private var dictation = SpeechDictationService()
     @State private var showMicAuthHint = false
+    @State private var isTyping = false
+
+    /// Parsing or writing items — nothing should interrupt either.
+    private var isBusy: Bool {
+        switch phase {
+        case .parsing, .adding: return true
+        case .input, .review:   return false
+        }
+    }
 
     private var selectedCount: Int {
         ingredients.filter(\.isSelected).count
@@ -103,6 +112,10 @@ struct BulkImportSheet: View {
                 }
             }
         }
+        // A stray downward drag while this is working used to dismiss the sheet
+        // and take the image and transcript with it. Work in progress is not
+        // something to lose to a gesture.
+        .interactiveDismissDisabled(isBusy)
         .onAppear {
             if rawText.isEmpty && !savedDraft.isEmpty {
                 rawText = savedDraft
@@ -176,37 +189,174 @@ struct BulkImportSheet: View {
         VStack(spacing: 20) {
             if let image = selectedImage {
                 imagePreviewSection(image: image)
-            } else {
+            } else if hasText || isTyping || dictation.isBusy {
                 textInputSection
+            } else {
+                // Nothing yet — lead with the ways in, not with a text box.
+                // Typing is the least likely of the five and used to occupy the
+                // whole screen while the other four fought over a button strip.
+                sourceChooser
             }
 
             if let error = errorMessage {
                 Text(error)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13))
                     .foregroundColor(DesignSystem.Colors.neonPink)
+                    .lineLimit(3)
                     .padding(.horizontal, 20)
             }
 
             Spacer()
 
-            parseButton
-                .padding(.horizontal, 20)
-                .padding(.bottom, 32)
+            if hasText || selectedImage != nil {
+                parseButton
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 32)
+            }
         }
         .padding(.top, 4)
     }
 
+    private var hasText: Bool {
+        !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    // MARK: - Source Chooser
+
+    private var sourceChooser: some View {
+        VStack(spacing: 14) {
+            Text("How do you want to add items?")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .padding(.top, 6)
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                sourceTile(icon: "mic.fill", title: "Speak",
+                           detail: "Say the whole list", tint: DesignSystem.Colors.neonCyan) {
+                    toggleDictation()
+                }
+                sourceTile(icon: "camera.fill", title: "Camera",
+                           detail: "Photograph a recipe", tint: DesignSystem.Colors.neonPurple) {
+                    editorFocused = false
+                    showCamera = true
+                }
+                sourceTile(icon: "photo.fill", title: "Photos",
+                           detail: "Pick an existing shot", tint: DesignSystem.Colors.neonPurple) {
+                    editorFocused = false
+                    showPhotoPicker = true
+                }
+                sourceTile(icon: "doc.on.clipboard.fill", title: "Paste",
+                           detail: pasteDetail, tint: DesignSystem.Colors.neonYellow) {
+                    pasteFromClipboard()
+                }
+            }
+            .padding(.horizontal, 20)
+
+            Button {
+                isTyping = true
+                editorFocused = true
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("Type it instead")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+
+            micStatusView
+        }
+    }
+
+    /// The clipboard can hold either, so say which is waiting rather than
+    /// making the user tap to find out.
+    private var pasteDetail: String {
+        if UIPasteboard.general.image != nil { return "An image is on the clipboard" }
+        if UIPasteboard.general.hasStrings   { return "Text is on the clipboard" }
+        return "Nothing copied yet"
+    }
+
+    private func pasteFromClipboard() {
+        editorFocused = false
+        if let img = UIPasteboard.general.image {
+            selectedImage = img
+        } else if let text = UIPasteboard.general.string, !text.isEmpty {
+            rawText = text
+            isTyping = true
+        } else {
+            errorMessage = "Nothing on the clipboard to paste."
+        }
+    }
+
+    private func sourceTile(
+        icon: String,
+        title: String,
+        detail: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }) {
+            VStack(alignment: .leading, spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundColor(tint)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(tint.opacity(0.14)))
+
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Text(detail)
+                    .font(.system(size: 11.5))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(tint.opacity(0.3), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var textInputSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Paste a recipe, shopping notes, or any list of items")
-                .font(.system(size: 14, weight: .regular))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
-                .padding(.horizontal, 20)
+            HStack {
+                Text("Anything goes — a recipe, notes, a list")
+                    .font(.system(size: 13))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Spacer()
+                Button("Start over") {
+                    rawText = ""
+                    isTyping = false
+                    editorFocused = false
+                    errorMessage = nil
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.neonCyan)
+            }
+            .padding(.horizontal, 20)
 
             ZStack(alignment: .topLeading) {
                 if rawText.isEmpty {
-                    Text("e.g. 2 cups flour, 3 eggs, 1 stick butter\nor a full recipe ingredient list...")
-                        .font(.system(size: 15, weight: .regular))
+                    Text("e.g. 2 cups flour, 3 eggs, 1 stick butter")
+                        .font(.system(size: 15))
                         .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.6))
                         .padding(.horizontal, 16)
                         .padding(.top, 14)
@@ -214,7 +364,7 @@ struct BulkImportSheet: View {
                 }
 
                 TextEditor(text: $rawText)
-                    .font(.system(size: 15, weight: .regular))
+                    .font(.system(size: 15))
                     .foregroundColor(.white)
                     .scrollContentBackground(.hidden)
                     .focused($editorFocused)
@@ -227,39 +377,15 @@ struct BulkImportSheet: View {
                     .fill(Color.white.opacity(0.07))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        DesignSystem.Colors.neonCyan.opacity(editorFocused ? 0.5 : 0.2),
-                                        DesignSystem.Colors.neonPurple.opacity(editorFocused ? 0.3 : 0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: editorFocused ? 1.5 : 1
-                            )
+                            .stroke(DesignSystem.Colors.neonCyan.opacity(editorFocused ? 0.5 : 0.2),
+                                    lineWidth: editorFocused ? 1.5 : 1)
                     )
             )
             .padding(.horizontal, 20)
 
-            // Image source + mic buttons
-            let imageDisabled = !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || dictation.isBusy
+            // Voice stays reachable while typing — dictate more onto what's there.
             HStack(spacing: 12) {
                 Spacer()
-                imageSourceButton(icon: "camera.fill", label: "Camera", disabled: imageDisabled) {
-                    editorFocused = false
-                    showCamera = true
-                }
-                imageSourceButton(icon: "photo.fill", label: "Photos", disabled: imageDisabled) {
-                    editorFocused = false
-                    showPhotoPicker = true
-                }
-                imageSourceButton(icon: "doc.on.clipboard", label: "Paste", disabled: imageDisabled) {
-                    if let img = UIPasteboard.general.image {
-                        editorFocused = false
-                        selectedImage = img
-                    }
-                }
                 micButton
             }
             .padding(.horizontal, 20)
@@ -479,21 +605,46 @@ struct BulkImportSheet: View {
     // MARK: - Parsing Phase
 
     private var parsingView: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             Spacer()
 
-            VStack(spacing: 16) {
+            // Show the thing being worked on, so the wait has an object.
+            if let image = selectedImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 150, height: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(DesignSystem.Colors.neonCyan.opacity(0.4), lineWidth: 1.5)
+                    )
+            } else {
+                Image(systemName: "waveform")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundColor(DesignSystem.Colors.neonCyan.opacity(0.6))
+            }
+
+            VStack(spacing: 10) {
                 ProgressView()
-                    .scaleEffect(1.4)
+                    .scaleEffect(1.2)
                     .tint(DesignSystem.Colors.neonCyan)
 
-                Text("Parsing ingredients...")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Text(selectedImage != nil ? "Reading the image…" : "Sorting out what you said…")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Text("Keep this open — it takes a few seconds")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
             }
 
             Spacer()
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        // Swallow drags so the sheet cannot be flung away by accident.
+        .gesture(DragGesture())
     }
 
     // MARK: - Review Phase

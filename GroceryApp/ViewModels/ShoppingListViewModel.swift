@@ -1406,8 +1406,20 @@ class ShoppingListViewModel: ObservableObject {
         // If order is the same, do nothing
     }
 
+    /// Alphabetical, with `id` breaking ties. Despite the name this does not
+    /// consult aisles — the At Store view groups by aisle itself, from the
+    /// mappings, so this only needs to give a stable order within a group.
+    ///
+    /// The tiebreaker is not cosmetic: Swift's sort is not stable, and the app
+    /// permits duplicate names (two "Milk" rows with different notes), so
+    /// without it those rows swap places on every refetch — the same reshuffle
+    /// bug applySorting was fixed for, on the screen where it matters most.
     func sortByAisle() {
-        items.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        items.sort {
+            let comparison = $0.name.localizedCaseInsensitiveCompare($1.name)
+            if comparison != .orderedSame { return comparison == .orderedAscending }
+            return $0.id < $1.id
+        }
     }
 
     // MARK: - Subscriptions

@@ -87,10 +87,13 @@ final class ListPartitioningTests: XCTestCase {
             item("E", status: .inCart, adHoc: true)
         ]
 
-        // Suggestions overlap by design; the other four must be disjoint and total.
-        let partitioned = vm.shoppingList.count + vm.inCart.count
-            + vm.adHocList.count + vm.adHocInCart.count + vm.suggestions.count
-        XCTAssertEqual(partitioned, vm.items.count,
+        // Comparing counts would let a double-count hide a dropped item, so
+        // compare the actual ids: every item must surface somewhere.
+        var seen = Set<String>()
+        for list in [vm.shoppingList, vm.inCart, vm.adHocList, vm.adHocInCart, vm.suggestions] {
+            seen.formUnion(list.map(\.id))
+        }
+        XCTAssertEqual(seen, Set(vm.items.map(\.id)),
                        "An item in no partition is invisible to the user and effectively lost")
     }
 }

@@ -6,14 +6,23 @@ import XCTest
 /// worthless — so these tests care about fidelity, not just "it saved something".
 final class LocalListStoreTests: XCTestCase {
 
-    override func setUp() {
-        super.setUp()
-        LocalListStore.clear()
+    private var tempDir: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // The test target is hosted inside the app, so without redirecting the
+        // store these tests would delete the real snapshot and race the host
+        // app's own debounced write.
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LocalListStoreTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        LocalListStore.directoryOverride = tempDir
     }
 
-    override func tearDown() {
-        LocalListStore.clear()
-        super.tearDown()
+    override func tearDownWithError() throws {
+        LocalListStore.directoryOverride = nil
+        if let tempDir { try? FileManager.default.removeItem(at: tempDir) }
+        try super.tearDownWithError()
     }
 
     private func sampleItem() -> GroceryItem {
@@ -33,7 +42,10 @@ final class LocalListStoreTests: XCTestCase {
             lockedBy: "someone",
             addedBy: "me",
             addedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            version: 7
+            version: 7,
+            images: [ItemImage(id: "img-1", s3Key: "item-images/x.jpg",
+                               uploadedBy: "me",
+                               uploadedAt: Date(timeIntervalSince1970: 1_700_000_000))]
         )
     }
 
@@ -56,6 +68,13 @@ final class LocalListStoreTests: XCTestCase {
         XCTAssertEqual(restored.notes, original.notes)
         XCTAssertEqual(restored.status, original.status)
         XCTAssertEqual(restored.version, original.version)
+        // CodingKeys is hand-written, so a field added to the struct but missed
+        // there round-trips as nil silently. productId in particular carries the
+        // aisle mapping — losing it offline loses the item's shelf location.
+        XCTAssertEqual(restored.productId, original.productId)
+        XCTAssertEqual(restored.householdId, original.householdId)
+        XCTAssertEqual(restored.lockedBy, original.lockedBy)
+        XCTAssertEqual(restored.images.count, original.images.count)
         XCTAssertEqual(restored.addedAt.timeIntervalSince1970,
                        original.addedAt.timeIntervalSince1970, accuracy: 1)
         XCTAssertEqual(snapshot.householdId, "hh-1")
@@ -91,10 +110,7 @@ final class LocalListStoreTests: XCTestCase {
     func testCorruptFileDegradesToNoSnapshotRatherThanThrowing() throws {
         LocalListStore.save(items: [sampleItem()], householdId: "hh-1")
 
-        let dir = try FileManager.default.url(for: .applicationSupportDirectory,
-                                              in: .userDomainMask,
-                                              appropriateFor: nil, create: true)
-        let url = dir.appendingPathComponent("shopping-list-snapshot.json")
+        let url = try XCTUnwrap(LocalListStore.fileURL)
         try Data("{ not json at all".utf8).write(to: url)
 
         // Must not throw. A bad snapshot means "no local copy", and the app

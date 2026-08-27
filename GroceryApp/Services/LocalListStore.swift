@@ -17,9 +17,18 @@ enum LocalListStore {
         var savedAt: Date
     }
 
-    private static let filename = "shopping-list-snapshot.json"
+    static let filename = "shopping-list-snapshot.json"
 
-    private static var fileURL: URL? {
+    /// Tests point this at a temp directory. The test target is hosted inside the
+    /// app, so without it a test run deletes the real snapshot out from under
+    /// whoever is using the app on that simulator — and races the host app's own
+    /// debounced write, which makes "nothing saved" assertions flaky.
+    static var directoryOverride: URL?
+
+    static var fileURL: URL? {
+        if let directoryOverride {
+            return directoryOverride.appendingPathComponent(filename)
+        }
         guard let dir = try? FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,

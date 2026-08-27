@@ -13,6 +13,7 @@ struct AtStoreModeView: View {
     @State private var showStoreSwitcher = false
     @State private var showAisleManagement = false
     @FocusState private var searchFieldFocused: Bool
+    @StateObject private var dictation = SpeechDictationService()
 
     // Get the currently selected household store (using shoppingStoreId when in shopping mode)
     private var selectedHouseholdStore: HouseholdStore? {
@@ -151,7 +152,9 @@ struct AtStoreModeView: View {
                     text: $searchText,
                     isFocused: $searchFieldFocused,
                     onSubmit: addItemFromSearch,
-                    onProductSelected: addProductFromSearch
+                    onProductSelected: addProductFromSearch,
+                    onVoice: toggleVoiceCapture,
+                    isListening: dictation.isRecording
                 )
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
@@ -591,6 +594,30 @@ struct AtStoreModeView: View {
     // MARK: - Search Actions
 
     /// Add item from typed input - active shopper adds directly
+    /// Tap to talk, tap to stop. The transcript lands in the search field rather
+    /// than being added blind — mishearing "toothpaste" as "toast" and silently
+    /// adding it is worse than making the user glance before hitting return.
+    private func toggleVoiceCapture() {
+        if dictation.isRecording {
+            dictation.stop()
+            return
+        }
+        dictation.onCommit = { text in
+            let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleaned.isEmpty else { return }
+            searchText = cleaned
+            searchFieldFocused = true
+        }
+        Task {
+            if case .granted = dictation.authState {
+                dictation.start()
+            } else {
+                await dictation.requestAuth()
+                if case .granted = dictation.authState { dictation.start() }
+            }
+        }
+    }
+
     private func addItemFromSearch() {
         let itemName = searchText.trimmingCharacters(in: .whitespaces)
         guard !itemName.isEmpty else { return }

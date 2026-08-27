@@ -123,6 +123,14 @@ class ShoppingListViewModel: ObservableObject {
         return shopperId == currentUserId
     }
 
+    /// True while another member holds an active session of any kind, so this
+    /// device must not mutate the list. Two people editing while one of them is
+    /// standing in an aisle produces races nobody can reason about — and for a
+    /// two-person household, "text them" is a better channel than a live edit.
+    var isListLockedByOtherSession: Bool {
+        isSomeoneElseShopping || isSomeoneElseAdHocShopping
+    }
+
     /// True when another member is out on an errand
     var isSomeoneElseAdHocShopping: Bool {
         guard shoppingStatus == .adHoc,
@@ -462,8 +470,15 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Add Item
     func addItem(name: String, quantity: String? = nil, notes: String? = nil, productId: String? = nil) async {
-        // Direct add even while someone else is shopping — the shopper sees a live
-        // toast + pulse via handleItemCreated / remoteAddedAt on their device.
+        // Reverses the v1.3.0 live-add. The shopper can still add anything to
+        // their own trip, so nothing is lost: a member who remembers milk texts
+        // the shopper, who adds it. The item is still recorded and still learned
+        // as a suggestion — it just enters through the person holding the cart.
+        if isListLockedByOtherSession {
+            showToast(message: "\(activeShopperDisplayName ?? "Someone") is shopping — text them instead", type: .warning)
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
 
         guard let householdId = householdId else {
             showToast(message: "No household selected")
@@ -618,7 +633,7 @@ class ShoppingListViewModel: ObservableObject {
     // MARK: - Move Item to Cart
     func moveToCart(_ item: GroceryItem) async {
         // List is read-only for remote members during active shopping
-        if isSomeoneElseShopping {
+        if isListLockedByOtherSession {
             showToast(message: "List is read-only while shopping", type: .warning)
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
             return
@@ -825,8 +840,11 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Restore Item
     func restoreItem(_ item: GroceryItem) async {
-        // Adding a suggestion back onto the ACTIVE list is allowed even while
-        // someone else is shopping — the shopper sees the item appear live.
+        if isListLockedByOtherSession {
+            showToast(message: "\(activeShopperDisplayName ?? "Someone") is shopping — text them instead", type: .warning)
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
 
         // On an errand, a suggestion joins the errand rather than the main list.
         if isCurrentUserAdHocShopping && !item.adHoc {
@@ -1101,7 +1119,7 @@ class ShoppingListViewModel: ObservableObject {
     // MARK: - Lock/Unlock Item
     func toggleLock(_ item: GroceryItem) async {
         // List is read-only for remote members during active shopping
-        if isSomeoneElseShopping {
+        if isListLockedByOtherSession {
             showToast(message: "List is read-only while shopping", type: .warning)
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
             return
@@ -1181,7 +1199,7 @@ class ShoppingListViewModel: ObservableObject {
     // MARK: - Update Item Notes
     func updateItemNotes(_ item: GroceryItem, notes: String?) async {
         // List is read-only for remote members during active shopping
-        if isSomeoneElseShopping {
+        if isListLockedByOtherSession {
             showToast(message: "List is read-only while shopping", type: .warning)
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
             return

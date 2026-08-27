@@ -15,6 +15,10 @@ struct SearchBar: View {
     var onSubmit: () -> Void
     var onProductSelected: (Product) -> Void
     var onImport: (() -> Void)? = nil
+    /// Optional one-item voice capture. Supplied where speed matters more than
+    /// bulk — mid-shop, holding a cart, after a "don't forget the toothpaste" text.
+    var onVoice: (() -> Void)? = nil
+    var isListening: Bool = false
 
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @State private var showAutocomplete = false
@@ -53,6 +57,24 @@ struct SearchBar: View {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(.white.opacity(0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale.combined(with: .opacity))
+                }
+
+                // Voice — one item, spoken. Bulk import is the sit-down tool;
+                // this is for when typing is the thing slowing you down.
+                if text.isEmpty, let onVoice {
+                    Button(action: {
+                        hapticFeedback(.medium)
+                        onVoice()
+                    }) {
+                        Image(systemName: isListening ? "waveform" : "mic.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(isListening
+                                             ? DesignSystem.Colors.neonPink
+                                             : DesignSystem.Colors.neonCyan)
+                            .symbolEffect(.variableColor, isActive: isListening)
                     }
                     .buttonStyle(.plain)
                     .transition(.scale.combined(with: .opacity))

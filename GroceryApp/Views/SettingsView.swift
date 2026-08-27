@@ -250,6 +250,19 @@ struct CustomTextField: View {
     var isSecure: Bool = false
     var keyboardType: UIKeyboardType = .default
     var autocapitalization: TextInputAutocapitalization = .sentences
+    /// Tells iOS what this field holds. Without it, AutoFill, iCloud Keychain
+    /// and 1Password have no idea which box is the username and which is the
+    /// password, so they never offer to fill anything.
+    var contentType: UITextContentType? = nil
+
+    /// The visible box is bigger than the text field inside it. Without this the
+    /// icon and the 16pt of padding are dead space, so the first tap does nothing
+    /// and it feels like the field needs tapping twice.
+    @FocusState private var isFocused: Bool
+
+    /// Typing a password blind is miserable, and on a phone keyboard it's the
+    /// main reason people get locked out of their own account.
+    @State private var isRevealed = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -261,15 +274,41 @@ struct CustomTextField: View {
             }
 
             if isSecure {
-                SecureField(placeholder, text: $text)
-                    .textInputAutocapitalization(autocapitalization)
+                Group {
+                    if isRevealed {
+                        TextField(placeholder, text: $text)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField(placeholder, text: $text)
+                    }
+                }
+                .textInputAutocapitalization(.never)
+                .textContentType(contentType)
+                .focused($isFocused)
+
+                Button {
+                    isRevealed.toggle()
+                } label: {
+                    Image(systemName: isRevealed ? "eye.slash.fill" : "eye.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isRevealed ? "Hide password" : "Show password")
             } else {
                 TextField(placeholder, text: $text)
                     .keyboardType(keyboardType)
                     .textInputAutocapitalization(autocapitalization)
+                    .textContentType(contentType)
+                    .autocorrectionDisabled(contentType != nil)
+                    .focused($isFocused)
             }
         }
         .padding(16)
+        .contentShape(Rectangle())
+        .onTapGesture { isFocused = true }
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.white.opacity(0.05))

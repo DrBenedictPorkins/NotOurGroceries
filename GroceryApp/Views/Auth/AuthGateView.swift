@@ -95,18 +95,20 @@ struct AuthGateView: View {
                     text: $email,
                     icon: "envelope.fill",
                     keyboardType: .emailAddress,
-                    autocapitalization: .never
+                    autocapitalization: .never,
+                    contentType: .username
                 )
 
                 CustomTextField(
                     placeholder: "Password",
                     text: $password,
                     icon: "lock.fill",
-                    isSecure: true
+                    isSecure: true,
+                    contentType: isSignUp ? .newPassword : .password
                 )
 
                 if isSignUp {
-                    Text("Password: 8+ chars, uppercase, lowercase, number, symbol")
+                    Text("At least 6 characters")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(DesignSystem.Colors.textTertiary)
                 }
@@ -176,7 +178,8 @@ struct AuthGateView: View {
                 placeholder: "Confirmation Code",
                 text: $confirmationCode,
                 icon: "number",
-                keyboardType: .numberPad
+                keyboardType: .numberPad,
+                contentType: .oneTimeCode
             )
 
             if let error = errorMessage {

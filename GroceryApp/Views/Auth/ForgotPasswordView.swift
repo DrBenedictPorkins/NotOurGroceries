@@ -71,7 +71,8 @@ struct ForgotPasswordView: View {
                 text: $email,
                 icon: "envelope.fill",
                 keyboardType: .emailAddress,
-                autocapitalization: .never
+                autocapitalization: .never,
+                contentType: .username
             )
 
             if let error = errorMessage {
@@ -127,24 +128,27 @@ struct ForgotPasswordView: View {
                 placeholder: "Confirmation Code",
                 text: $confirmationCode,
                 icon: "number",
-                keyboardType: .numberPad
+                keyboardType: .numberPad,
+                contentType: .oneTimeCode
             )
 
             CustomTextField(
                 placeholder: "New Password",
                 text: $newPassword,
                 icon: "lock.fill",
-                isSecure: true
+                isSecure: true,
+                contentType: .newPassword
             )
 
             CustomTextField(
                 placeholder: "Confirm Password",
                 text: $confirmPassword,
                 icon: "lock.fill",
-                isSecure: true
+                isSecure: true,
+                contentType: .newPassword
             )
 
-            Text("Password: 8+ chars, uppercase, lowercase, number, symbol")
+            Text("At least 6 characters")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
 
@@ -267,11 +271,21 @@ struct ForgotPasswordView: View {
                     with: newPassword,
                     confirmationCode: confirmationCode
                 )
-                successMessage = "Password reset successful! Returning to sign in..."
 
-                // Delay then dismiss
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                onDismiss()
+                // We're holding a valid email and the password we just set, so
+                // making the user type both again is pure friction. Sign them in.
+                do {
+                    try await amplifyService.signIn(email: email, password: newPassword)
+                    successMessage = "Password reset. Signing you in..."
+                    try? await Task.sleep(nanoseconds: 800_000_000)
+                    onDismiss()
+                } catch {
+                    // Reset worked even if auto sign-in didn't — say so, and let
+                    // them in the normal way rather than implying the reset failed.
+                    successMessage = "Password reset. Please sign in."
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    onDismiss()
+                }
             } catch {
                 errorMessage = parseAuthError(error)
             }

@@ -22,7 +22,7 @@ if (!LAMBDA_FUNCTION_NAME) {
 const tools = [
   {
     name: "list_tables",
-    description: "List all DynamoDB tables for the NotOurGroceries backend",
+    description: "List all DynamoDB tables for the Got Dill backend",
     inputSchema: {
       type: "object" as const,
       properties: {},

@@ -80,6 +80,9 @@ struct RootView: View {
 
 // MARK: - Splash View (Loading state)
 struct SplashView: View {
+    /// One per launch, held for the life of the view so it doesn't
+    /// shuffle on every redraw.
+    @State private var tagline = AppIdentity.randomTagline()
     @ObservedObject private var loadingState = AppLoadingState.shared
 
     private var versionString: String {
@@ -115,9 +118,13 @@ struct SplashView: View {
                     .foregroundStyle(DesignSystem.Colors.accentGradient)
                     .neonGlow(color: DesignSystem.Colors.neonCyan)
 
-                Text("NotOurGroceries")
+                Text(AppIdentity.name)
                     .font(.system(size: 28, weight: .bold))
                     .foregroundStyle(DesignSystem.Colors.accentGradient)
+
+                Text(tagline)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
 
                 VStack(spacing: 4) {
                     Text(versionString)

@@ -1,4 +1,4 @@
-# NotOurGroceries
+# Got Dill
 
 A shared grocery list for a household, built around the way people actually shop: everyone adds to one live list, one person takes it to the store, and the app reorders that list to match the store's aisles so the shopper walks the floor once instead of three times.
 

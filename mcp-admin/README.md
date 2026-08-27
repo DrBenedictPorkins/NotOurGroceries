@@ -1,6 +1,6 @@
 # NOG Admin MCP Server
 
-A local MCP (Model Context Protocol) shim that bridges Claude Code to the NotOurGroceries admin Lambda function.
+A local MCP (Model Context Protocol) shim that bridges Claude Code to the Got Dill admin Lambda function.
 
 ## Setup
 

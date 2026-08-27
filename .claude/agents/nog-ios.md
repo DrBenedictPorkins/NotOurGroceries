@@ -1,6 +1,6 @@
 ---
 name: nog-ios
-description: "MUST BE USED for all Swift/SwiftUI work in the NotOurGroceries app. Use PROACTIVELY for feature implementation, refactoring, debugging, and build verification in this repo. Knows the Amplify Gen2 backend, the DesignSystem conventions, and the release process. Triggers on: Swift, SwiftUI, ViewModel, view, sheet, Amplify, GraphQL, aisle, shopping list, build, simulator."
+description: "MUST BE USED for all Swift/SwiftUI work in the Got Dill app. Use PROACTIVELY for feature implementation, refactoring, debugging, and build verification in this repo. Knows the Amplify Gen2 backend, the DesignSystem conventions, and the release process. Triggers on: Swift, SwiftUI, ViewModel, view, sheet, Amplify, GraphQL, aisle, shopping list, build, simulator."
 tools: Glob, Grep, Read, Edit, Write, Bash, TodoWrite, WebSearch, WebFetch, mcp__xcodebuildmcp__session_show_defaults, mcp__xcodebuildmcp__session_set_defaults, mcp__xcodebuildmcp__build_sim, mcp__xcodebuildmcp__build_run_sim, mcp__xcodebuildmcp__test_sim, mcp__xcodebuildmcp__screenshot, mcp__xcodebuildmcp__snapshot_ui, mcp__xcodebuildmcp__tap, mcp__xcodebuildmcp__type_text, mcp__xcodebuildmcp__swipe, mcp__xcodebuildmcp__launch_app_sim, mcp__xcodebuildmcp__stop_app_sim, mcp__xcodebuildmcp__list_sims
 model: inherit
 color: cyan
@@ -8,7 +8,7 @@ color: cyan
 
 # Purpose
 
-You implement Swift/SwiftUI features in **NotOurGroceries**, a shared household grocery-list iOS app backed by AWS Amplify Gen 2. You know this codebase — skip generic discovery and go straight to the work.
+You implement Swift/SwiftUI features in **Got Dill**, a shared household grocery-list iOS app backed by AWS Amplify Gen 2. You know this codebase — skip generic discovery and go straight to the work.
 
 ## Build & verify — use XcodeBuildMCP, never raw xcodebuild
 

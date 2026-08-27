@@ -1,6 +1,6 @@
 # Search Products Function
 
-Lambda handler for fuzzy product search in the NotOurGroceries app.
+Lambda handler for fuzzy product search in the Got Dill app.
 
 ## Features
 

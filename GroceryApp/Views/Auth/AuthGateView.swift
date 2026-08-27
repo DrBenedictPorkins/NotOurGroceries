@@ -58,11 +58,11 @@ struct AuthGateView: View {
                 .foregroundStyle(DesignSystem.Colors.accentGradient)
                 .neonGlow(color: DesignSystem.Colors.neonCyan)
 
-            Text("NotOurGroceries")
+            Text(AppIdentity.name)
                 .font(.system(size: 32, weight: .bold))
                 .foregroundStyle(DesignSystem.Colors.accentGradient)
 
-            Text("Share your shopping list with family")
+            Text(AppIdentity.shortDescription)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
         }

@@ -78,7 +78,7 @@ async function sendEmail(recipientEmail: string, senderName: string, householdNa
     <body>
       <div class="container">
         <h1>You're invited to join a household!</h1>
-        <p><strong>${senderName}</strong> has invited you to join the <strong>"${householdName}"</strong> household on NotOurGroceries.</p>
+        <p><strong>${senderName}</strong> has invited you to join the <strong>"${householdName}"</strong> household on Got Dill.</p>
 
         <p>Use this invite code to join:</p>
         <div class="code">${inviteCode}</div>
@@ -87,7 +87,7 @@ async function sendEmail(recipientEmail: string, senderName: string, householdNa
 
         <p><strong>How to join:</strong></p>
         <ol>
-          <li>Open the NotOurGroceries app</li>
+          <li>Open the Got Dill app</li>
           <li>Go to the Household tab</li>
           <li>Select "Join Existing"</li>
           <li>Enter the invite code above</li>
@@ -95,7 +95,7 @@ async function sendEmail(recipientEmail: string, senderName: string, householdNa
 
         <div class="footer">
           <p>If you didn't expect this invitation, you can safely ignore this email.</p>
-          <p>NotOurGroceries - Shared shopping lists for families</p>
+          <p>Got Dill - Shared shopping lists for households</p>
         </div>
       </div>
     </body>
@@ -105,14 +105,14 @@ async function sendEmail(recipientEmail: string, senderName: string, householdNa
   const textBody = `
 You're invited to join a household!
 
-${senderName} has invited you to join the "${householdName}" household on NotOurGroceries.
+${senderName} has invited you to join the "${householdName}" household on Got Dill.
 
 Use this invite code to join: ${inviteCode}
 
 This code expires on ${expiresAtFormatted}.
 
 How to join:
-1. Open the NotOurGroceries app
+1. Open the Got Dill app
 2. Go to the Household tab
 3. Select "Join Existing"
 4. Enter the invite code above
@@ -127,7 +127,7 @@ If you didn't expect this invitation, you can safely ignore this email.
     },
     Message: {
       Subject: {
-        Data: `${senderName} invited you to join "${householdName}" on NotOurGroceries`,
+        Data: `${senderName} invited you to join "${householdName}" on Got Dill`,
       },
       Body: {
         Html: { Data: htmlBody },

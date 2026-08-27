@@ -15,6 +15,7 @@
 		8AE93CD8079C5629CE9DED63 /* SonarPingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */; };
 		AA0000000000000000000001 /* GroceryAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* GroceryAppApp.swift */; };
 		AA0000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* ContentView.swift */; };
+		AA0000000000000000000097 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000097 /* AppIdentity.swift */; };
 		AA0000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000003 /* Assets.xcassets */; };
 		AA0000000000000000000004 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000004 /* Preview Assets.xcassets */; };
 		AA0000000000000000000010 /* Aisle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010 /* Aisle.swift */; };
@@ -112,6 +113,7 @@
 		B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = amplify_outputs_prod.json; sourceTree = "<group>"; };
 		BB0000000000000000000001 /* GroceryAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryAppApp.swift; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000097 /* AppIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIdentity.swift; sourceTree = "<group>"; };
 		BB0000000000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB0000000000000000000004 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		BB0000000000000000000010 /* Aisle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Aisle.swift; sourceTree = "<group>"; };
@@ -303,6 +305,7 @@
 			children = (
 				BB0000000000000000000050 /* RootView.swift */,
 				BB0000000000000000000002 /* ContentView.swift */,
+				BB0000000000000000000097 /* AppIdentity.swift */,
 				BB0000000000000000000030 /* AtStoreModeView.swift */,
 				BB0000000000000000000092 /* AdHocModeView.swift */,
 				BB0000000000000000000074 /* CreateStoreSheet.swift */,
@@ -486,6 +489,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA0000000000000000000002 /* ContentView.swift in Sources */,
+				AA0000000000000000000097 /* AppIdentity.swift in Sources */,
 				AA0000000000000000000001 /* GroceryAppApp.swift in Sources */,
 				AA0000000000000000000010 /* Aisle.swift in Sources */,
 				AA0000000000000000000011 /* Commit.swift in Sources */,
@@ -708,7 +712,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_CFBundleDisplayName = "NOG (Dev)";
+				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill (Dev)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan store aisle directories for automatic product mapping.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone so you can dictate grocery items into the bulk import list.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library to select store aisle directory images.";
@@ -745,7 +749,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
-				INFOPLIST_KEY_CFBundleDisplayName = NotOurGroceries;
+				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan store aisle directories for automatic product mapping.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone so you can dictate grocery items into the bulk import list.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library to select store aisle directory images.";

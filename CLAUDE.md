@@ -1,4 +1,4 @@
-# NotOurGroceries - Development Notes
+# Got Dill - Development Notes
 
 ## AWS Configuration
 

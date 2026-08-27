@@ -344,7 +344,7 @@ struct HouseholdInviteView: View {
 
     private func shareMessage(for details: AmplifyService.HouseholdDetails) -> String {
         """
-        Join my household "\(details.name)" on NotOurGroceries!
+        Join my household "\(details.name)" on \(AppIdentity.name)!
 
         Use this invite code: \(details.inviteCode)
 

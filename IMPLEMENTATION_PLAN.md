@@ -2,7 +2,7 @@
 
 ## Overview
 
-Implement authentication gate, auto-household creation on signup, invite system with email, and real-time subscriptions for NotOurGroceries iOS app.
+Implement authentication gate, auto-household creation on signup, invite system with email, and real-time subscriptions for Got Dill iOS app.
 
 ---
 
@@ -27,7 +27,7 @@ When starting implementation, launch these Task agents in parallel:
 
 ```
 Task 1 (subagent_type: "apple-dev-pro"):
-  "Implement auth gate for NotOurGroceries - create RootView.swift, AuthGateView.swift,
+  "Implement auth gate for Got Dill - create RootView.swift, AuthGateView.swift,
    HouseholdSetupView.swift, update GroceryAppApp.swift, add checkHouseholdNameAvailable
    to AmplifyService"
 

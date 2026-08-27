@@ -1,6 +1,6 @@
 # Common Grocery Products Catalog
 
-A reusable list of ~250 common supermarket products for seeding the NotOurGroceries app.
+A reusable list of ~250 common supermarket products for seeding the Got Dill app.
 
 ## Produce - Fruits
 - Apples

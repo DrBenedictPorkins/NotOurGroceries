@@ -85,10 +85,19 @@ export const handler: Handler = async (event) => {
 
 Dictated speech: this input is often a transcript of someone talking, so treat it as one side of a conversation rather than a written list.
 - Strip conversational framing entirely: "ok", "so", "um", "let's see", "I need", "I want you to add", "we'll get some", "don't forget", "oh and". These are never items.
-- Honour self-corrections — the LAST thing said about an item wins:
-    "milk, actually make that two gallons" → one item, Milk, quantity "2 gallons"
-    "get cheddar, no wait, mozzarella"     → one item, Mozzarella (NOT cheddar)
-    "apples, the green ones"               → name: "Apples", qualifier: "Green"
+- Self-corrections REPLACE. This is the rule most easily got wrong, so apply it
+  literally: when a correction marker appears, the item before it is DELETED and does
+  not appear in your output at all. Never emit both the original and the correction.
+    "get cheddar, no wait, mozzarella"  → [Mozzarella]            NOT [Cheddar, Mozzarella]
+    "chicken, sorry, I meant turkey"    → [Turkey]                NOT [Chicken, Turkey]
+    "milk — actually make that two gallons" → [Milk, qty 2 gallons]  (one item, not two)
+    "apples, the green ones"            → [Apples, qualifier Green] (one item, not two)
+  Correction markers to watch for: "no wait", "wait", "actually", "sorry", "I meant",
+  "make that", "scratch that", "or rather", "instead", "change that to", "not X, Y".
+  Before returning, re-read your list: if two items both trace to one phrase where the
+  speaker changed their mind, keep only the later one.
+- A correction and a retraction differ: correction swaps one item for another, retraction
+  removes it entirely with nothing in its place.
 - Honour retractions — if the speaker takes an item back, omit it completely:
     "add eggs... actually skip the eggs, we have plenty" → no Eggs item at all
     Watch for: "never mind", "forget the", "skip", "we already have", "cancel that", "not the".

@@ -80,10 +80,11 @@
 		BCE700C7876941359C07CABF /* UserCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15546147AB154BAB9998BE81 /* UserCache.swift */; };
 		CB60F28BFD167CB0B4567A5E /* AisleScanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCFE63ECF05EDADD036FDCC /* AisleScanSheet.swift */; };
 		E8FBCD0EB31D28E134EB0960 /* StoreSwitcherSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */; };
-		TT0000000000000000000001 /* ShoppingModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000011 /* ShoppingModeTests.swift */; };
-		TT0000000000000000000002 /* ShoppingListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000012 /* ShoppingListViewModelTests.swift */; };
-		TT0000000000000000000003 /* GroceryItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000013 /* GroceryItemTests.swift */; };
 		TT0000000000000000000004 /* ProductTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000014 /* ProductTests.swift */; };
+		TT0000000000000000000140 /* ListPartitioningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000240 /* ListPartitioningTests.swift */; };
+		TT0000000000000000000141 /* SortStabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000241 /* SortStabilityTests.swift */; };
+		TT0000000000000000000142 /* LocalListStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000242 /* LocalListStoreTests.swift */; };
+		TT0000000000000000000143 /* ShoppingStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000243 /* ShoppingStatusTests.swift */; };
 		TT0000000000000000000005 /* UserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000015 /* UserTests.swift */; };
 		TT0000000000000000000006 /* AuthErrorParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000016 /* AuthErrorParsingTests.swift */; };
 /* End PBXBuildFile section */
@@ -169,10 +170,11 @@
 		DD0000000000000000000001 /* GroceryApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GroceryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadyToShopSheet.swift; sourceTree = "<group>"; };
 		TT0000000000000000000010 /* GroceryAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GroceryAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		TT0000000000000000000011 /* ShoppingModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingModeTests.swift; sourceTree = "<group>"; };
-		TT0000000000000000000012 /* ShoppingListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListViewModelTests.swift; sourceTree = "<group>"; };
-		TT0000000000000000000013 /* GroceryItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryItemTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000014 /* ProductTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000240 /* ListPartitioningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListPartitioningTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000241 /* SortStabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortStabilityTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000242 /* LocalListStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalListStoreTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000243 /* ShoppingStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingStatusTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000015 /* UserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000016 /* AuthErrorParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthErrorParsingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -361,10 +363,11 @@
 			isa = PBXGroup;
 			children = (
 				TT0000000000000000000016 /* AuthErrorParsingTests.swift */,
-				TT0000000000000000000013 /* GroceryItemTests.swift */,
 				TT0000000000000000000014 /* ProductTests.swift */,
-				TT0000000000000000000012 /* ShoppingListViewModelTests.swift */,
-				TT0000000000000000000011 /* ShoppingModeTests.swift */,
+				TT0000000000000000000240 /* ListPartitioningTests.swift */,
+				TT0000000000000000000241 /* SortStabilityTests.swift */,
+				TT0000000000000000000242 /* LocalListStoreTests.swift */,
+				TT0000000000000000000243 /* ShoppingStatusTests.swift */,
 				TT0000000000000000000015 /* UserTests.swift */,
 			);
 			path = GroceryAppTests;
@@ -553,10 +556,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				TT0000000000000000000001 /* ShoppingModeTests.swift in Sources */,
-				TT0000000000000000000002 /* ShoppingListViewModelTests.swift in Sources */,
-				TT0000000000000000000003 /* GroceryItemTests.swift in Sources */,
 				TT0000000000000000000004 /* ProductTests.swift in Sources */,
+				TT0000000000000000000140 /* ListPartitioningTests.swift in Sources */,
+				TT0000000000000000000141 /* SortStabilityTests.swift in Sources */,
+				TT0000000000000000000142 /* LocalListStoreTests.swift in Sources */,
+				TT0000000000000000000143 /* ShoppingStatusTests.swift in Sources */,
 				TT0000000000000000000005 /* UserTests.swift in Sources */,
 				TT0000000000000000000006 /* AuthErrorParsingTests.swift in Sources */,
 			);

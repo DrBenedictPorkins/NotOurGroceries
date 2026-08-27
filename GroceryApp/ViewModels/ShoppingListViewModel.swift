@@ -338,11 +338,20 @@ class ShoppingListViewModel: ObservableObject {
         defer { isLoading = false; hasLoadedInitialData = true }
 
         do {
-            // Fetch all items for the household using filter-based query
-            // Note: listItemsByHouseholdAndStatus requires status param, so we use listGroceryItems with filter
+            // Query the householdId GSI, not listGroceryItems with a filter. The old
+            // comment here claimed `status` was a required argument; the deployed
+            // schema says otherwise — only `householdId: ID!` is required, and
+            // `status` is an optional sort-key condition. Filtering instead of
+            // querying made this a full table Scan: DynamoDB read every item of
+            // every household on every list load and discarded the non-matches.
+            //
+            // It was also silently lossy. On a Scan, `limit` caps rows EXAMINED,
+            // not rows returned, so once the table passed 1000 rows a household
+            // could lose items off the end of its own list. Paginating on the GSI
+            // fixes both — each page is 1000 items of this household only.
             let document = """
-            query ListGroceryItems($filter: ModelGroceryItemFilterInput, $limit: Int) {
-                listGroceryItems(filter: $filter, limit: $limit) {
+            query ListItemsByHousehold($householdId: ID!, $limit: Int, $nextToken: String) {
+                listItemsByHouseholdAndStatus(householdId: $householdId, limit: $limit, nextToken: $nextToken) {
                     items {
                         id
                         householdId
@@ -362,45 +371,65 @@ class ShoppingListViewModel: ObservableObject {
                         version
                         images
                     }
+                    nextToken
                 }
             }
             """
 
-            let filter: [String: Any] = [
-                "householdId": ["eq": householdId]
-            ]
+            var fetched: [GroceryItem] = []
+            var nextToken: String? = nil
+            var parseFailed = false
 
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["filter": filter, "limit": 1000],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
+            repeat {
+                var variables: [String: Any] = ["householdId": householdId, "limit": 1000]
+                if let nextToken { variables["nextToken"] = nextToken }
 
-            let response = try await apiQuery(request)
+                let request = GraphQLRequest<JSONValue>(
+                    document: document,
+                    variables: variables,
+                    responseType: JSONValue.self,
+                    authMode: AWSAuthorizationType.amazonCognitoUserPools
+                )
 
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let listResult) = root["listGroceryItems"],
-                   case .array(let itemsJson) = listResult["items"] {
-                    self.items = itemsJson.compactMap { parseGroceryItem($0) }
-                    applySorting()
-                    isShowingLocalSnapshot = false
+                let response = try await apiQuery(request)
 
-                    logger.info("Loaded \(self.items.count) items: \(self.shoppingList.count) active, \(self.inCart.count) in cart, \(self.suggestions.count) suggestions")
-                } else {
-                    logger.error("Failed to parse items response structure")
-                }
-            case .failure(let error):
-                logger.error("Failed to fetch items: \(String(describing: error))")
-                self.errorMessage = error.localizedDescription
-                if AmplifyService.shared.isAuthError(error) {
-                    try? await AmplifyService.shared.signOut()
+                switch response {
+                case .success(let json):
+                    guard case .object(let root) = json,
+                          case .object(let listResult) = root["listItemsByHouseholdAndStatus"],
+                          case .array(let itemsJson) = listResult["items"] else {
+                        logger.error("Failed to parse items response structure")
+                        parseFailed = true
+                        break
+                    }
+                    fetched.append(contentsOf: itemsJson.compactMap { parseGroceryItem($0) })
+                    if case .string(let token) = listResult["nextToken"] {
+                        nextToken = token
+                    } else {
+                        nextToken = nil
+                    }
+                case .failure(let error):
+                    logger.error("Failed to fetch items: \(String(describing: error))")
+                    self.errorMessage = error.localizedDescription
+                    if AmplifyService.shared.isAuthError(error) {
+                        try? await AmplifyService.shared.signOut()
+                        return
+                    }
+                    handleServerUnreachable()
+                    // Leave `items` alone rather than publishing a half-fetched
+                    // list — a partial page would look like someone deleted the
+                    // rest of the list.
                     return
                 }
-                handleServerUnreachable()
-            }
+            } while nextToken != nil && !parseFailed
+
+            if parseFailed { return }
+
+            self.items = fetched
+            applySorting()
+            isShowingLocalSnapshot = false
+
+            logger.info("Loaded \(self.items.count) items: \(self.shoppingList.count) active, \(self.inCart.count) in cart, \(self.suggestions.count) suggestions")
 
         } catch {
             logger.error("Error loading shopping list: \(error)")

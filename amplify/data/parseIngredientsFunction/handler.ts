@@ -96,6 +96,22 @@ Dictated speech: this input is often a transcript of someone talking, so treat i
 - Transcription is imperfect. Repair obvious mis-hearings into the sensible grocery term when confident: "macaronis" → "Macaroni", "whole flour" → "Whole Wheat Flour", "do a orange juice" → "Orange Juice". Do not invent items you are not confident about.
 - Speakers repeat themselves when thinking aloud; collapse duplicates into a single item carrying the richest quantity/qualifier mentioned.
 ${knownTermsSection}
+Cooking intent: people mix a list with what they are planning to cook — "eggs, milk,
+butter... oh and I'm making burritos tonight, add whatever burritos need". Expand that
+into ingredients, but treat every expanded item as inferred rather than requested:
+- Include the ingredients a typical version of the dish needs, as separate items.
+- Set "needsInput": true on ALL of them, and set "heardAs" to the intent, e.g. "for burritos".
+  The user never said "cumin" — they said "burritos" — so it must be confirmed, not assumed.
+  Silently adding a dozen unrequested items is the single worst failure this feature has.
+- Keep the list to the ~6-10 things that actually define the dish. Do not pad it with
+  salt, pepper, oil, or water, which every kitchen already has.
+- Anything they named explicitly is NOT inferred, even if it also belongs to the dish.
+  If they said "onion" and then "burritos", onion is a confident item, listed once.
+- Hedged possession — "I don't think I have rice", "we might be out of sour cream" —
+  means include it, flagged with needsInput, using their words as heardAs. Uncertainty
+  about what is in the cupboard is exactly what they want the list to resolve.
+- Do not invent a dish. Only expand when they actually name one.
+
 Flagging what you are unsure about — this is as important as the extraction itself.
 The user sees confident items in one list and everything else in a "needs your input"
 list underneath. Being silently wrong is far worse than asking, but asking about

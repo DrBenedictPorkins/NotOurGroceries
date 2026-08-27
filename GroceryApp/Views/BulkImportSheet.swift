@@ -64,6 +64,9 @@ struct BulkImportSheet: View {
     @Binding var isPresented: Bool
 
     @State private var rawText = ""
+    /// Dictating a long list is expensive to redo, so the draft outlives the sheet.
+    /// Losing 300 spoken words to a stray tap is not a recoverable mistake.
+    @AppStorage("bulkImportDraft") private var savedDraft = ""
     @State private var selectedImage: UIImage? = nil
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -101,6 +104,9 @@ struct BulkImportSheet: View {
             }
         }
         .onAppear {
+            if rawText.isEmpty && !savedDraft.isEmpty {
+                rawText = savedDraft
+            }
             editorFocused = true
             dictation.onCommit = { chunk in
                 if rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -112,6 +118,9 @@ struct BulkImportSheet: View {
         }
         .onDisappear {
             if dictation.isRecording { dictation.stop() }
+        }
+        .onChange(of: rawText) { _, text in
+            savedDraft = text
         }
         .sheet(isPresented: $showCamera) {
             CameraPicker(image: $selectedImage)
@@ -718,6 +727,9 @@ struct BulkImportSheet: View {
                 }
             }
             await MainActor.run {
+                // The draft did its job — don't resurrect it next time.
+                savedDraft = ""
+                rawText = ""
                 isPresented = false
             }
         }
@@ -874,8 +886,6 @@ private struct _RawItem: Decodable {
 private struct IngredientReviewRow: View {
     @Binding var item: ParsedIngredient
     let viewModel: ShoppingListViewModel
-    @State private var showMatches = false
-    @State private var matches: [Product] = []
 
     private var nameLabel: Text {
         if let notes = item.notes, !notes.isEmpty {
@@ -897,194 +907,43 @@ private struct IngredientReviewRow: View {
         }
     }
 
-    @State private var showDetail = false
-
     var body: some View {
-        VStack(spacing: 0) {
-            rowContent
-            if showMatches {
-                matchesDropdown
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(item.isSelected ? Color.white.opacity(0.06) : Color.white.opacity(0.02))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            item.isSelected
-                            ? DesignSystem.Colors.neonCyan.opacity(0.2)
-                            : Color.white.opacity(0.06),
-                            lineWidth: 1
-                        )
-                )
-        )
-        .animation(.easeInOut(duration: 0.15), value: item.isSelected)
-        .animation(.easeInOut(duration: 0.2), value: showMatches)
-        .sheet(isPresented: $showDetail) {
-            IngredientDetailSheet(item: $item)
-        }
+        rowContent
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(item.isSelected ? Color.white.opacity(0.06) : Color.white.opacity(0.02))
+            )
+            .animation(.easeInOut(duration: 0.15), value: item.isSelected)
     }
 
     private var rowContent: some View {
-        HStack(spacing: 14) {
-            // Checkbox — only this toggles selection
-            Button(action: { item.isSelected.toggle() }) {
-                ZStack {
-                    Circle()
-                        .fill(item.isSelected ? DesignSystem.Colors.neonCyan.opacity(0.2) : Color.white.opacity(0.05))
-                        .frame(width: 26, height: 26)
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    item.isSelected ? DesignSystem.Colors.neonCyan : Color.white.opacity(0.2),
-                                    lineWidth: 1.5
-                                )
-                        )
-                    if item.isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(DesignSystem.Colors.neonCyan)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
+        // Three things only: is it coming, what is it, how much. Everything else
+        // that used to live here — a catalog badge, an expand chevron, an
+        // ellipsis to a detail sheet — was noise on a screen you look at once
+        // and then never again.
+        HStack(spacing: 12) {
+            Image(systemName: item.isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 21))
+                .foregroundColor(item.isSelected
+                                 ? DesignSystem.Colors.neonCyan
+                                 : DesignSystem.Colors.textTertiary.opacity(0.5))
 
-            Button(action: toggleMatches) {
-                HStack(spacing: 6) {
-                    nameLabel
+            nameLabel
+                .opacity(item.isSelected ? 1 : 0.45)
 
-                    if item.productId != nil {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.neonCyan.opacity(item.isSelected ? 0.7 : 0.3))
-                    } else {
-                        Text("new")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.neonPurple.opacity(item.isSelected ? 0.8 : 0.3))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(DesignSystem.Colors.neonPurple.opacity(item.isSelected ? 0.12 : 0.05))
-                            )
-                    }
+            Spacer(minLength: 8)
 
-                    Image(systemName: showMatches ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            // Quantity badge
             if let qty = item.quantity, !qty.isEmpty {
                 Text(qty)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.07))
-                    )
+                    .opacity(item.isSelected ? 1 : 0.45)
             }
-
-            // Detail button
-            Button(action: { showDetail = true }) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
         }
+        .padding(.vertical, 11)
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-    }
-
-    private var matchesDropdown: some View {
-        VStack(spacing: 0) {
-            Divider().background(Color.white.opacity(0.08))
-            if matches.isEmpty {
-                Text("No matches found in your list or catalog.")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ForEach(matches) { product in
-                    matchRow(product)
-                    if product.id != matches.last?.id {
-                        Divider().background(Color.white.opacity(0.06))
-                    }
-                }
-            }
-        }
-    }
-
-    private func matchRow(_ product: Product) -> some View {
-        let isCurrent = item.productId == product.id
-        let isHousehold = product.category == "Previous"
-        return Button(action: { pick(product) }) {
-            HStack(spacing: 10) {
-                Image(systemName: isHousehold ? "house.fill" : "cart.badge.plus")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(isHousehold ? DesignSystem.Colors.neonPurple.opacity(0.8) : DesignSystem.Colors.neonCyan.opacity(0.7))
-                    .frame(width: 16)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(product.name)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white)
-                    Text(product.category)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                }
-
-                Spacer()
-
-                if isCurrent {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(DesignSystem.Colors.neonCyan)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func toggleMatches() {
-        if showMatches {
-            showMatches = false
-            return
-        }
-        let trimmed = item.originalName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let householdMatches: [Product] = viewModel.suggestions
-            .filter { $0.name.lowercased().contains(trimmed) || $0.normalizedName.lowercased().contains(trimmed) }
-            .map { Product(id: $0.id, name: $0.name, normalizedName: $0.normalizedName, category: "Previous") }
-        let catalogMatches = ProductCache.shared.strictMatches(for: item.originalName)
-        var seen = Set(householdMatches.map { $0.normalizedName })
-        let dedupedCatalog = catalogMatches.filter { p in
-            if seen.contains(p.normalizedName) { return false }
-            seen.insert(p.normalizedName)
-            return true
-        }
-        matches = householdMatches + dedupedCatalog
-        showMatches = true
-    }
-
-    private func pick(_ product: Product) {
-        item.productId = product.id
-        item.name = product.name
-        showMatches = false
+        .contentShape(Rectangle())
+        .onTapGesture { item.isSelected.toggle() }
     }
 }
 

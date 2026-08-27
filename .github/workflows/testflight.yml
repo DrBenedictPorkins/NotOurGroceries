@@ -67,6 +67,40 @@ jobs:
           # (same version + different build is sufficient, but Apple sometimes rejects)
           echo "Scheduled or manual run — build number already stamped above"
 
+      # aws-sdk-swift is a very large repo and the runner cold-cloned it on every
+      # run. Run 33110689526 hung 59 minutes inside that fetch and was killed by
+      # the job timeout without compiling a single file. Cache keyed on the
+      # resolved graph, so it only re-fetches when a dependency actually moves.
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .spm-cache
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      # Bounded and retried on its own, so a hung fetch fails in 10 minutes with a
+      # clear message instead of silently eating the whole 60-minute job budget.
+      - name: Resolve SwiftPM dependencies
+        run: |
+          for attempt in 1 2 3; do
+            echo "Resolve attempt $attempt"
+            # perl alarm rather than `timeout`, which is GNU coreutils and is not
+            # reliably present on macOS runners. perl always is.
+            if perl -e 'alarm(600); exec @ARGV' xcodebuild -resolvePackageDependencies \
+                 -project GroceryApp.xcodeproj \
+                 -scheme GroceryApp \
+                 -clonedSourcePackagesDirPath .spm-cache; then
+              echo "Resolved on attempt $attempt"
+              exit 0
+            fi
+            echo "Attempt $attempt failed or timed out; retrying"
+          done
+          echo "Package resolution failed after 3 attempts"
+          exit 1
+
       - name: Archive
         run: |
           xcodebuild archive \
@@ -75,6 +109,8 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath build/GroceryApp.xcarchive \
+            -clonedSourcePackagesDirPath .spm-cache \
+            -disableAutomaticPackageResolution \
             BUILD_ACTIVE_RESOURCES_ONLY=NO
 
       - name: Export IPA

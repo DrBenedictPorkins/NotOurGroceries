@@ -5,7 +5,6 @@ struct StoreSelectionSheet: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @StateObject private var storeService = StoreService.shared
     @State private var showCreateStore = false
-    @State private var isStartingPlain = false
     var onStoreSelected: () -> Void
 
     // Batch mapping flow state
@@ -27,7 +26,11 @@ struct StoreSelectionSheet: View {
                     .opacity(0.3)
 
                 VStack(spacing: 0) {
-                    storeList
+                    if viewModel.householdStores.isEmpty {
+                        emptyStateView
+                    } else {
+                        storeList
+                    }
 
                     Spacer()
 
@@ -96,11 +99,7 @@ struct StoreSelectionSheet: View {
     private var storeList: some View {
         ScrollView {
             VStack(spacing: 12) {
-                // Always first, and always available: shopping should never be
-                // blocked behind naming a store or defining its aisles.
-                justShoppingRow
-
-                ForEach(viewModel.householdStores.filter { $0.name != ShoppingListViewModel.defaultStoreName }) { store in
+                ForEach(viewModel.householdStores) { store in
                     StoreRow(store: store, isLoading: isCheckingMappings && selectedStore?.id == store.id) {
                         Task {
                             await handleStoreSelection(store)
@@ -111,76 +110,6 @@ struct StoreSelectionSheet: View {
             }
             .padding(.vertical, 20)
         }
-    }
-
-    /// Shop with no particular store. Backed by a plain no-aisle store created on
-    /// first use, so items can still learn aisle positions over time if the user
-    /// ever bothers to record them.
-    private var justShoppingRow: some View {
-        Button {
-            Task { await startJustShopping() }
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "bag.fill")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.neonCyan)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(DesignSystem.Colors.neonCyan.opacity(0.14)))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Just shopping")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-                    Text("No particular store, no aisles — just the list")
-                        .font(.system(size: 12))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                }
-
-                Spacer(minLength: 0)
-
-                if isStartingPlain {
-                    ProgressView().scaleEffect(0.7).tint(DesignSystem.Colors.neonCyan)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(DesignSystem.Colors.neonCyan.opacity(0.35), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(isCheckingMappings || isStartingPlain)
-    }
-
-    private func startJustShopping() async {
-        isStartingPlain = true
-        defer { isStartingPlain = false }
-
-        let store: HouseholdStore?
-        if let existing = viewModel.householdStores.first(where: { $0.name == ShoppingListViewModel.defaultStoreName }) {
-            store = existing
-        } else {
-            store = await viewModel.createStore(
-                name: ShoppingListViewModel.defaultStoreName,
-                chain: nil,
-                aisles: [],
-                layoutType: .noAisles
-            )
-        }
-
-        guard let store else { return }
-        selectedStore = store
-        unmappedItems = []
-        showReadyToShop = true
     }
 
     // MARK: - Store Selection Flow

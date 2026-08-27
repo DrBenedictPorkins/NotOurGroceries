@@ -12,6 +12,7 @@ struct AdHocModeView: View {
     @State private var searchText = ""
     @State private var showFinishAlert = false
     @State private var isSuggestionsExpanded = true
+    @State private var isMainListExpanded = true
     @FocusState private var searchFieldFocused: Bool
 
     private var accent: Color { DesignSystem.Colors.neonPurple }
@@ -93,6 +94,73 @@ struct AdHocModeView: View {
                                     .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                             }
                             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: viewModel.adHocInCart.map(\.id))
+                        }
+                        .listSectionSeparator(.hidden)
+                    }
+
+                    // The main list, right there. Quick Trip used to hide it,
+                    // which made "errand plus grab a few things" — the most
+                    // common real trip — impossible without leaving the mode.
+                    if !viewModel.shoppingList.isEmpty {
+                        Section {
+                            HStack(spacing: 6) {
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        isMainListExpanded.toggle()
+                                    }
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "list.bullet")
+                                            .font(.system(size: 13, weight: .semibold))
+                                        Text("SHOPPING LIST (\(viewModel.shoppingList.count))")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .tracking(0.5)
+                                        Image(systemName: isMainListExpanded ? "chevron.up" : "chevron.down")
+                                            .font(.system(size: 13, weight: .semibold))
+                                    }
+                                    .foregroundColor(DesignSystem.Colors.neonCyan)
+                                }
+                                .buttonStyle(.plain)
+
+                                Spacer()
+
+                                // For when the trip turns into "actually, let me
+                                // just do the whole shop while I'm here".
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                    Task {
+                                        for item in viewModel.shoppingList {
+                                            await viewModel.pullItemToAdHoc(item)
+                                        }
+                                    }
+                                } label: {
+                                    Text("Add all")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(DesignSystem.Colors.neonCyan)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(
+                                            Capsule()
+                                                .fill(DesignSystem.Colors.neonCyan.opacity(0.12))
+                                                .overlay(Capsule().stroke(DesignSystem.Colors.neonCyan.opacity(0.4), lineWidth: 1))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 14, leading: 20, bottom: 4, trailing: 20))
+
+                            if isMainListExpanded {
+                                ForEach(viewModel.shoppingList) { item in
+                                    GroceryItemRow(item: item)
+                                        .environmentObject(viewModel)
+                                        .listRowBackground(Color.clear)
+                                        .listRowSeparator(.hidden)
+                                        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                }
+                            }
                         }
                         .listSectionSeparator(.hidden)
                     }
@@ -277,7 +345,7 @@ struct AdHocModeView: View {
             Text("Nothing on this trip yet")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.textSecondary)
-            Text("Search above, or tap a suggestion below")
+            Text("Search above, or tap something from your list below")
                 .font(.system(size: 12))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .multilineTextAlignment(.center)

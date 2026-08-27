@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-27
+
 ### Shopping
 - Two ways to shop instead of three: **At Store** for the planned aisle-sorted run, **Quick Trip** for everything else
 - Quick Trip now shows your shopping list — tap items to bring them along, or Add all. Anything you don't find goes back on the list; anything you buy is saved as a suggestion
@@ -264,7 +266,8 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.4.0...HEAD
+[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.5.0...HEAD
+[1.5.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.5.0
 [1.4.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.4.0
 [1.3.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.3.0
 [1.2.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.2.0

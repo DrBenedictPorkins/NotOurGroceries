@@ -470,13 +470,12 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Add Item
     func addItem(name: String, quantity: String? = nil, notes: String? = nil, productId: String? = nil) async {
-        // Reverses the v1.3.0 live-add. The shopper can still add anything to
-        // their own trip, so nothing is lost: a member who remembers milk texts
-        // the shopper, who adds it. The item is still recorded and still learned
-        // as a suggestion — it just enters through the person holding the cart.
+        // Someone else is mid-trip: ask rather than either blocking or barging in.
+        // A hard block ignores that they may still be in the aisles; a direct add
+        // (the v1.3.0 behaviour) ignores that they may be at the checkout. Only
+        // the person actually standing there can judge, so let them decide.
         if isListLockedByOtherSession {
-            showToast(message: "\(activeShopperDisplayName ?? "Someone") is shopping — text them instead", type: .warning)
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            await submitAddRequest(name: name, quantity: quantity, notes: notes, productId: productId)
             return
         }
 
@@ -840,9 +839,16 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Restore Item
     func restoreItem(_ item: GroceryItem) async {
+        // Same reasoning as addItem: pulling a suggestion back onto the list
+        // during someone else's trip is a request, not a fait accompli.
         if isListLockedByOtherSession {
-            showToast(message: "\(activeShopperDisplayName ?? "Someone") is shopping — text them instead", type: .warning)
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            await submitAddRequest(
+                name: item.name,
+                quantity: item.quantity,
+                notes: item.notes,
+                productId: item.productId,
+                normalizedName: item.normalizedName
+            )
             return
         }
 

@@ -14,13 +14,37 @@ struct ParsedIngredient: Identifiable {
     var productId: String?
     var isSelected: Bool = true
 
-    init(name: String, quantity: String? = nil, notes: String? = nil, productId: String? = nil, isSelected: Bool = true) {
+    /// The speaker's own words, when the parsed name differs from them.
+    var heardAs: String?
+    /// The parser couldn't resolve this from the transcript alone.
+    var needsInput: Bool = false
+    /// Candidate names, best first, when the words support more than one product.
+    var alternatives: [String] = []
+    /// Set once the user picks or confirms, so it leaves the "needs input" section.
+    var resolved: Bool = false
+
+    /// Still awaiting the user. Drives which section the row appears in.
+    var isUnresolved: Bool { needsInput && !resolved }
+
+    init(
+        name: String,
+        quantity: String? = nil,
+        notes: String? = nil,
+        productId: String? = nil,
+        isSelected: Bool = true,
+        heardAs: String? = nil,
+        needsInput: Bool = false,
+        alternatives: [String] = []
+    ) {
         self.originalName = name
         self.name = name
         self.quantity = quantity
         self.notes = notes
         self.productId = productId
         self.isSelected = isSelected
+        self.heardAs = heardAs
+        self.needsInput = needsInput
+        self.alternatives = alternatives
     }
 }
 
@@ -485,11 +509,25 @@ struct BulkImportSheet: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
 
-            // Items list
+            // Items list — confident first, anything the parser guessed at below.
+            // Splitting them is the point: reviewing every item is as useless as
+            // reviewing none, so only the uncertain ones ask for attention.
             ScrollView {
                 LazyVStack(spacing: 8) {
                     ForEach($ingredients) { $item in
-                        IngredientReviewRow(item: $item, viewModel: viewModel)
+                        if !item.isUnresolved {
+                            IngredientReviewRow(item: $item, viewModel: viewModel)
+                        }
+                    }
+
+                    if unresolvedCount > 0 {
+                        needsInputHeader
+
+                        ForEach($ingredients) { $item in
+                            if item.isUnresolved {
+                                NeedsInputRow(item: $item, viewModel: viewModel)
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -508,13 +546,39 @@ struct BulkImportSheet: View {
         }
     }
 
+    private var unresolvedCount: Int {
+        ingredients.filter(\.isUnresolved).count
+    }
+
+    private var needsInputHeader: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "questionmark.circle.fill")
+                .font(.system(size: 13, weight: .semibold))
+            Text("NOT SURE ABOUT \(unresolvedCount)")
+                .font(.system(size: 12, weight: .bold))
+                .tracking(0.5)
+            Spacer()
+        }
+        .foregroundColor(DesignSystem.Colors.warning)
+        .padding(.top, 20)
+        .padding(.bottom, 2)
+    }
+
     private var addButton: some View {
         Button(action: addSelectedItems) {
             HStack(spacing: 10) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 16, weight: .semibold))
-                Text(selectedCount == 0 ? "No Items Selected" : "Add \(selectedCount) Item\(selectedCount == 1 ? "" : "s")")
-                    .font(.system(size: 17, weight: .semibold))
+                VStack(spacing: 1) {
+                    Text(selectedCount == 0 ? "No Items Selected" : "Add \(selectedCount) Item\(selectedCount == 1 ? "" : "s")")
+                        .font(.system(size: 17, weight: .semibold))
+                    // Don't let a guess in silently — say how many are unanswered.
+                    if unresolvedCount > 0 && selectedCount > 0 {
+                        Text("\(unresolvedCount) unanswered — best guess will be used")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.warning)
+                    }
+                }
             }
             .foregroundColor(selectedCount == 0 ? .white.opacity(0.3) : .white)
             .frame(maxWidth: .infinity)
@@ -721,12 +785,23 @@ struct BulkImportSheet: View {
                       case .string(let name) = obj["name"] else { return nil }
                 let qty: String? = { if case .string(let q) = obj["quantity"] { return q }; return nil }()
                 let notes: String? = { if case .string(let q) = obj["qualifier"] { return q }; return nil }()
-                return ParsedIngredient(name: name, quantity: qty, notes: notes)
+                let heard: String? = { if case .string(let h) = obj["heardAs"] { return h }; return nil }()
+                let needs: Bool = { if case .boolean(let b) = obj["needsInput"] { return b }; return false }()
+                let alts: [String] = {
+                    guard case .array(let a) = obj["alternatives"] else { return [] }
+                    return a.compactMap { if case .string(let v) = $0 { return v }; return nil }
+                }()
+                return ParsedIngredient(name: name, quantity: qty, notes: notes,
+                                        heardAs: heard, needsInput: needs, alternatives: alts)
             }
         case .string(let s):
             guard let data = s.data(using: .utf8),
                   let items = try? JSONDecoder().decode([_RawItem].self, from: data) else { return [] }
-            return items.map { ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier) }
+            return items.map {
+                ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier,
+                                 heardAs: $0.heardAs, needsInput: $0.needsInput ?? false,
+                                 alternatives: $0.alternatives ?? [])
+            }
         default:
             return []
         }
@@ -740,11 +815,18 @@ struct BulkImportSheet: View {
         if let str = dataObj["parseIngredients"] as? String {
             guard let itemData = str.data(using: .utf8) else { return [] }
             let items = try JSONDecoder().decode([_RawItem].self, from: itemData)
-            return items.map { ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier) }
+            return items.map {
+                ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier,
+                                 heardAs: $0.heardAs, needsInput: $0.needsInput ?? false,
+                                 alternatives: $0.alternatives ?? [])
+            }
         } else if let arr = dataObj["parseIngredients"] as? [[String: Any]] {
             return arr.compactMap { obj -> ParsedIngredient? in
                 guard let name = obj["name"] as? String else { return nil }
-                return ParsedIngredient(name: name, quantity: obj["quantity"] as? String, notes: obj["qualifier"] as? String)
+                return ParsedIngredient(name: name, quantity: obj["quantity"] as? String, notes: obj["qualifier"] as? String,
+                                        heardAs: obj["heardAs"] as? String,
+                                        needsInput: obj["needsInput"] as? Bool ?? false,
+                                        alternatives: obj["alternatives"] as? [String] ?? [])
             }
         }
         return []
@@ -755,6 +837,9 @@ private struct _RawItem: Decodable {
     let name: String
     let quantity: String?
     let qualifier: String?
+    let heardAs: String?
+    let needsInput: Bool?
+    let alternatives: [String]?
 }
 
 // MARK: - Ingredient Review Row
@@ -1113,6 +1198,166 @@ private struct CameraPicker: UIViewControllerRepresentable {
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.dismiss()
+        }
+    }
+}
+
+// MARK: - Needs Input Row
+
+/// A row for something the parser couldn't resolve from the transcript alone.
+/// Two shapes: pick-one when the words genuinely support several products, and
+/// plain confirm when it repaired a probable mis-hearing.
+struct NeedsInputRow: View {
+    @Binding var item: ParsedIngredient
+    let viewModel: ShoppingListViewModel
+
+    private var accent: Color { DesignSystem.Colors.warning }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // What was actually said, so the user can judge the guess.
+            if let heard = item.heardAs, !heard.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("You said “\(heard)”")
+                        .font(.system(size: 12, weight: .medium))
+                        .italic()
+                    Spacer(minLength: 0)
+                }
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+
+            if item.alternatives.count > 1 {
+                Text("Which did you mean?")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                // Best-first, so the thing this household actually buys leads.
+                FlowRow(spacing: 8) {
+                    ForEach(item.alternatives, id: \.self) { choice in
+                        Button {
+                            item.name = choice
+                            item.resolved = true
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        } label: {
+                            Text(choice)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(DesignSystem.Colors.textPrimary)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 9)
+                                .background(
+                                    Capsule()
+                                        .fill(accent.opacity(0.12))
+                                        .overlay(Capsule().stroke(accent.opacity(0.45), lineWidth: 1))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } else {
+                // Nothing to choose between — it repaired a mis-hearing and
+                // wants a nod before treating it as fact.
+                HStack(spacing: 8) {
+                    Text(item.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    if let q = item.quantity, !q.isEmpty {
+                        Text(q)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                HStack(spacing: 8) {
+                    Button {
+                        item.resolved = true
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Label("Yes", systemImage: "checkmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.success)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(DesignSystem.Colors.success.opacity(0.12))
+                                    .overlay(Capsule().stroke(DesignSystem.Colors.success.opacity(0.45), lineWidth: 1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        item.isSelected = false
+                        item.resolved = true
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Label("Skip", systemImage: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.05))
+                                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(accent.opacity(0.07))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(accent.opacity(0.35), lineWidth: 1)
+                )
+        )
+    }
+}
+
+/// Wraps chips onto as many lines as they need. The alternatives are product
+/// names of unpredictable length, so a fixed HStack would clip them.
+struct FlowRow: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: maxWidth, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x + size.width > bounds.maxX, x > bounds.minX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

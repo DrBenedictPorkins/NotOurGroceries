@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Shopping
+- Two ways to shop instead of three: **At Store** for the planned aisle-sorted run, **Quick Trip** for everything else
+- Quick Trip now shows your shopping list — tap items to bring them along, or Add all. Anything you don't find goes back on the list; anything you buy is saved as a suggestion
+- Finishing a trip with items left asks what to do: keep them (the store didn't have them) or clear them (you got them and didn't tick them off)
+- Notes can be marked "Just for this trip" — reminders like "get only 1" clear themselves when shopping finishes
+- Adding an item while someone else is shopping now asks them to approve it, so they can say no at the checkout
+- Voice button on the At Store search — say an item, tap once, it's on the list
+
+### No signal
+- **Paper List** mode: the app stops calling the server entirely — no waiting, no spinners. Cross things off and add items; changes stay on your phone
+- Your list is saved on the phone, so it's there instantly even if the app crashes at the store with no reception
+- If it can't reach the server on launch it offers the paper list, or keeps retrying quietly in the background
+
+### Adding items
+- Speak a whole list naturally — it handles filler, corrections ("cheddar, no wait, mozzarella") and retractions ("actually skip the eggs")
+- Say what you're cooking and it suggests the ingredients, grouped in a card you accept or trim — nothing is added without your say-so
+- The review list separates what it heard clearly from what it guessed at, showing your own words next to each guess
+- Rebuilt the import screen around how you actually add things: Speak, Camera, Photos, Paste — with typing as an option rather than the default
+- Your typed or dictated text is no longer lost if you back out by accident
+
+### Elsewhere
+- Cleaner list header — it now reports what's happening instead of repeating the screen's name
+- Password fields have a show/hide toggle, work with 1Password and iCloud Keychain, and focus on the first tap
+- Resetting your password signs you straight in
+- Fix: the list no longer reshuffles itself when you reopen the app, or when you enter a store
+- Removed per-item emoji reactions
+
 ## [1.4.0] - 2026-08-26
 
 - Quick Trip: start a store-less shopping run for a few things you need right now — your main list stays untouched and comes back when you finish

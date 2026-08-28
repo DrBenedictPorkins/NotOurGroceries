@@ -303,9 +303,42 @@ class ShoppingListViewModel: ObservableObject {
         return try await Amplify.API.mutate(request: request)
     }
 
+    /// Every read goes through here, and it retries.
+    ///
+    /// It used to be a single attempt. That is the wrong shape for a phone: iOS
+    /// tears down sockets while the app is suspended, so the first request after
+    /// coming back from the background very often fails on a connection that is
+    /// perfectly healthy. With one attempt, that blip travelled all the way up to
+    /// "the server is unreachable, would you like to switch to a paper list" —
+    /// while the user was sitting on working wifi.
+    ///
+    /// Retrying here rather than at the call sites means every caller gets it,
+    /// and the layers above only ever see failures that survived three attempts.
     private func apiQuery(_ request: GraphQLRequest<JSONValue>) async throws -> GraphQLResponse<JSONValue> {
         guard !PaperMode.shared.blocksNetwork else { throw PaperModeActive() }
-        return try await Amplify.API.query(request: request)
+
+        let delays: [UInt64] = [400_000_000, 1_200_000_000]  // 0.4s, then 1.2s
+        var lastError: Error?
+
+        for attempt in 0...delays.count {
+            do {
+                return try await Amplify.API.query(request: request)
+            } catch {
+                // A bad token will fail identically forever. Retrying it wastes
+                // the user's time and delays the sign-out they actually need.
+                if AmplifyService.shared.isAuthError(error) { throw error }
+
+                lastError = error
+                if attempt < delays.count {
+                    logger.info("apiQuery attempt \(attempt + 1) failed, retrying")
+                    try? await Task.sleep(nanoseconds: delays[attempt])
+                    if PaperMode.shared.blocksNetwork { throw PaperModeActive() }
+                }
+            }
+        }
+
+        logger.error("apiQuery failed after \(delays.count + 1) attempts")
+        throw lastError ?? PaperModeActive()
     }
 
     // MARK: - Data Loading
@@ -379,6 +412,7 @@ class ShoppingListViewModel: ObservableObject {
             var fetched: [GroceryItem] = []
             var nextToken: String? = nil
             var parseFailed = false
+            var loadFailed = false
 
             repeat {
                 var variables: [String: Any] = ["householdId": householdId, "limit": 1000]
@@ -416,20 +450,26 @@ class ShoppingListViewModel: ObservableObject {
                         return
                     }
                     handleServerUnreachable()
-                    // Leave `items` alone rather than publishing a half-fetched
-                    // list — a partial page would look like someone deleted the
-                    // rest of the list.
-                    return
+                    // Stop paging and leave `items` alone rather than publishing
+                    // a half-fetched list, which would look like someone deleted
+                    // the rest of it. Deliberately a flag and not a `return` —
+                    // returning here would skip the tail of this function, and
+                    // the tail is where subscriptions get re-established. One
+                    // failed load would silently kill realtime sync for the rest
+                    // of the session.
+                    loadFailed = true
+                    nextToken = nil
                 }
-            } while nextToken != nil && !parseFailed
+            } while nextToken != nil && !parseFailed && !loadFailed
 
-            if parseFailed { return }
+            if !parseFailed && !loadFailed {
+                self.items = fetched
+                applySorting()
+                isShowingLocalSnapshot = false
+                noteServerReachable()
 
-            self.items = fetched
-            applySorting()
-            isShowingLocalSnapshot = false
-
-            logger.info("Loaded \(self.items.count) items: \(self.shoppingList.count) active, \(self.inCart.count) in cart, \(self.suggestions.count) suggestions")
+                logger.info("Loaded \(self.items.count) items: \(self.shoppingList.count) active, \(self.inCart.count) in cart, \(self.suggestions.count) suggestions")
+            }
 
         } catch {
             logger.error("Error loading shopping list: \(error)")
@@ -1527,19 +1567,57 @@ class ShoppingListViewModel: ObservableObject {
     /// True while quietly retrying after the user declined paper mode.
     @Published private(set) var isRetryingConnection = false
 
-    private var offeredPaperThisLaunch = false
+    private var offeredPaperThisOutage = false
+    private var consecutiveLoadFailures = 0
     private var reconnectTask: Task<Void, Never>?
 
     /// The crash-at-the-store case: we came up, couldn't reach anything, but the
     /// local snapshot means there IS a list to shop from. Offer it rather than
     /// leaving the user staring at an empty screen.
+    /// Decide whether this failure means "you have no network" or just "that
+    /// request didn't work".
+    ///
+    /// The old version could not tell the difference: one failed request, from
+    /// any cause, put the paper-list prompt on screen. Since the request layer
+    /// had no retry and iOS kills sockets during suspension, the most common
+    /// trigger in practice was simply opening the app after a while — on a
+    /// working connection.
+    ///
+    /// Two signals now have to agree before we say anything:
+    ///   - the failure survived apiQuery's three attempts, and
+    ///   - either the device has no usable network interface, or a second
+    ///     independent load has also failed.
+    ///
+    /// Offering paper mode is a big, disruptive claim about the user's world.
+    /// Be sure before making it; staying quiet costs nothing, because the list
+    /// on screen is still there either way.
     private func handleServerUnreachable() {
         guard !PaperMode.shared.blocksNetwork else { return }
-        guard !offeredPaperThisLaunch else { return }
+        guard !offeredPaperThisOutage else { return }
         guard !items.isEmpty else { return }   // nothing to offer
 
-        offeredPaperThisLaunch = true
+        consecutiveLoadFailures += 1
+
+        // No interface at all — airplane mode, no bars, wifi off. Nothing is
+        // ambiguous about this, so don't make them fail twice to hear it.
+        let networkIsPlainlyGone = !PaperMode.shared.pathIsSatisfied
+
+        guard networkIsPlainlyGone || consecutiveLoadFailures >= 2 else {
+            logger.info("Load failed but the network looks fine — staying quiet")
+            return
+        }
+
+        offeredPaperThisOutage = true
         showOfflinePrompt = true
+    }
+
+    /// Called whenever a load actually lands. Clears the failure count and
+    /// re-arms the prompt, so it is once per *outage* rather than once per
+    /// launch — the old flag spent its single shot on the wake-up blip and then
+    /// stayed silent through a genuine outage for the rest of the session.
+    private func noteServerReachable() {
+        consecutiveLoadFailures = 0
+        offeredPaperThisOutage = false
     }
 
     /// User said no to paper. Keep trying — store wifi often shows up a minute

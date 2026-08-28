@@ -304,10 +304,17 @@ class AmplifyService: ObservableObject {
     // MARK: - Auth Error Handling
 
     /// Checks if an error is auth-related (expired/invalid tokens) and forces sign-out if so.
-    func handleAuthError(_ error: Error) {
+    /// Overload for errors that aren't GraphQLResponseError — transport failures
+    /// and anything else thrown out of the SDK. String-sniffing, because those
+    /// types don't expose a structured auth signal.
+    func isAuthError(_ error: Error) -> Bool {
         let message = String(describing: error)
-        if message.contains("Unauthorized") || message.contains("Not Authorized") || message.contains("token") || message.contains("Token") {
-            print("Auth error detected, forcing sign-out: \(message)")
+        return message.contains("Unauthorized") || message.contains("Not Authorized") || message.contains("token") || message.contains("Token")
+    }
+
+    func handleAuthError(_ error: Error) {
+        if isAuthError(error) {
+            print("Auth error detected, forcing sign-out: \(String(describing: error))")
             Task { @MainActor in
                 try? await signOut()
             }

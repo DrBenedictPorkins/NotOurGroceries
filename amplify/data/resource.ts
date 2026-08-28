@@ -325,6 +325,15 @@ const schema = a.schema({
   // ========================================
   // SHOPPING REQUEST MODEL (Request/Approval Inbox)
   // ========================================
+  // DEPRECATED — the request/approve inbox was removed from the client. In seven
+  // months it was never used once: the ShoppingRequest table has zero rows, ever.
+  // The premise was wrong too. An in-app request has no delivery guarantee, so
+  // anything genuinely urgent gets re-sent by text anyway, and an inbox invites
+  // the pile-on failure other apps get complained about.
+  //
+  // The model stays only so builds that still subscribe to onCreateShoppingRequest
+  // keep passing AppSync validation. Drop it, and RequestType, once every tester
+  // is past v1.6.0. Same gate as `reactions`.
   ShoppingRequest: a
     .model({
       householdId: a.id().required(),

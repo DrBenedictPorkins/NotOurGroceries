@@ -63,10 +63,6 @@ class ShoppingListViewModel: ObservableObject {
     static let abandonedShoppingThreshold: TimeInterval = 60 * 60  // 1 hour
     static let shopperInactivityReminder: TimeInterval = 10 * 60   // 10 minutes
 
-    // MARK: - Shopping Request Inbox
-    @Published var pendingRequests: [ShoppingRequest] = []
-    @Published var showInboxSheet = false
-
     // MARK: - Undo Cart
     @Published var undoCartItem: GroceryItem?
     private var undoCartTask: Task<Void, Never>?
@@ -129,6 +125,15 @@ class ShoppingListViewModel: ObservableObject {
     /// two-person household, "text them" is a better channel than a live edit.
     var isListLockedByOtherSession: Bool {
         isSomeoneElseShopping || isSomeoneElseAdHocShopping
+    }
+
+    /// The single response to "you tried to change the list while someone else is
+    /// out". Every mutation path says exactly this, so it lives in one place —
+    /// there used to be two answers (a toast for most actions, a request/approve
+    /// inbox for adds) and the inbox was never once used.
+    func warnListReadOnly() {
+        showToast(message: "List is read-only while shopping", type: .warning)
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
     }
 
     /// True when another member is out on an errand
@@ -199,11 +204,6 @@ class ShoppingListViewModel: ObservableObject {
         return "\(minutes)m"
     }
 
-    /// Number of pending shopping requests
-    var pendingRequestCount: Int {
-        pendingRequests.count
-    }
-
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     private var subscriptionCancellables = Set<AnyCancellable>()
@@ -211,7 +211,6 @@ class ShoppingListViewModel: ObservableObject {
     private var pendingOptimisticIds: Set<String> = []
     private var pendingRemovals: Set<String> = []
     private var hasLoadedInitialData = false
-    private var reminderTimer: Timer?
 
     var householdId: String? {
         AmplifyService.shared.currentHouseholdId
@@ -256,7 +255,6 @@ class ShoppingListViewModel: ObservableObject {
         if let observer = householdChangedObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        reminderTimer?.invalidate()
         abandonedCheckTimer?.invalidate()
     }
 
@@ -539,12 +537,16 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Add Item
     func addItem(name: String, quantity: String? = nil, notes: String? = nil, productId: String? = nil) async {
-        // Someone else is mid-trip: ask rather than either blocking or barging in.
-        // A hard block ignores that they may still be in the aisles; a direct add
-        // (the v1.3.0 behaviour) ignores that they may be at the checkout. Only
-        // the person actually standing there can judge, so let them decide.
+        // List is read-only for remote members during active shopping, exactly as
+        // it already was for moving to cart, locking and editing notes.
+        //
+        // This used to route to a request/approve inbox. That was removed: in
+        // seven months of use it was never invoked once, and the premise was
+        // wrong. An in-app request has no delivery guarantee, so anything actually
+        // urgent gets sent again by text anyway — and then you have asked twice
+        // and still don't know if they saw it.
         if isListLockedByOtherSession {
-            await submitAddRequest(name: name, quantity: quantity, notes: notes, productId: productId)
+            warnListReadOnly()
             return
         }
 
@@ -701,8 +703,7 @@ class ShoppingListViewModel: ObservableObject {
     func moveToCart(_ item: GroceryItem) async {
         // List is read-only for remote members during active shopping
         if isListLockedByOtherSession {
-            showToast(message: "List is read-only while shopping", type: .warning)
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            warnListReadOnly()
             return
         }
 
@@ -905,16 +906,9 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Restore Item
     func restoreItem(_ item: GroceryItem) async {
-        // Same reasoning as addItem: pulling a suggestion back onto the list
-        // during someone else's trip is a request, not a fait accompli.
+        // Same rule as addItem — read-only while someone else is out.
         if isListLockedByOtherSession {
-            await submitAddRequest(
-                name: item.name,
-                quantity: item.quantity,
-                notes: item.notes,
-                productId: item.productId,
-                normalizedName: item.normalizedName
-            )
+            warnListReadOnly()
             return
         }
 
@@ -1012,9 +1006,9 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Delete Item
     func deleteItem(_ item: GroceryItem) async {
-        // If someone else is shopping, submit a removal request instead
-        if isSomeoneElseShopping {
-            await submitRemoveRequest(item: item)
+        // Same read-only rule as the rest of the list while someone else is out.
+        if isListLockedByOtherSession {
+            warnListReadOnly()
             return
         }
 
@@ -1078,29 +1072,6 @@ class ShoppingListViewModel: ObservableObject {
             showToast(message: "Failed to delete item", type: .error)
             print("Delete error: \(error)")
         }
-    }
-
-    /// Suggest removal of an item to the active shopper (for remote members)
-    /// This is used when someone else is shopping and a remote member wants to remove an item
-    func suggestRemoval(_ item: GroceryItem) async {
-        guard isSomeoneElseShopping else {
-            // If not in remote shopping mode, just delete normally
-            await deleteItem(item)
-            return
-        }
-
-        // Get the shopper's name for the toast
-        let shopperName = activeShopperDisplayName ?? "the shopper"
-
-        // For now, show a local toast confirming the suggestion was sent
-        // In a future iteration, this could notify the shopper via a real-time mechanism
-        showToast(message: "Suggested removing \(item.name) to \(shopperName)", type: .info)
-
-        // Note: The shopper will see this item in their list and can choose to cross it off
-        // For a more sophisticated implementation, we could:
-        // 1. Add a "removalSuggestedBy" field to the item
-        // 2. Update the item via GraphQL
-        // 3. The shopper would see a badge on the item indicating a removal suggestion
     }
 
     // MARK: - Update Notes
@@ -1192,8 +1163,7 @@ class ShoppingListViewModel: ObservableObject {
     func toggleLock(_ item: GroceryItem) async {
         // List is read-only for remote members during active shopping
         if isListLockedByOtherSession {
-            showToast(message: "List is read-only while shopping", type: .warning)
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            warnListReadOnly()
             return
         }
 
@@ -1272,8 +1242,7 @@ class ShoppingListViewModel: ObservableObject {
     func updateItemNotes(_ item: GroceryItem, notes: String?) async {
         // List is read-only for remote members during active shopping
         if isListLockedByOtherSession {
-            showToast(message: "List is read-only while shopping", type: .warning)
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            warnListReadOnly()
             return
         }
 
@@ -1542,15 +1511,6 @@ class ShoppingListViewModel: ObservableObject {
             }
             .store(in: &subscriptionCancellables)
 
-        // Observe shopping requests
-        SubscriptionService.shared.$lastShoppingRequest
-            .compactMap { $0 }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] request in
-                self?.handleNewShoppingRequest(request)
-            }
-            .store(in: &subscriptionCancellables)
-
         logger.info("Subscriptions set up for household: \(householdId)")
     }
 
@@ -1660,7 +1620,6 @@ class ShoppingListViewModel: ObservableObject {
         stopRetryingToReconnect()
 
         teardownSubscriptions()
-        stopReminderTimer()
         stopAbandonedCheckTimer()
         ShopperReminderService.shared.cancel()
 
@@ -2113,23 +2072,6 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Reminder Timer Management
 
-    /// Start reminder timer for pending shopping requests (plays notification every 45 seconds)
-    func startReminderTimer() {
-        guard !PaperMode.shared.blocksNetwork else { return }
-        reminderTimer?.invalidate()
-        reminderTimer = Timer.scheduledTimer(withTimeInterval: 45.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.playReminderNotification()
-            }
-        }
-    }
-
-    /// Stop reminder timer
-    func stopReminderTimer() {
-        reminderTimer?.invalidate()
-        reminderTimer = nil
-    }
-
     /// Start a 60s tick that lets the UI re-evaluate `isSessionAbandoned` while at-store.
     func startAbandonedCheckTimer() {
         abandonedCheckTimer?.invalidate()
@@ -2152,16 +2094,6 @@ class ShoppingListViewModel: ObservableObject {
     func bumpShopperActivity() {
         guard isCurrentUserShopping else { return }
         ShopperReminderService.shared.schedule(after: Self.shopperInactivityReminder)
-    }
-
-    /// Play reminder notification for pending requests
-    @MainActor
-    private func playReminderNotification() {
-        guard pendingRequestCount > 0 else { return }
-        // Play sound
-        AudioServicesPlaySystemSound(1007)
-        // Haptic
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     // MARK: - Shopping Mode Management
@@ -2273,12 +2205,6 @@ class ShoppingListViewModel: ObservableObject {
                         }
                     }
 
-                    // Fetch pending requests
-                    await fetchPendingRequests()
-
-                    // Start reminder timer for pending requests
-                    startReminderTimer()
-
                     // Nudge the shopper if nothing gets crossed off for a while.
                     await ShopperReminderService.shared.requestPermissionIfNeeded()
                     bumpShopperActivity()
@@ -2305,8 +2231,7 @@ class ShoppingListViewModel: ObservableObject {
 
         do {
             // Stop reminder timer
-            stopReminderTimer()
-            ShopperReminderService.shared.cancel()
+                ShopperReminderService.shared.cancel()
 
             // Calculate stats BEFORE changing item statuses
             let itemsInCart = inCart
@@ -2387,7 +2312,6 @@ class ShoppingListViewModel: ObservableObject {
 
                     // Clear all pending requests AFTER status is set to IDLE
                     // This prevents remote members from submitting more requests
-                    await clearAllPendingRequests()
 
                     // Set stats and show completion sheet
                     shoppingCompletionStats = stats
@@ -2841,12 +2765,6 @@ class ShoppingListViewModel: ObservableObject {
                             }
                         }
 
-                        // Fetch pending requests
-                        await fetchPendingRequests()
-
-                        // Start reminder timer for pending requests
-                        startReminderTimer()
-
                         // Restart the inactivity reminder — we lost any prior schedule
                         // when the app was killed.
                         await ShopperReminderService.shared.requestPermissionIfNeeded()
@@ -2893,331 +2811,6 @@ class ShoppingListViewModel: ObservableObject {
         } catch {
             showToast(message: "Failed to assign aisle", type: .error)
             logger.error("Failed to assign item to aisle: \(error)")
-        }
-    }
-
-    // MARK: - Shopping Request Management
-
-    /// Remote member submits request to add an item
-    func submitAddRequest(name: String, quantity: String? = nil, notes: String? = nil, productId: String? = nil, normalizedName: String? = nil) async {
-        guard let householdId = householdId else {
-            showToast(message: "No household selected", type: .error)
-            return
-        }
-
-        guard let currentUserId = AmplifyService.shared.currentUser?.userId else {
-            showToast(message: "Not signed in", type: .error)
-            return
-        }
-
-        do {
-            let document = """
-            mutation CreateShoppingRequest($input: CreateShoppingRequestInput!) {
-                createShoppingRequest(input: $input) {
-                    id
-                    householdId
-                    requestType
-                    itemName
-                    normalizedName
-                    quantity
-                    notes
-                    productId
-                    targetItemId
-                    requestedBy
-                    requestedAt
-                    status
-                    resolvedBy
-                    resolvedAt
-                }
-            }
-            """
-
-            let iso8601Formatter = ISO8601DateFormatter()
-            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let now = Date()
-
-            var input: [String: Any] = [
-                "id": UUID().uuidString,
-                "householdId": householdId,
-                "requestType": "ADD_ITEM",
-                "itemName": name,
-                "normalizedName": normalizedName ?? normalizeName(name),
-                "requestedBy": currentUserId,
-                "requestedAt": iso8601Formatter.string(from: now),
-                "status": "PENDING"
-            ]
-
-            if let quantity = quantity { input["quantity"] = quantity }
-            if let notes = notes { input["notes"] = notes }
-            if let productId = productId { input["productId"] = productId }
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                let shopperName = activeShopperDisplayName ?? "shopper"
-                showToast(message: "Request sent to \(shopperName)")
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            case .failure(let error):
-                showToast(message: "Failed to send request", type: .error)
-                logger.error("Failed to create shopping request: \(error)")
-            }
-        } catch {
-            showToast(message: "Failed to send request", type: .error)
-            logger.error("Failed to create shopping request: \(error)")
-        }
-    }
-
-    /// Remote member submits request to remove an item
-    func submitRemoveRequest(item: GroceryItem) async {
-        guard let householdId = householdId else {
-            showToast(message: "No household selected", type: .error)
-            return
-        }
-
-        guard let currentUserId = AmplifyService.shared.currentUser?.userId else {
-            showToast(message: "Not signed in", type: .error)
-            return
-        }
-
-        do {
-            let document = """
-            mutation CreateShoppingRequest($input: CreateShoppingRequestInput!) {
-                createShoppingRequest(input: $input) {
-                    id
-                    householdId
-                    requestType
-                    itemName
-                    normalizedName
-                    quantity
-                    notes
-                    productId
-                    targetItemId
-                    requestedBy
-                    requestedAt
-                    status
-                    resolvedBy
-                    resolvedAt
-                }
-            }
-            """
-
-            let iso8601Formatter = ISO8601DateFormatter()
-            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let now = Date()
-
-            let input: [String: Any] = [
-                "id": UUID().uuidString,
-                "householdId": householdId,
-                "requestType": "REMOVE_ITEM",
-                "itemName": item.name,
-                "normalizedName": item.normalizedName ?? normalizeName(item.name),
-                "targetItemId": item.id,
-                "requestedBy": currentUserId,
-                "requestedAt": iso8601Formatter.string(from: now),
-                "status": "PENDING"
-            ]
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                let shopperName = activeShopperDisplayName ?? "shopper"
-                showToast(message: "Removal request sent to \(shopperName)")
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            case .failure(let error):
-                showToast(message: "Failed to send request", type: .error)
-                logger.error("Failed to create shopping request: \(error)")
-            }
-        } catch {
-            showToast(message: "Failed to send request", type: .error)
-            logger.error("Failed to create shopping request: \(error)")
-        }
-    }
-
-    /// Load pending requests for the current shopper
-    func fetchPendingRequests() async {
-        guard let householdId = householdId else { return }
-        guard isCurrentUserShopping else { return }
-
-        do {
-            let document = """
-            query RequestsByHouseholdAndStatus($householdId: ID!, $status: ModelStringKeyConditionInput) {
-                requestsByHouseholdAndStatus(householdId: $householdId, status: $status) {
-                    items {
-                        id
-                        householdId
-                        requestType
-                        itemName
-                        normalizedName
-                        quantity
-                        notes
-                        productId
-                        targetItemId
-                        requestedBy
-                        requestedAt
-                        status
-                        resolvedBy
-                        resolvedAt
-                    }
-                }
-            }
-            """
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: [
-                    "householdId": householdId,
-                    "status": ["eq": "PENDING"]
-                ],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await apiQuery(request)
-
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let listResult) = root["requestsByHouseholdAndStatus"],
-                   case .array(let items) = listResult["items"] {
-                    pendingRequests = items.compactMap { parseShoppingRequest($0) }
-                    logger.info("Fetched \(self.pendingRequests.count) pending requests")
-                }
-            case .failure(let error):
-                logger.error("Failed to fetch pending requests: \(error)")
-            }
-        } catch {
-            logger.error("Failed to fetch pending requests: \(error)")
-        }
-    }
-
-    /// Shopper approves a request
-    func approveRequest(_ request: ShoppingRequest) async {
-        if request.isAddRequest {
-            // Add the item
-            await addItem(
-                name: request.itemName,
-                quantity: request.quantity,
-                notes: request.notes,
-                productId: request.productId
-            )
-        } else if request.isRemoveRequest, let targetItemId = request.targetItemId {
-            // Find and delete the item
-            if let item = items.first(where: { $0.id == targetItemId }) {
-                await deleteItem(item)
-            }
-        }
-
-        // Delete the request
-        await deleteShoppingRequest(request)
-
-        // Remove from local list
-        pendingRequests.removeAll { $0.id == request.id }
-
-        // Show toast
-        let message = request.isAddRequest ? "Added \(request.itemName)" : "Removed \(request.itemName)"
-        showToast(message: message)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-    }
-
-    /// Shopper rejects a request
-    func rejectRequest(_ request: ShoppingRequest) async {
-        // Delete the request
-        await deleteShoppingRequest(request)
-
-        // Remove from local list
-        pendingRequests.removeAll { $0.id == request.id }
-
-        // Show toast
-        showToast(message: "Request rejected")
-        UINotificationFeedbackGenerator().notificationOccurred(.warning)
-    }
-
-    /// Delete a shopping request
-    private func deleteShoppingRequest(_ request: ShoppingRequest) async {
-        do {
-            let document = """
-            mutation DeleteShoppingRequest($input: DeleteShoppingRequestInput!) {
-                deleteShoppingRequest(input: $input) {
-                    id
-                }
-            }
-            """
-
-            let input: [String: Any] = [
-                "id": request.id
-            ]
-
-            let graphQLRequest = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await apiMutate(graphQLRequest)
-
-            switch response {
-            case .success:
-                logger.info("Deleted shopping request: \(request.id)")
-            case .failure(let error):
-                logger.error("Failed to delete shopping request: \(error)")
-            }
-        } catch {
-            logger.error("Failed to delete shopping request: \(error)")
-        }
-    }
-
-    /// Clear all pending requests (called when shopping ends)
-    func clearAllPendingRequests() async {
-        guard let householdId = householdId else { return }
-
-        // Delete all pending requests for this household
-        for request in pendingRequests {
-            await deleteShoppingRequest(request)
-        }
-
-        // Clear local list
-        pendingRequests.removeAll()
-        logger.info("Cleared all pending requests for household: \(householdId)")
-    }
-
-    /// Handle new shopping request from subscription
-    private func handleNewShoppingRequest(_ request: ShoppingRequest) {
-        // Only add if current user is shopping
-        guard isCurrentUserShopping else { return }
-
-        // Add to pending requests if not already present
-        if !pendingRequests.contains(where: { $0.id == request.id }) {
-            pendingRequests.append(request)
-
-            // Play system sound notification
-            AudioServicesPlaySystemSound(1007)
-
-            // Haptic feedback
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-
-            // Show toast
-            let requesterName = UserCache.shared.displayName(for: request.requestedBy)
-            let message = request.isAddRequest ? "wants to add \(request.itemName)" : "wants to remove \(request.itemName)"
-            showToast(message: message, userName: requesterName)
-
-            logger.info("New shopping request received: \(request.itemName) from \(requesterName)")
         }
     }
 
@@ -3470,70 +3063,4 @@ class ShoppingListViewModel: ObservableObject {
         )
     }
 
-    func parseShoppingRequest(_ json: JSONValue) -> ShoppingRequest? {
-        guard case .object(let obj) = json,
-              case .string(let id) = obj["id"],
-              case .string(let householdId) = obj["householdId"],
-              case .string(let requestTypeString) = obj["requestType"],
-              case .string(let itemName) = obj["itemName"],
-              case .string(let requestedBy) = obj["requestedBy"],
-              case .string(let statusString) = obj["status"] else {
-            logger.error("parseShoppingRequest: Missing required field in JSON")
-            return nil
-        }
-
-        guard let requestType = ShoppingRequest.RequestType(rawValue: requestTypeString),
-              let status = ShoppingRequest.RequestStatus(rawValue: statusString) else {
-            logger.error("parseShoppingRequest: Invalid enum value - requestType: \(requestTypeString), status: \(statusString)")
-            return nil
-        }
-
-        let iso8601Formatter = ISO8601DateFormatter()
-        iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-        var requestedAt = Date()
-        if case .string(let requestedAtString) = obj["requestedAt"] {
-            requestedAt = iso8601Formatter.date(from: requestedAtString) ?? Date()
-        }
-
-        var resolvedAt: Date? = nil
-        if case .string(let resolvedAtString) = obj["resolvedAt"] {
-            resolvedAt = iso8601Formatter.date(from: resolvedAtString)
-        }
-
-        var normalizedName: String? = nil
-        if case .string(let value) = obj["normalizedName"] { normalizedName = value }
-
-        var quantity: String? = nil
-        if case .string(let value) = obj["quantity"] { quantity = value }
-
-        var notes: String? = nil
-        if case .string(let value) = obj["notes"] { notes = value }
-
-        var productId: String? = nil
-        if case .string(let value) = obj["productId"] { productId = value }
-
-        var targetItemId: String? = nil
-        if case .string(let value) = obj["targetItemId"] { targetItemId = value }
-
-        var resolvedBy: String? = nil
-        if case .string(let value) = obj["resolvedBy"] { resolvedBy = value }
-
-        return ShoppingRequest(
-            id: id,
-            householdId: householdId,
-            requestType: requestType,
-            itemName: itemName,
-            normalizedName: normalizedName,
-            quantity: quantity,
-            notes: notes,
-            productId: productId,
-            targetItemId: targetItemId,
-            requestedBy: requestedBy,
-            requestedAt: requestedAt,
-            status: status,
-            resolvedBy: resolvedBy,
-            resolvedAt: resolvedAt
-        )
-    }
 }

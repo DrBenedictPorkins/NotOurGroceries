@@ -12,7 +12,6 @@ class SubscriptionService: ObservableObject {
     @Published var lastUpdatedItemId: String?
     @Published var lastDeletedItemId: String?
     @Published var lastHouseholdShoppingUpdate: HouseholdShoppingUpdate?
-    @Published var lastShoppingRequest: ShoppingRequest?
     @Published var connectionState: ConnectionState = .disconnected
     @Published var lastError: SubscriptionError?
 
@@ -40,7 +39,6 @@ class SubscriptionService: ObservableObject {
     private var updateTask: Task<Void, Never>?
     private var deleteTask: Task<Void, Never>?
     private var householdTask: Task<Void, Never>?
-    private var shoppingRequestTask: Task<Void, Never>?
     private var currentHouseholdId: String?
 
     // Event debouncing
@@ -109,7 +107,6 @@ class SubscriptionService: ObservableObject {
         subscribeToUpdate(householdId: householdId)
         subscribeToDelete(householdId: householdId)
         subscribeToHouseholdUpdate(householdId: householdId)
-        subscribeToShoppingRequests(householdId: householdId)
 
         print("SubscriptionService: Subscribed to household \(householdId)")
     }
@@ -119,13 +116,11 @@ class SubscriptionService: ObservableObject {
         updateTask?.cancel()
         deleteTask?.cancel()
         householdTask?.cancel()
-        shoppingRequestTask?.cancel()
         debounceTask?.cancel()
         createTask = nil
         updateTask = nil
         deleteTask = nil
         householdTask = nil
-        shoppingRequestTask = nil
         debounceTask = nil
         currentHouseholdId = nil
         connectionState = .disconnected
@@ -426,70 +421,6 @@ class SubscriptionService: ObservableObject {
         }
     }
 
-    private func subscribeToShoppingRequests(householdId: String) {
-        shoppingRequestTask = Task {
-            let document = """
-            subscription OnCreateShoppingRequest {
-              onCreateShoppingRequest {
-                id
-                householdId
-                requestType
-                itemName
-                normalizedName
-                quantity
-                notes
-                productId
-                targetItemId
-                requestedBy
-                requestedAt
-                status
-                resolvedBy
-                resolvedAt
-              }
-            }
-            """
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let subscription = Amplify.API.subscribe(request: request)
-
-            do {
-                for try await subscriptionEvent in subscription {
-                    switch subscriptionEvent {
-                    case .connection(let state):
-                        print("SubscriptionService: ShoppingRequest connection state: \(state)")
-                        updateConnectionState(from: state)
-                    case .data(let result):
-                        switch result {
-                        case .success(let json):
-                            if let shoppingRequest = parseShoppingRequest(from: json, key: "onCreateShoppingRequest"),
-                               shoppingRequest.householdId == householdId {
-                                // Ensure user is cached for display
-                                await ensureUserCached(shoppingRequest.requestedBy)
-                                print("SubscriptionService: ShoppingRequest created: \(shoppingRequest.id)")
-                                self.lastShoppingRequest = shoppingRequest
-                            }
-                        case .failure(let error):
-                            let errorMessage = parseGraphQLError(error)
-                            print("SubscriptionService: ShoppingRequest subscription error - \(errorMessage)")
-                            AmplifyService.shared.handleAuthError(error)
-                        }
-                    }
-                }
-            } catch {
-                if !Task.isCancelled {
-                    let errorMessage = error.localizedDescription
-                    print("SubscriptionService: ShoppingRequest subscription fatal error - \(errorMessage)")
-                    AmplifyService.shared.handleAuthError(error)
-                }
-            }
-        }
-    }
-
     // MARK: - Error Parsing Helper
 
     private func parseGraphQLError(_ error: GraphQLResponseError<JSONValue>) -> String {
@@ -585,71 +516,6 @@ class SubscriptionService: ObservableObject {
             addedBy: addedBy,
             addedAt: addedAt,
             version: version
-        )
-    }
-
-    private func parseShoppingRequest(from json: JSONValue, key: String) -> ShoppingRequest? {
-        guard case .object(let root) = json,
-              case .object(let obj) = root[key],
-              case .string(let id) = obj["id"],
-              case .string(let householdId) = obj["householdId"],
-              case .string(let requestTypeString) = obj["requestType"],
-              case .string(let itemName) = obj["itemName"],
-              case .string(let requestedBy) = obj["requestedBy"],
-              case .string(let statusString) = obj["status"] else {
-            print("parseShoppingRequest: Missing required field in JSON for key \(key)")
-            return nil
-        }
-
-        guard let requestType = ShoppingRequest.RequestType(rawValue: requestTypeString),
-              let status = ShoppingRequest.RequestStatus(rawValue: statusString) else {
-            print("parseShoppingRequest: Invalid enum value - requestType: \(requestTypeString), status: \(statusString)")
-            return nil
-        }
-
-        var requestedAt = Date()
-        if case .string(let requestedAtString) = obj["requestedAt"] {
-            requestedAt = ISO8601DateFormatter().date(from: requestedAtString) ?? Date()
-        }
-
-        var resolvedAt: Date? = nil
-        if case .string(let resolvedAtString) = obj["resolvedAt"] {
-            resolvedAt = ISO8601DateFormatter().date(from: resolvedAtString)
-        }
-
-        var normalizedName: String? = nil
-        if case .string(let value) = obj["normalizedName"] { normalizedName = value }
-
-        var quantity: String? = nil
-        if case .string(let value) = obj["quantity"] { quantity = value }
-
-        var notes: String? = nil
-        if case .string(let value) = obj["notes"] { notes = value }
-
-        var productId: String? = nil
-        if case .string(let value) = obj["productId"] { productId = value }
-
-        var targetItemId: String? = nil
-        if case .string(let value) = obj["targetItemId"] { targetItemId = value }
-
-        var resolvedBy: String? = nil
-        if case .string(let value) = obj["resolvedBy"] { resolvedBy = value }
-
-        return ShoppingRequest(
-            id: id,
-            householdId: householdId,
-            requestType: requestType,
-            itemName: itemName,
-            normalizedName: normalizedName,
-            quantity: quantity,
-            notes: notes,
-            productId: productId,
-            targetItemId: targetItemId,
-            requestedBy: requestedBy,
-            requestedAt: requestedAt,
-            status: status,
-            resolvedBy: resolvedBy,
-            resolvedAt: resolvedAt
         )
     }
 

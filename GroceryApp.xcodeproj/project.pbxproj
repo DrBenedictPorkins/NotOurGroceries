@@ -25,7 +25,6 @@
 		AA0000000000000000000014 /* Product.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000014 /* Product.swift */; };
 		AA0000000000000000000015 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000015 /* Store.swift */; };
 		AA0000000000000000000016 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000016 /* User.swift */; };
-		AA0000000000000000000017 /* ShoppingRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000017 /* ShoppingRequest.swift */; };
 		AA0000000000000000000020 /* AmplifyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000020 /* AmplifyService.swift */; };
 		AA0000000000000000000021 /* DesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000021 /* DesignSystem.swift */; };
 		AA0000000000000000000022 /* ShoppingListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000022 /* ShoppingListViewModel.swift */; };
@@ -59,7 +58,6 @@
 		AA0000000000000000000059 /* UserIdentityGradient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000059 /* UserIdentityGradient.swift */; };
 		AA0000000000000000000060 /* UserColorBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000060 /* UserColorBadge.swift */; };
 		AA0000000000000000000061 /* ProfileColorPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000061 /* ProfileColorPickerSheet.swift */; };
-		AA0000000000000000000062 /* InboxSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000062 /* InboxSheet.swift */; };
 		AA0000000000000000000063 /* ForgotPasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000063 /* ForgotPasswordView.swift */; };
 		AA0000000000000000000070 /* HouseholdStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000070 /* HouseholdStore.swift */; };
 		AA0000000000000000000071 /* ProductAisleMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000071 /* ProductAisleMapping.swift */; };
@@ -123,7 +121,6 @@
 		BB0000000000000000000014 /* Product.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Product.swift; sourceTree = "<group>"; };
 		BB0000000000000000000015 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		BB0000000000000000000016 /* User.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = User.swift; sourceTree = "<group>"; };
-		BB0000000000000000000017 /* ShoppingRequest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingRequest.swift; sourceTree = "<group>"; };
 		BB0000000000000000000020 /* AmplifyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmplifyService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000021 /* DesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystem.swift; sourceTree = "<group>"; };
 		BB0000000000000000000022 /* ShoppingListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListViewModel.swift; sourceTree = "<group>"; };
@@ -152,7 +149,6 @@
 		BB0000000000000000000059 /* UserIdentityGradient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserIdentityGradient.swift; sourceTree = "<group>"; };
 		BB0000000000000000000060 /* UserColorBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserColorBadge.swift; sourceTree = "<group>"; };
 		BB0000000000000000000061 /* ProfileColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileColorPickerSheet.swift; sourceTree = "<group>"; };
-		BB0000000000000000000062 /* InboxSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxSheet.swift; sourceTree = "<group>"; };
 		BB0000000000000000000063 /* ForgotPasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForgotPasswordView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000070 /* HouseholdStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseholdStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000071 /* ProductAisleMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductAisleMapping.swift; sourceTree = "<group>"; };
@@ -258,7 +254,6 @@
 				BB0000000000000000000070 /* HouseholdStore.swift */,
 				BB0000000000000000000014 /* Product.swift */,
 				BB0000000000000000000071 /* ProductAisleMapping.swift */,
-				BB0000000000000000000017 /* ShoppingRequest.swift */,
 				BB0000000000000000000015 /* Store.swift */,
 				BB0000000000000000000016 /* User.swift */,
 				1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */,
@@ -337,7 +332,6 @@
 				BB0000000000000000000096 /* ListMenuSheet.swift */,
 				BB0000000000000000000095 /* PaperModeBanner.swift */,
 				BB0000000000000000000078 /* ImagePicker.swift */,
-				BB0000000000000000000062 /* InboxSheet.swift */,
 				BB0000000000000000000058 /* ItemDetailSheet.swift */,
 				BB0000000000000000000057 /* MarqueeText.swift */,
 				BB0000000000000000000032 /* SearchBar.swift */,
@@ -498,7 +492,6 @@
 				AA0000000000000000000014 /* Product.swift in Sources */,
 				AA0000000000000000000015 /* Store.swift in Sources */,
 				AA0000000000000000000016 /* User.swift in Sources */,
-				AA0000000000000000000017 /* ShoppingRequest.swift in Sources */,
 				AA0000000000000000000020 /* AmplifyService.swift in Sources */,
 				AA0000000000000000000056 /* AppLoadingState.swift in Sources */,
 				AA0000000000000000000090 /* SpeechDictationService.swift in Sources */,
@@ -543,7 +536,6 @@
 				AA0000000000000000000072 /* StoreService.swift in Sources */,
 				AA0000000000000000000073 /* StoreSelectionSheet.swift in Sources */,
 				AA0000000000000000000074 /* CreateStoreSheet.swift in Sources */,
-				AA0000000000000000000062 /* InboxSheet.swift in Sources */,
 				AA0000000000000000000075 /* ShoppingActiveInfoModal.swift in Sources */,
 				CB60F28BFD167CB0B4567A5E /* AisleScanSheet.swift in Sources */,
 				36B866D86A21E55F7AF2ED72 /* StoreAisleManagementView.swift in Sources */,

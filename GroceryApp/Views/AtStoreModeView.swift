@@ -8,7 +8,6 @@ struct AtStoreModeView: View {
     @EnvironmentObject var amplifyService: AmplifyService
     @ObservedObject private var storeService = StoreService.shared
     @State private var showDoneShoppingAlert = false
-    @State private var newRequestArrived = false
     @State private var searchText = ""
     @State private var showStoreSwitcher = false
     @State private var showAisleManagement = false
@@ -223,10 +222,6 @@ struct AtStoreModeView: View {
             shoppingActiveBorderOverlay
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $viewModel.showInboxSheet) {
-            InboxSheet()
-                .environmentObject(viewModel)
-        }
         .sheet(isPresented: $showStoreSwitcher) {
             StoreSwitcherSheet(currentStoreId: selectedHouseholdStore?.id)
                 .environmentObject(viewModel)
@@ -245,18 +240,6 @@ struct AtStoreModeView: View {
                     isPresented = false
                 }
                 .interactiveDismissDisabled()
-            }
-        }
-        .onReceive(SubscriptionService.shared.$lastShoppingRequest.compactMap { $0 }) { request in
-            // Only trigger animation if we're the shopper
-            if viewModel.isCurrentUserShopping {
-                withAnimation {
-                    newRequestArrived = true
-                }
-                // Reset after animation
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    newRequestArrived = false
-                }
             }
         }
         .confirmationDialog(
@@ -321,29 +304,6 @@ struct AtStoreModeView: View {
                             )
                     }
 
-                    // Inbox button
-                    Button(action: {
-                        viewModel.showInboxSheet = true
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "tray.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.white.opacity(0.7))
-
-                            if viewModel.pendingRequestCount > 0 {
-                                InboxBadge(count: viewModel.pendingRequestCount)
-                                    .offset(x: 8, y: -8)
-                            }
-                        }
-                        .padding(8)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.1))
-                        )
-                    }
-                    .modifier(ShakeEffect(shakes: newRequestArrived ? 3 : 0))
-                    .animation(.default, value: newRequestArrived)
                 }
             }
 
@@ -707,19 +667,6 @@ struct AtStoreModeView: View {
 }
 
 // MARK: - Shake Effect Modifier
-
-struct ShakeEffect: GeometryEffect {
-    var shakes: Int
-    var animatableData: CGFloat {
-        get { CGFloat(shakes) }
-        set { shakes = Int(newValue) }
-    }
-
-    func effectValue(size: CGSize) -> ProjectionTransform {
-        let angle = sin(animatableData * .pi * 2) * 0.1
-        return ProjectionTransform(CGAffineTransform(rotationAngle: angle))
-    }
-}
 
 // MARK: - Aisle Group Model
 

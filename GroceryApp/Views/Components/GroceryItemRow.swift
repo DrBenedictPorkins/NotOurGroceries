@@ -8,6 +8,7 @@ struct GroceryItemRow: View {
     @State private var shakeOffset: CGFloat = 0
     @State private var isShaking = false
     @State private var showDetailSheet = false
+    @State private var showDeleteConfirmation = false
 
     // Transition animation states
     @State private var isTransitioning = false
@@ -87,46 +88,38 @@ struct GroceryItemRow: View {
 
     var body: some View {
         rowContent
-            .swipeActions(edge: .trailing, allowsFullSwipe: !isLockedByAnotherUser && !viewModel.isSomeoneElseShopping) {
-                // Delete action (both lists - swipe LEFT to delete)
-                // When someone else is shopping, show "Suggest Removal" instead
-                if viewModel.isSomeoneElseShopping {
-                    Button {
-                        Task {
-                            await viewModel.suggestRemoval(item)
+            // Swipe LEFT: archive, never destroy. Delete used to live here and was
+            // reachable by a hard swipe while scrolling — an irreversible action on
+            // the same gesture people use to scroll past things. It now lives in the
+            // context menu, so nothing on the swipe surface can lose data.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                if item.status == .active {
+                    if isLockedByAnotherUser {
+                        // Not role: .destructive — that plays the removal animation
+                        // on a row that is not going anywhere.
+                        Button {
+                            triggerShake()
+                            UINotificationFeedbackGenerator().notificationOccurred(.error)
+                            if let lockedBy = item.lockedBy {
+                                viewModel.showLockedItemWarning(lockedBy: lockedBy)
+                            }
+                        } label: {
+                            Label("Move", systemImage: "arrow.uturn.down")
                         }
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    } label: {
-                        Label("Suggest Removal", systemImage: "xmark.circle")
-                    }
-                    .tint(DesignSystem.Colors.neonPink)
-                } else if isLockedByAnotherUser {
-                    // Locked by another user - show error feedback instead of delete
-                    // Note: Do NOT use role: .destructive as it triggers removal animation
-                    Button {
-                        triggerShake()
-                        UINotificationFeedbackGenerator().notificationOccurred(.error)
-                        if let lockedBy = item.lockedBy {
-                            viewModel.showLockedItemWarning(lockedBy: lockedBy)
+                        .tint(.gray)
+                    } else {
+                        Button {
+                            animateToSuggestions()
+                        } label: {
+                            Label("Suggestions", systemImage: "arrow.uturn.down")
                         }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
+                        .tint(DesignSystem.Colors.neonAmber)
                     }
-                    .tint(.gray)
-                } else {
-                    Button(role: .destructive) {
-                        Task {
-                            await viewModel.deleteItem(item)
-                        }
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                    .tint(.red)
                 }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                // Swipe RIGHT: suggestions → active only (direct even while someone
-                // else is shopping — shopper sees a live add via handleItemCreated).
+                // Swipe RIGHT: suggestions → active only. restoreItem enforces the
+                // read-only rule if someone else is mid-trip.
                 if item.status == .suggestion {
                     Button {
                         animateToActive()
@@ -134,6 +127,17 @@ struct GroceryItemRow: View {
                         Label("Add to List", systemImage: "plus.circle.fill")
                     }
                     .tint(DesignSystem.Colors.dillGreen)
+                }
+            }
+            // Long-press. Uses .contextMenu rather than a raw long-press gesture so
+            // the duration, preview and destructive styling are the system's, not
+            // ours — this is where iOS users look for row actions that are not on
+            // the swipe.
+            .contextMenu {
+                Button(role: .destructive) {
+                    showDeleteConfirmation = true
+                } label: {
+                    Label("Delete permanently", systemImage: "trash")
                 }
             }
             .offset(x: shakeOffset)
@@ -156,9 +160,11 @@ struct GroceryItemRow: View {
                         animateToCart()
                     } else if viewModel.isCurrentUserShopping {
                         animateToCart()
-                    } else if viewModel.isSomeoneElseShopping {
-                        Task { await viewModel.submitRemoveRequest(item: item) }
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    } else if viewModel.isListLockedByOtherSession {
+                        // Read-only while someone else is out. This used to file a
+                        // removal request into an inbox; that flow is gone.
+                        triggerShake()
+                        viewModel.warnListReadOnly()
                     } else {
                         animateToSuggestions()
                     }
@@ -171,6 +177,22 @@ struct GroceryItemRow: View {
             .sheet(isPresented: $showDetailSheet) {
                 ItemDetailSheet(item: item)
                     .environmentObject(viewModel)
+            }
+            // Delete is for an item that should not exist — a mis-heard dictation,
+            // a typo. It is not "I don't need this right now"; tapping the row does
+            // that and keeps the item in suggestions. The message says so, because
+            // both gestures make the row disappear and only one is recoverable.
+            .confirmationDialog(
+                "Delete \(item.name)?",
+                isPresented: $showDeleteConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Delete", role: .destructive) {
+                    Task { await viewModel.deleteItem(item) }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This removes it permanently. To keep it for next time, tap the item instead — it moves to suggestions.")
             }
     }
 

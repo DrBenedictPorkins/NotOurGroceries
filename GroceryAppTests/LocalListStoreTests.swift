@@ -34,8 +34,6 @@ final class LocalListStoreTests: XCTestCase {
             quantity: "3",
             notes: "Red",
             notesEphemeral: true,
-            adHoc: true,
-            adHocPulled: true,
             isCustom: true,
             productId: "prod-9",
             status: .inCart,
@@ -81,13 +79,12 @@ final class LocalListStoreTests: XCTestCase {
     }
 
     func testRoundTripPreservesTheFlagsThatDecideItemFate() throws {
-        // adHocPulled decides whether an unbought errand item returns to the main
-        // list or is discarded. Losing it across a restart loses groceries.
+        // notesEphemeral decides whether a note is wiped when the trip ends, and
+        // isCustom whether the item is catalogued. Losing either across a restart
+        // changes what the user sees on the shelf.
         LocalListStore.save(items: [sampleItem()], householdId: "hh-1")
         let restored = try XCTUnwrap(LocalListStore.load()?.items.first)
 
-        XCTAssertTrue(restored.adHoc)
-        XCTAssertTrue(restored.adHocPulled)
         XCTAssertTrue(restored.notesEphemeral)
         XCTAssertTrue(restored.isCustom)
     }

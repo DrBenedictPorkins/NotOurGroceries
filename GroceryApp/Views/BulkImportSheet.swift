@@ -63,6 +63,12 @@ struct BulkImportSheet: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @Binding var isPresented: Bool
 
+    /// Where the accepted items go. Nil means the shared household list, which is
+    /// the normal case. The Quick List passes a closure so the same four import
+    /// sources — speak, camera, photos, paste — work on a list that never leaves
+    /// this phone, without a second copy of this screen.
+    var onCommit: (([String]) -> Void)? = nil
+
     @State private var rawText = ""
     /// Dictating a long list is expensive to redo, so the draft outlives the sheet.
     /// Losing 300 spoken words to a stray tap is not a recoverable mistake.
@@ -869,6 +875,18 @@ struct BulkImportSheet: View {
 
         let total = selected.count
         phase = .adding(done: 0, total: total)
+
+        if let onCommit {
+            // Local target: no household write, no product matching, no aisle
+            // inference. Quantity is folded into the line because a scratch list
+            // has no fields.
+            onCommit(selected.map { item in
+                if let q = item.quantity, !q.isEmpty { return "\(item.name) — \(q)" }
+                return item.name
+            })
+            isPresented = false
+            return
+        }
 
         Task {
             for (i, item) in selected.enumerated() {

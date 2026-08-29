@@ -155,10 +155,7 @@ struct GroceryItemRow: View {
                 }
 
                 if item.status == .active {
-                    if item.adHoc && viewModel.isCurrentUserAdHocShopping {
-                        // On an errand a tap means "grabbed it", same as at a store
-                        animateToCart()
-                    } else if viewModel.isCurrentUserShopping {
+                    if viewModel.isCurrentUserShopping {
                         animateToCart()
                     } else if viewModel.isListLockedByOtherSession {
                         // Read-only while someone else is out. This used to file a

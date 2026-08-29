@@ -16,6 +16,7 @@ struct ShoppingListView: View {
     @State private var showForceFinishAlert = false
     @State private var showForceFinishHoldSheet = false
     @State private var showPaperModeAlert = false
+    @State private var showQuickList = false
     @State private var showListMenu = false
     @State private var hintOn = false
     @State private var hasHinted = false
@@ -32,21 +33,21 @@ struct ShoppingListView: View {
                 .ignoresSafeArea()
                 .opacity(0.3)
 
+            // Paper mode replaces the screen rather than annotating it. A banner on
+            // the normal list left the two modes looking identical, which is the one
+            // thing paper mode must never be — you have to be able to tell at a
+            // glance that the household cannot see what you are doing.
+            if paperMode.isActive {
+                PaperListView(onReconnect: {
+                    Task { await viewModel.exitPaperMode() }
+                })
+                .environmentObject(viewModel)
+            } else {
             VStack(spacing: 0) {
                 // Custom Header
                 headerView
 
                 reconnectingLine
-
-                // Paper mode is never a subtle state — it sits above the list.
-                if paperMode.isActive {
-                    PaperModeBanner(onReconnect: {
-                        Task { await viewModel.exitPaperMode() }
-                    })
-                    .environmentObject(viewModel)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-                }
 
                 // Sort Options - show when list has items, or keep visible while undo is pending
                 if !viewModel.shoppingList.isEmpty || viewModel.undoSuggestionItem != nil {
@@ -203,9 +204,10 @@ struct ShoppingListView: View {
                     }
                 }
             }
+            }
 
             // Glowing border overlay when shopping is active
-            if viewModel.isSomeoneElseShopping {
+            if viewModel.isSomeoneElseShopping && !paperMode.isActive {
                 shoppingActiveBorderOverlay
             }
         }
@@ -221,6 +223,10 @@ struct ShoppingListView: View {
                 isAtStore = true
             })
             .environmentObject(viewModel)
+        }
+        .fullScreenCover(isPresented: $showQuickList) {
+            QuickListView(isPresented: $showQuickList)
+                .environmentObject(viewModel)
         }
         .sheet(isPresented: $showBulkImport) {
             BulkImportSheet(isPresented: $showBulkImport)
@@ -251,7 +257,7 @@ struct ShoppingListView: View {
             ListMenuSheet(
                 isPresented: $showListMenu,
                 onAtStore: { showStoreSelection = true },
-                onQuickTrip: { Task { await viewModel.enterAdHocMode() } },
+                onQuickList: { showQuickList = true },
                 onPaperList: { showPaperModeAlert = true },
                 onSignOut: { Task { try? await amplifyService.signOut() } }
             )
@@ -426,9 +432,6 @@ struct ShoppingListView: View {
         if viewModel.isSomeoneElseShopping {
             return "\(viewModel.activeShopperDisplayName ?? "Someone") is shopping"
         }
-        if viewModel.isSomeoneElseAdHocShopping {
-            return "\(viewModel.activeShopperDisplayName ?? "Someone") is out"
-        }
         if viewModel.shoppingList.isEmpty { return "Nothing to buy" }
         return "Shopping list"
     }
@@ -439,9 +442,6 @@ struct ShoppingListView: View {
         }
         if viewModel.isSomeoneElseShopping {
             return AnyShapeStyle(DesignSystem.Colors.dillGreen)
-        }
-        if viewModel.isSomeoneElseAdHocShopping {
-            return AnyShapeStyle(DesignSystem.Colors.neonPurple)
         }
         return AnyShapeStyle(DesignSystem.Colors.textPrimary)
     }
@@ -482,9 +482,6 @@ struct ShoppingListView: View {
             let store = viewModel.householdStores.first(where: { $0.id == viewModel.shoppingStoreId })?.name
             let where_ = store.map { "at \($0)" } ?? "shopping"
             return total > 0 ? "\(where_) · \(done) of \(total) in cart" : where_
-        }
-        if viewModel.isSomeoneElseAdHocShopping {
-            return "Quick trip · your list is untouched"
         }
         if viewModel.shoppingList.isEmpty {
             return "Add something below to get started"

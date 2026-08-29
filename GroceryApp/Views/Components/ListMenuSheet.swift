@@ -11,7 +11,7 @@ struct ListMenuSheet: View {
     @ObservedObject private var paperMode = PaperMode.shared
 
     var onAtStore: () -> Void
-    var onQuickTrip: () -> Void
+    var onQuickList: () -> Void
     var onPaperList: () -> Void
     var onSignOut: () -> Void
 
@@ -52,14 +52,14 @@ struct ListMenuSheet: View {
                         }
 
                         row(
-                            icon: "figure.walk.motion",
+                            icon: "list.bullet.rectangle.portrait",
                             tint: DesignSystem.Colors.neonPurple,
-                            title: "Quick Trip",
-                            detail: "A few things somewhere else. Your main list stays untouched.",
-                            disabled: !canStartShopping
+                            title: "Quick List",
+                            detail: "Scratch list for a quick errand. This phone only — never shared.",
+                            disabled: false
                         ) {
                             isPresented = false
-                            onQuickTrip()
+                            onQuickList()
                         }
 
                         row(

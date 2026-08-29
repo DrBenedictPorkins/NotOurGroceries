@@ -15,6 +15,18 @@ enum LocalListStore {
         var items: [GroceryItem]
         var householdId: String?
         var savedAt: Date
+
+        /// The rest of what a shopping trip needs. The list alone is not enough:
+        /// arriving at the store with no signal and a cold app used to mean no
+        /// store to pick and no aisle order, because both lived only in memory.
+        /// These are already-computed values, so persisting them costs nothing
+        /// and buys a fully working trip offline. Only inference for brand-new
+        /// custom items still needs the network.
+        ///
+        /// Optional with defaults so a snapshot written by an older build still
+        /// decodes — losing the list to a schema change would defeat the point.
+        var stores: [HouseholdStore]?
+        var aisleMappings: [String: [ProductAisleMapping]]?
     }
 
     static let filename = "shopping-list-snapshot.json"
@@ -52,9 +64,23 @@ enum LocalListStore {
 
     // MARK: - Write
 
-    static func save(items: [GroceryItem], householdId: String?) {
+    static func save(
+        items: [GroceryItem],
+        householdId: String?,
+        stores: [HouseholdStore]? = nil,
+        aisleMappings: [String: [ProductAisleMapping]]? = nil
+    ) {
         guard let url = fileURL else { return }
-        let snapshot = Snapshot(items: items, householdId: householdId, savedAt: Date())
+        // Never blank out context we already hold just because this caller did
+        // not pass it — an item-only save must not cost the aisle mappings.
+        let existing = load()
+        let snapshot = Snapshot(
+            items: items,
+            householdId: householdId,
+            savedAt: Date(),
+            stores: stores ?? existing?.stores,
+            aisleMappings: aisleMappings ?? existing?.aisleMappings
+        )
         do {
             let data = try encoder.encode(snapshot)
             // .atomic so a crash mid-write can't leave a truncated file behind —

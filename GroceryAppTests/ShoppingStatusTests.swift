@@ -9,7 +9,9 @@ final class ShoppingStatusTests: XCTestCase {
     func testAllStatusesParseFromTheirServerValues() {
         XCTAssertEqual(ShoppingStatus(rawValue: "IDLE"), .idle)
         XCTAssertEqual(ShoppingStatus(rawValue: "AT_STORE"), .atStore)
-        XCTAssertEqual(ShoppingStatus(rawValue: "AD_HOC"), .adHoc)
+        // AD_HOC was the Quick Trip status; the mode is gone and the value
+        // must no longer parse into anything.
+        XCTAssertNil(ShoppingStatus(rawValue: "AD_HOC"))
     }
 
     func testUnknownStatusDoesNotParse() {
@@ -24,7 +26,6 @@ final class ShoppingStatusTests: XCTestCase {
         // Amplify enum silently breaks session detection for everyone.
         XCTAssertEqual(ShoppingStatus.idle.rawValue, "IDLE")
         XCTAssertEqual(ShoppingStatus.atStore.rawValue, "AT_STORE")
-        XCTAssertEqual(ShoppingStatus.adHoc.rawValue, "AD_HOC")
     }
 
     func testItemStatusRawValuesMatchTheSchema() {
@@ -35,15 +36,12 @@ final class ShoppingStatusTests: XCTestCase {
 }
 
 /// The item defaults matter because they decide where an item shows up. A new
-/// item defaulting to `adHoc = true` would vanish from the main list.
 final class GroceryItemDefaultsTests: XCTestCase {
 
     func testNewItemDefaultsToTheMainList() {
         let item = GroceryItem(name: "Milk")
 
         XCTAssertEqual(item.status, .active)
-        XCTAssertFalse(item.adHoc, "A new item belongs to the main list, not to an errand")
-        XCTAssertFalse(item.adHocPulled)
         XCTAssertFalse(item.notesEphemeral, "Notes are durable unless explicitly marked trip-scoped")
     }
 
@@ -58,7 +56,7 @@ final class GroceryItemDefaultsTests: XCTestCase {
     }
 
     func testDecodingToleratesMissingNewFields() throws {
-        // Rows written before adHoc/notesEphemeral existed must still decode —
+        // Rows written before notesEphemeral existed must still decode —
         // production has hundreds of them.
         let json = """
         {
@@ -72,7 +70,6 @@ final class GroceryItemDefaultsTests: XCTestCase {
         let item = try decoder.decode(GroceryItem.self, from: Data(json.utf8))
 
         XCTAssertEqual(item.name, "Milk")
-        XCTAssertFalse(item.adHoc)
         XCTAssertFalse(item.notesEphemeral)
         XCTAssertTrue(item.images.isEmpty)
     }

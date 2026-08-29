@@ -26,7 +26,6 @@ enum ShoppingStatus: String, Codable {
     case idle = "IDLE"
     case atStore = "AT_STORE"
     /// A store-less errand run. Startable only from `.idle`, so it never races a store trip.
-    case adHoc = "AD_HOC"
 }
 
 @MainActor
@@ -79,12 +78,12 @@ class ShoppingListViewModel: ObservableObject {
 
     /// Items on the shopping list (active items to be picked up)
     var shoppingList: [GroceryItem] {
-        items.filter { $0.status == .active && !$0.adHoc }
+        items.filter { $0.status == .active }
     }
 
     /// Items already in the cart during the current shopping trip
     var inCart: [GroceryItem] {
-        items.filter { $0.status == .inCart && !$0.adHoc }
+        items.filter { $0.status == .inCart }
     }
 
     /// Suggested items from previous shopping trips
@@ -94,37 +93,12 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Ad-Hoc Trip
 
-    /// Items still to grab on the current store-less errand
-    var adHocList: [GroceryItem] {
-        items.filter { $0.status == .active && $0.adHoc }
-    }
-
-    /// Items already grabbed on the current errand
-    var adHocInCart: [GroceryItem] {
-        items.filter { $0.status == .inCart && $0.adHoc }
-    }
-
-    /// True while this household is on a store-less errand
-    var isAdHocMode: Bool {
-        shoppingStatus == .adHoc
-    }
-
-    /// True when the current user is the one running the errand
-    var isCurrentUserAdHocShopping: Bool {
-        guard shoppingStatus == .adHoc,
-              let shopperId = activeShopperId,
-              let currentUserId = AmplifyService.shared.currentUser?.userId else {
-            return false
-        }
-        return shopperId == currentUserId
-    }
-
     /// True while another member holds an active session of any kind, so this
     /// device must not mutate the list. Two people editing while one of them is
     /// standing in an aisle produces races nobody can reason about — and for a
     /// two-person household, "text them" is a better channel than a live edit.
     var isListLockedByOtherSession: Bool {
-        isSomeoneElseShopping || isSomeoneElseAdHocShopping
+        isSomeoneElseShopping
     }
 
     /// The single response to "you tried to change the list while someone else is
@@ -134,16 +108,6 @@ class ShoppingListViewModel: ObservableObject {
     func warnListReadOnly() {
         showToast(message: "List is read-only while shopping", type: .warning)
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
-    }
-
-    /// True when another member is out on an errand
-    var isSomeoneElseAdHocShopping: Bool {
-        guard shoppingStatus == .adHoc,
-              let shopperId = activeShopperId,
-              let currentUserId = AmplifyService.shared.currentUser?.userId else {
-            return false
-        }
-        return shopperId != currentUserId
     }
 
     /// Returns true if the current user is the active shopper
@@ -238,7 +202,33 @@ class ShoppingListViewModel: ObservableObject {
         items = snapshot.items
         localSnapshotSavedAt = snapshot.savedAt
         isShowingLocalSnapshot = true
-        logger.info("Restored \(snapshot.items.count) items from local snapshot")
+
+        // Restore the rest of the trip, not just the list. Without these, opening
+        // the app cold in a car park meant no store to choose and no aisle order,
+        // which is most of what At Store is for.
+        if let stores = snapshot.stores, !stores.isEmpty, householdStores.isEmpty {
+            householdStores = stores
+        }
+        if let mappings = snapshot.aisleMappings, !mappings.isEmpty {
+            for (storeId, list) in mappings where productAisleMappings[storeId] == nil {
+                productAisleMappings[storeId] = list
+            }
+        }
+
+        logger.info("Restored \(snapshot.items.count) items, \(snapshot.stores?.count ?? 0) stores, \(snapshot.aisleMappings?.count ?? 0) mapped stores from local snapshot")
+    }
+
+    /// Called whenever stores or aisle mappings change, so the offline copy keeps
+    /// up. Separate from the item stream because these change rarely and are
+    /// large; folding them into the 600ms item debounce would rewrite them on
+    /// every tick of a shopping trip.
+    private func persistShoppingContext() {
+        LocalListStore.save(
+            items: items,
+            householdId: householdId,
+            stores: householdStores,
+            aisleMappings: productAisleMappings
+        )
     }
 
     private func setupLocalSnapshotSaving() {
@@ -247,6 +237,15 @@ class ShoppingListViewModel: ObservableObject {
             .debounce(for: .milliseconds(600), scheduler: DispatchQueue.main)
             .sink { [weak self] items in
                 LocalListStore.save(items: items, householdId: self?.householdId)
+            }
+            .store(in: &cancellables)
+
+        // Stores and mappings change rarely, so a longer debounce and their own
+        // stream. Both are needed to shop offline.
+        Publishers.CombineLatest($householdStores, $productAisleMappings)
+            .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
+            .sink { [weak self] _, _ in
+                self?.persistShoppingContext()
             }
             .store(in: &cancellables)
     }
@@ -391,8 +390,6 @@ class ShoppingListViewModel: ObservableObject {
                         quantity
                         notes
                         notesEphemeral
-                        adHoc
-                        adHocPulled
                         isCustom
                         productId
                         status
@@ -566,12 +563,9 @@ class ShoppingListViewModel: ObservableObject {
         // review picker, where the user gets to accept/reject each candidate. Silent
         // auto-merge risks buying the wrong thing, e.g. "coconut milk" collapsing
         // into "coconut milk yogurt".)
-        // During an errand the item belongs to that trip, and duplicates are checked
-        // against the errand's own lists — the main list is a separate world right now.
-        let isErrandAdd = isAdHocMode
         let normalizedName = normalizeName(name)
-        let listToCheck = isErrandAdd ? adHocList : shoppingList
-        let cartToCheck = isErrandAdd ? adHocInCart : inCart
+        let listToCheck = shoppingList
+        let cartToCheck = inCart
 
         if let existingItem = listToCheck.first(where: { $0.normalizedName == normalizedName }) {
             showToast(message: "\(existingItem.name) is already on the list")
@@ -584,16 +578,9 @@ class ShoppingListViewModel: ObservableObject {
             return
         }
 
-        // On an errand, an item sitting on the main list is pulled onto the trip rather
-        // than duplicated — this is the "add from item list" path the user wanted.
-        if isErrandAdd, let mainListItem = shoppingList.first(where: { $0.normalizedName == normalizedName }) {
-            await pullItemToAdHoc(mainListItem)
-            return
-        }
-
         // Check suggestions - reactivate existing item instead of creating duplicate
         if let suggestionItem = suggestions.first(where: { $0.normalizedName == normalizedName }) {
-            await setAdHocFlags(suggestionItem, adHoc: isErrandAdd, pulled: false, status: .active)
+            await restoreItem(suggestionItem)
             return
         }
 
@@ -609,7 +596,6 @@ class ShoppingListViewModel: ObservableObject {
             normalizedName: normalizedName,
             quantity: quantity,
             notes: notes,
-            adHoc: isErrandAdd,
             isCustom: productId == nil,
             productId: productId,
             status: .active,
@@ -626,7 +612,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation CreateGroceryItem($input: CreateGroceryItemInput!) {
                 createGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -641,7 +627,6 @@ class ShoppingListViewModel: ObservableObject {
                 "status": "ACTIVE",
                 "addedBy": currentUserId,
                 "addedAt": ISO8601DateFormatter().string(from: now),
-                "adHoc": isErrandAdd,
                 "version": 0
             ]
             if let quantity = quantity { input["quantity"] = quantity }
@@ -710,7 +695,7 @@ class ShoppingListViewModel: ObservableObject {
         // Check if locked by another user (skip during shopping mode - shopper has full
         // control, and likewise for the runner of a store-less errand)
         let currentUserId = AmplifyService.shared.currentUser?.userId
-        if !isCurrentUserShopping, !isCurrentUserAdHocShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
+        if !isCurrentUserShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
             let lockedByName = UserCache.shared.displayName(for: lockedBy)
             await MainActor.run {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -752,7 +737,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -913,11 +898,6 @@ class ShoppingListViewModel: ObservableObject {
         }
 
         // On an errand, a suggestion joins the errand rather than the main list.
-        if isCurrentUserAdHocShopping && !item.adHoc {
-            await setAdHocFlags(item, adHoc: true, pulled: false, status: .active)
-            return
-        }
-
         let currentUserId = AmplifyService.shared.currentUser?.userId ?? ""
 
         // Check if locked by another user (skip during shopping mode - shopper has full control)
@@ -972,7 +952,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -1015,7 +995,7 @@ class ShoppingListViewModel: ObservableObject {
         // Check if locked by another user (skip during shopping mode - shopper has full
         // control, and likewise for the runner of a store-less errand)
         let currentUserId = AmplifyService.shared.currentUser?.userId
-        if !isCurrentUserShopping, !isCurrentUserAdHocShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
+        if !isCurrentUserShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
             let lockedByName = UserCache.shared.displayName(for: lockedBy)
             await MainActor.run {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -1190,7 +1170,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -1249,7 +1229,7 @@ class ShoppingListViewModel: ObservableObject {
         // Check if locked by another user (skip during shopping mode - shopper has full
         // control, and likewise for the runner of a store-less errand)
         let currentUserId = AmplifyService.shared.currentUser?.userId
-        if !isCurrentUserShopping, !isCurrentUserAdHocShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
+        if !isCurrentUserShopping, let lockedBy = item.lockedBy, lockedBy != currentUserId {
             let lockedByName = UserCache.shared.displayName(for: lockedBy)
             await MainActor.run {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -1273,7 +1253,7 @@ class ShoppingListViewModel: ObservableObject {
             let document = """
             mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
                 updateGroceryItem(input: $input) {
-                    id householdId name normalizedName quantity notes notesEphemeral adHoc adHocPulled isCustom productId
+                    id householdId name normalizedName quantity notes notesEphemeral isCustom productId
                     status lockedBy addedBy addedAt version
                 }
             }
@@ -1836,8 +1816,6 @@ class ShoppingListViewModel: ObservableObject {
                 quantity
                 notes
                 notesEphemeral
-                adHoc
-                adHocPulled
                 isCustom
                 productId
                 status
@@ -2098,7 +2076,15 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Shopping Mode Management
 
-    /// Enter shopping mode at a specific store
+    /// Enter shopping mode at a specific store.
+    ///
+    /// Local state is set first and the household write is best-effort. It used to
+    /// be the other way round: the mutation had to land before anything happened,
+    /// so tapping "At Store" in a car park with no signal produced a red toast and
+    /// nothing else — the app refused to let you shop the list already in your
+    /// hand. The household write only exists so other members see that you are out
+    /// and go read-only; if it fails there is no signal, so they were not going to
+    /// be told anyway.
     func enterShoppingMode(store: HouseholdStore) async {
         guard let householdId = householdId else {
             showToast(message: "No household selected", type: .error)
@@ -2108,6 +2094,20 @@ class ShoppingListViewModel: ObservableObject {
         guard let currentUserId = AmplifyService.shared.currentUser?.userId else {
             showToast(message: "Not signed in", type: .error)
             return
+        }
+
+        // You are shopping the moment you say so.
+        shoppingStatus = .atStore
+        activeShopperId = currentUserId
+        shoppingStoreId = store.id
+        selectedHouseholdStore = store
+        shoppingStartedAt = Date()
+        isAtStoreMode = true
+
+        // Aisle order comes from mappings already on disk, so a cold offline start
+        // still walks the store in order for anything mapped before.
+        if let cached = productAisleMappings[store.id], !cached.isEmpty {
+            logger.info("At-Store: using \(cached.count) cached aisle mappings")
         }
 
         do {
@@ -2213,13 +2213,20 @@ class ShoppingListViewModel: ObservableObject {
                     logger.info("Entered shopping mode at store: \(store.name)")
                 }
             case .failure(let error):
-                showToast(message: "Failed to enter shopping mode", type: .error)
-                logger.error("Failed to enter shopping mode: \(error)")
+                enteredShoppingModeOffline(store: store, error: error)
             }
         } catch {
-            showToast(message: "Failed to enter shopping mode", type: .error)
-            logger.error("Failed to enter shopping mode: \(error)")
+            enteredShoppingModeOffline(store: store, error: error)
         }
+    }
+
+    /// The session is already live locally; this only reports what the household
+    /// will not know about it. Deliberately not an error toast — nothing the user
+    /// wanted has failed. They are shopping.
+    private func enteredShoppingModeOffline(store: HouseholdStore, error: Error) {
+        logger.error("Shopping mode started offline at \(store.name): \(error)")
+        showToast(message: "Shopping at \(store.name) · offline, others won't see it", type: .warning)
+        persistShoppingContext()
     }
 
     /// Exit shopping mode
@@ -2454,223 +2461,6 @@ class ShoppingListViewModel: ObservableObject {
         } catch {
             logger.error("Failed to update item status: \(error)")
         }
-    }
-
-    // MARK: - Ad-Hoc Trip Management
-
-    /// Persist an item's ad-hoc flags, optionally alongside a status change.
-    private func setAdHocFlags(
-        _ item: GroceryItem,
-        adHoc: Bool,
-        pulled: Bool,
-        status: GroceryItem.ItemStatus? = nil
-    ) async {
-        // Optimistic update
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            var updated = item
-            updated.adHoc = adHoc
-            updated.adHocPulled = pulled
-            if let status { updated.status = status }
-            updated.version += 1
-            items[index] = updated
-            applySorting()
-        }
-
-        do {
-            var input: [String: Any] = [
-                "id": item.id,
-                "adHoc": adHoc,
-                "adHocPulled": pulled,
-                "version": item.version + 1
-            ]
-            if let status { input["status"] = status.rawValue }
-
-            let document = """
-            mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
-                updateGroceryItem(input: $input) {
-                    id status adHoc adHocPulled version
-                }
-            }
-            """
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            _ = try await apiMutate(request)
-        } catch {
-            if error is PaperModeActive { return }
-            // Revert on failure — a stuck ad-hoc flag would hide the item from both lists
-            if let index = items.firstIndex(where: { $0.id == item.id }) {
-                items[index] = item
-            }
-            logger.error("Failed to update ad-hoc flags: \(error)")
-        }
-    }
-
-    /// Start a store-less errand. Only allowed from IDLE, so it can never race a store trip.
-    func enterAdHocMode() async {
-        guard let householdId = householdId else {
-            showToast(message: "No household selected", type: .error)
-            return
-        }
-        guard let currentUserId = AmplifyService.shared.currentUser?.userId else {
-            showToast(message: "Not signed in", type: .error)
-            return
-        }
-        guard shoppingStatus == .idle else {
-            showToast(message: "Someone is already shopping", type: .warning)
-            return
-        }
-
-        do {
-            let iso8601Formatter = ISO8601DateFormatter()
-            iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-
-            let document = """
-            mutation UpdateHousehold($input: UpdateHouseholdInput!) {
-                updateHousehold(input: $input) {
-                    id shoppingStatus activeShopperId shoppingStoreId shoppingStartedAt
-                }
-            }
-            """
-
-            // No store binding — that's the whole point of an errand
-            let input: [String: Any] = [
-                "id": householdId,
-                "shoppingStatus": "AD_HOC",
-                "activeShopperId": currentUserId,
-                "shoppingStoreId": NSNull(),
-                "shoppingStartedAt": iso8601Formatter.string(from: Date())
-            ]
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                shoppingStatus = .adHoc
-                activeShopperId = currentUserId
-                shoppingStoreId = nil
-                selectedHouseholdStore = nil
-                shoppingStartedAt = Date()
-                logger.info("Entered ad-hoc mode")
-            case .failure(let error):
-                showToast(message: "Couldn't start the errand", type: .error)
-                logger.error("Failed to enter ad-hoc mode: \(error)")
-            }
-        } catch {
-            showToast(message: "Couldn't start the errand", type: .error)
-            logger.error("Failed to enter ad-hoc mode: \(error)")
-        }
-    }
-
-    /// Move an item off the main list onto the errand. It keeps ACTIVE status but is
-    /// flagged as pulled, so it returns to the main list if the errand ends without it.
-    func pullItemToAdHoc(_ item: GroceryItem) async {
-        guard isAdHocMode else { return }
-        await setAdHocFlags(item, adHoc: true, pulled: true)
-    }
-
-    /// Put a pulled item back on the main list mid-errand, undoing `pullItemToAdHoc`.
-    func returnItemToMainList(_ item: GroceryItem) async {
-        guard item.adHoc else { return }
-        await setAdHocFlags(item, adHoc: false, pulled: false, status: .active)
-    }
-
-    /// Finish the errand. Bought items are learned as suggestions; items pulled off the
-    /// main list are restored to it; freshly typed leftovers are discarded as one-offs.
-    func exitAdHocMode() async {
-        guard let householdId = householdId else {
-            showToast(message: "No household selected", type: .error)
-            return
-        }
-
-        let bought = adHocInCart
-        let leftoverPulled = adHocList.filter { $0.adHocPulled }
-        let leftoverFresh = adHocList.filter { !$0.adHocPulled }
-
-        let stats = ShoppingCompletionStats(
-            itemsPickedUp: bought.count,
-            itemsNotPickedUp: leftoverPulled.count + leftoverFresh.count,
-            itemsAddedDuringTrip: 0,
-            customItemsLearned: bought.filter { $0.isCustom }.count,
-            storeName: "Quick Trip",
-            startedAt: shoppingStartedAt ?? Date(),
-            endedAt: Date()
-        )
-
-        // Bought → learned as a suggestion for next time, and off the errand
-        for item in bought {
-            await setAdHocFlags(item, adHoc: false, pulled: false, status: .suggestion)
-        }
-
-        // Pulled but not found → back onto the main list, exactly where it came from
-        for item in leftoverPulled {
-            await setAdHocFlags(item, adHoc: false, pulled: false, status: .active)
-        }
-
-        // Typed fresh for this errand and not bought → a one-off, discard it
-        for item in leftoverFresh {
-            await deleteItem(item)
-        }
-
-        // Trip-scoped notes die with the trip, same as a store run
-        await clearEphemeralNotes()
-
-        do {
-            let document = """
-            mutation UpdateHousehold($input: UpdateHouseholdInput!) {
-                updateHousehold(input: $input) {
-                    id shoppingStatus activeShopperId shoppingStoreId
-                }
-            }
-            """
-
-            let input: [String: Any] = [
-                "id": householdId,
-                "shoppingStatus": "IDLE",
-                "activeShopperId": NSNull(),
-                "shoppingStoreId": NSNull(),
-                "shoppingStartedAt": NSNull()
-            ]
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            _ = try await apiMutate(request)
-        } catch {
-            logger.error("Failed to clear ad-hoc status: \(error)")
-        }
-
-        shoppingStatus = .idle
-        activeShopperId = nil
-        shoppingStoreId = nil
-        shoppingStartedAt = nil
-
-        // A trip where nothing was added and nothing bought has no story to tell.
-        if bought.isEmpty && leftoverPulled.isEmpty && leftoverFresh.isEmpty {
-            logger.info("Cancelled an empty ad-hoc trip")
-            return
-        }
-
-        shoppingCompletionStats = stats
-        showShoppingCompletedSheet = true
-
-        logger.info("Ended ad-hoc trip — \(bought.count) bought, \(leftoverPulled.count) restored, \(leftoverFresh.count) discarded")
     }
 
     /// Fetch current household shopping status and restore state if current user was shopping
@@ -2990,11 +2780,7 @@ class ShoppingListViewModel: ObservableObject {
         var notesEphemeral = false
         if case .boolean(let value) = obj["notesEphemeral"] { notesEphemeral = value }
 
-        var adHoc = false
-        if case .boolean(let value) = obj["adHoc"] { adHoc = value }
 
-        var adHocPulled = false
-        if case .boolean(let value) = obj["adHocPulled"] { adHocPulled = value }
 
         var productId: String? = nil
         if case .string(let value) = obj["productId"] { productId = value }
@@ -3022,8 +2808,6 @@ class ShoppingListViewModel: ObservableObject {
             quantity: quantity,
             notes: notes,
             notesEphemeral: notesEphemeral,
-            adHoc: adHoc,
-            adHocPulled: adHocPulled,
             isCustom: isCustom,
             productId: productId,
             status: status,

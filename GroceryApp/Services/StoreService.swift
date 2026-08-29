@@ -72,23 +72,26 @@ class StoreService: ObservableObject {
             return dict
         }
 
-        // AWSJSON fields must be sent as native JSON values (arrays/objects),
-        // NOT as JSON strings. DynamoDB S-type strings get double-encoded by AppSync.
-        var input: [String: Any] = [
+        // AWSJSON goes over the wire as a serialized JSON *string*. A native array
+        // is rejected with "Variable 'aisleLayout' has an invalid value" even when
+        // it is perfectly well-formed — confirmed by logging the exact payload
+        // against updateStore, which failed identically until it was encoded this
+        // way. AppSync decodes the string, and DynamoDB stores a real list, so
+        // nothing is double-encoded.
+        //
+        // This also removes the old special case for empty layouts: "[]" is a
+        // valid JSON string, so there is no longer anything to omit.
+        let aisleLayoutJSON = (try? JSONSerialization.data(withJSONObject: initialAisles))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+
+        let input: [String: Any] = [
             "id": storeId,
             "householdId": householdId,
             "name": name,
             "chain": chain ?? "",
-            "layoutType": layoutType.rawValue
+            "layoutType": layoutType.rawValue,
+            "aisleLayout": aisleLayoutJSON
         ]
-
-        // Omit aisleLayout entirely rather than sending an empty array. AppSync
-        // rejects `[]` for an AWSJSON variable ("has an invalid value"), which only
-        // shows up for no-aisle stores since every other path seeds standard sections.
-        // The field is nullable and parseHouseholdStore treats a missing value as [].
-        if !initialAisles.isEmpty {
-            input["aisleLayout"] = initialAisles
-        }
 
         let request = GraphQLRequest<JSONValue>(
             document: document,
@@ -141,10 +144,17 @@ class StoreService: ObservableObject {
             return dict
         }
 
+        // AWSJSON as a *serialized string*. The native array is well-formed JSON
+        // and AppSync still rejects it here with "Variable 'aisleLayout' has an
+        // invalid value" — verified by logging the exact payload. The comment on
+        // createStore claiming native is required appears to be wrong for update.
+        let aisleLayoutJSON = (try? JSONSerialization.data(withJSONObject: aisleLayoutNative))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+
         var input: [String: Any] = [
             "id": store.id,
             "name": store.name,
-            "aisleLayout": aisleLayoutNative,
+            "aisleLayout": aisleLayoutJSON,
             "layoutType": store.layoutType.rawValue
         ]
 

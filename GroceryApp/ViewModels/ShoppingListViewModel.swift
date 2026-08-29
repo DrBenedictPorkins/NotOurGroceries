@@ -208,6 +208,11 @@ class ShoppingListViewModel: ObservableObject {
         // which is most of what At Store is for.
         if let stores = snapshot.stores, !stores.isEmpty, householdStores.isEmpty {
             householdStores = stores
+            // Flag it, because loadStores skips fetching when householdStores is
+            // already populated — and restoring from the snapshot populates it.
+            // Without this the app would come up on cached stores and never
+            // refresh them, which silently disabled the department backfill.
+            storesAreFromSnapshot = true
         }
         if let mappings = snapshot.aisleMappings, !mappings.isEmpty {
             for (storeId, list) in mappings where productAisleMappings[storeId] == nil {
@@ -1896,11 +1901,17 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     /// Load stores for the current household
+    private var storesAreFromSnapshot = false
+
     func loadStores(forceRefresh: Bool = false) async {
-        // Skip if stores already loaded (prevents redundant fetches on tab switch)
-        if !householdStores.isEmpty && !forceRefresh {
+        // Skip if stores already loaded (prevents redundant fetches on tab switch).
+        // Snapshot-restored stores don't count as loaded: they are a cached copy
+        // to shop from offline, not a fetch.
+        if !householdStores.isEmpty && !forceRefresh && !storesAreFromSnapshot {
+            print("[BACKFILL] loadStores SKIPPED — \(self.householdStores.count) already loaded")
             return
         }
+        print("[BACKFILL] loadStores FETCHING — have \(self.householdStores.count), forceRefresh=\(forceRefresh), fromSnapshot=\(self.storesAreFromSnapshot)")
 
         guard let householdId = householdId else {
             logger.error("loadStores: No household ID available")
@@ -1909,6 +1920,7 @@ class ShoppingListViewModel: ObservableObject {
 
         do {
             householdStores = try await StoreService.shared.fetchStores(householdId: householdId)
+            storesAreFromSnapshot = false
             logger.info("Loaded \(self.householdStores.count) stores for household")
 
             if householdStores.isEmpty {
@@ -1917,6 +1929,7 @@ class ShoppingListViewModel: ObservableObject {
                 await backfillStandardSections()
             }
         } catch {
+            print("[BACKFILL] fetchStores THREW: \(String(describing: error))")
             logger.error("Failed to load stores: \(error)")
         }
     }
@@ -1930,15 +1943,20 @@ class ShoppingListViewModel: ObservableObject {
     /// and this runs on every load.
     private func backfillStandardSections() async {
         let empty = householdStores.filter { $0.aisleLayout.isEmpty }
+        print("[BACKFILL] check — \(self.householdStores.count) stores, \(empty.count) with no layout")
         guard !empty.isEmpty else { return }
 
-        logger.info("Backfilling standard departments into \(empty.count) store(s)")
         for store in empty {
-            guard let updated = try? await StoreService.shared.addMissingStandardSections(to: store) else {
-                continue
-            }
-            if let index = householdStores.firstIndex(where: { $0.id == updated.id }) {
-                householdStores[index] = updated
+            do {
+                let updated = try await StoreService.shared.addMissingStandardSections(to: store)
+                if let index = householdStores.firstIndex(where: { $0.id == updated.id }) {
+                    householdStores[index] = updated
+                }
+                print("[BACKFILL] OK — \(updated.aisleLayout.count) departments into \(store.name)")
+            } catch {
+                // Was `try?`, which meant a failing write looked identical to a
+                // store that needed nothing — the reason this went unnoticed.
+                print("[BACKFILL] FAILED for \(store.name): \(String(describing: error))")
             }
         }
     }

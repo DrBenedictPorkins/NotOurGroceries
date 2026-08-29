@@ -1942,11 +1942,20 @@ class ShoppingListViewModel: ObservableObject {
     /// are ignored on purpose: an unsorted list is a worse list, not a broken one,
     /// and this runs on every load.
     private func backfillStandardSections() async {
-        let empty = householdStores.filter { $0.aisleLayout.isEmpty }
-        print("[BACKFILL] check — \(self.householdStores.count) stores, \(empty.count) with no layout")
-        guard !empty.isEmpty else { return }
+        // Any store missing a standard section, not just an empty one. The
+        // original "empty only" test meant that adding the seven centre
+        // departments later reached nobody: every existing store already had the
+        // seven perimeter ones, so none of them qualified, and brown sugar stayed
+        // homeless. addMissingStandardSections adds by id and is idempotent, and
+        // scanned aisles sit alongside these — every store already carries both.
+        let standardIds = Set(StoreService.standardSections.map { $0.id })
+        let needsTopUp = householdStores.filter { store in
+            !standardIds.isSubset(of: Set(store.aisleLayout.map { $0.id }))
+        }
+        print("[BACKFILL] check — \(self.householdStores.count) stores, \(needsTopUp.count) missing standard sections")
+        guard !needsTopUp.isEmpty else { return }
 
-        for store in empty {
+        for store in needsTopUp {
             do {
                 let updated = try await StoreService.shared.addMissingStandardSections(to: store)
                 if let index = householdStores.firstIndex(where: { $0.id == updated.id }) {

@@ -16,6 +16,7 @@ struct QuickListView: View {
     @FocusState private var entryFocused: Bool
     @State private var showClearConfirmation = false
     @State private var showImport = false
+    @State private var mainListExpanded = false
 
     var body: some View {
         ZStack {
@@ -31,6 +32,7 @@ struct QuickListView: View {
                     list
                 }
 
+                mainListReference
                 suggestionsStrip
             }
         }
@@ -211,14 +213,94 @@ struct QuickListView: View {
         .scrollDismissesKeyboard(.immediately)
     }
 
+    /// What the big shop currently looks like, for reference only.
+    ///
+    /// Deliberately inert. Tapping to copy an item across was considered and
+    /// rejected: the quick list holds plain strings with no link back to the
+    /// GroceryItem, so a copy is a duplicate, and ticking the copy could never
+    /// update the original. Two rows for one carton of milk, one of which lies.
+    ///
+    /// Collapsed by default because it is context, not the thing you came here
+    /// to do.
+    @ViewBuilder
+    private var mainListReference: some View {
+        let main = viewModel.shoppingList
+
+        if !main.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { mainListExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: mainListExpanded ? "chevron.down" : "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("MAIN LIST")
+                            .font(.system(size: 11, weight: .bold))
+                            .kerning(0.8)
+                        Text("read-only")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.7))
+                        Spacer()
+                        Text("\(main.count)")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if mainListExpanded {
+                    ScrollView(.vertical, showsIndicators: true) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(main) { item in
+                                HStack(spacing: 10) {
+                                    Text(item.name)
+                                        .font(.system(size: 15))
+                                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                                    if let quantity = item.quantity, !quantity.isEmpty {
+                                        Text(quantity)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.7))
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 180)
+                    .scrollDismissesKeyboard(.immediately)
+                }
+            }
+            .background(DesignSystem.Colors.secondaryBackground.opacity(0.5))
+        }
+    }
+
     /// Your own purchase history, browsable here for the same reason it works on
     /// the main list: scrolling past things is how you remember you need them.
     /// Tapping copies the name onto this list — it never touches the household,
     /// and the history itself is untouched. Already-cached, so it works offline.
     @ViewBuilder
     private var suggestionsStrip: some View {
-        let available = viewModel.suggestions.filter { suggestion in
-            !store.lines.contains { $0.name.caseInsensitiveCompare(suggestion.name) == .orderedSame }
+        // Everything the household knows about, not just the archive: suggestions
+        // plus whatever is currently on the main list. Those two are mutually
+        // exclusive by status, so an item sitting on the big shop would otherwise
+        // vanish from here — visible under MAIN LIST but impossible to take on
+        // the errand without typing it. This is the strip as it would look if the
+        // main list were empty.
+        //
+        // An item on the main list therefore appears twice: greyed above as
+        // "already on the big shop", and tappable here as "you can grab it too".
+        // Different questions, same item.
+        var seen = Set<String>()
+        let known = (viewModel.suggestions + viewModel.shoppingList).filter { item in
+            seen.insert(item.normalizedName).inserted
+        }
+        let available = known.filter { item in
+            !store.lines.contains { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }
         }
 
         if !available.isEmpty {

@@ -188,10 +188,16 @@ const inferProductAisleLambda = backend.inferProductAisleFunction.resources.lamb
 // Add environment variables
 addEnvVars(inferProductAisleLambda, {
   MAPPING_TABLE_NAME: productAisleMappingTable.tableName,
+  // The store's own aisle layout. Inference used to build its context purely
+  // from products already mapped, so a store nobody had mapped yet could never
+  // bootstrap — it demanded a directory scan even when it had a perfectly good
+  // list of departments sitting on it.
+  HOUSEHOLD_STORE_TABLE_NAME: backend.data.resources.tables['HouseholdStore'].tableName,
 });
 
 // Grant read access to ProductAisleMapping table
 productAisleMappingTable.grantReadData(inferProductAisleLambda);
+backend.data.resources.tables['HouseholdStore'].grantReadData(inferProductAisleLambda);
 
 // Grant permission to query the GSI (byStoreId index)
 inferProductAisleLambda.addToRolePolicy(new PolicyStatement({

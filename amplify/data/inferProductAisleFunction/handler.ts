@@ -1,11 +1,12 @@
 import type { AppSyncResolverHandler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const MAPPING_TABLE = process.env.MAPPING_TABLE_NAME!;
+const HOUSEHOLD_STORE_TABLE = process.env.HOUSEHOLD_STORE_TABLE_NAME!;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
 
 const MODEL = 'claude-sonnet-4-6';
@@ -52,6 +53,39 @@ interface ExistingMapping {
 /**
  * Fetch existing mappings for a store to use as context
  */
+interface StoreAisle {
+  id: string;
+  number?: string;
+  name?: string;
+  description?: string;
+  displayOrder?: number;
+}
+
+/// The aisles the store itself declares. This is what inference should be
+/// matching against: every store is seeded with seven standard departments
+/// carrying descriptions written for exactly this purpose ("Milk, cream,
+/// yogurt, butter, cheese, eggs..."). Building context only from products
+/// already mapped meant those descriptions were never seen, and a store could
+/// only ever place items into aisles that already had something in them.
+async function fetchStoreAisles(storeId: string): Promise<StoreAisle[]> {
+  try {
+    const result = await ddbClient.send(
+      new GetCommand({
+        TableName: HOUSEHOLD_STORE_TABLE,
+        Key: { id: storeId },
+        ProjectionExpression: 'aisleLayout',
+      })
+    );
+    const layout = result.Item?.aisleLayout;
+    if (!layout) return [];
+    const parsed = typeof layout === 'string' ? JSON.parse(layout) : layout;
+    return Array.isArray(parsed) ? (parsed as StoreAisle[]) : [];
+  } catch (err) {
+    console.error('[INFER] Failed to read store aisle layout', err);
+    return [];
+  }
+}
+
 async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]> {
   const mappings: ExistingMapping[] = [];
   let lastEvaluatedKey: Record<string, any> | undefined;
@@ -92,7 +126,23 @@ async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]
  * Build aisle context from existing mappings
  * Groups products by aisle for the LLM to understand store layout
  */
-function buildAisleContext(mappings: ExistingMapping[]): string {
+function buildAisleContext(mappings: ExistingMapping[], aisles: StoreAisle[] = []): string {
+  const declared: string[] = [];
+  if (aisles.length > 0) {
+    declared.push('Aisles and departments in this store:');
+    const sorted = [...aisles].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+    for (const aisle of sorted) {
+      const label = [aisle.number, aisle.name].filter(Boolean).join(' ').trim() || aisle.id;
+      declared.push(aisle.description ? `- ${label} (id: ${aisle.id}) — ${aisle.description}` : `- ${label} (id: ${aisle.id})`);
+    }
+    declared.push('');
+    if (mappings.length > 0) declared.push('Products already placed:');
+  }
+  const prefix = declared.join('\n');
+  return prefix + buildMappingContext(mappings);
+}
+
+function buildMappingContext(mappings: ExistingMapping[]): string {
   // Group by aisle
   const aisleGroups: Record<string, string[]> = {};
 
@@ -310,19 +360,25 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
   try {
     // Fetch existing mappings for context
     console.log(`[INFER] Fetching existing mappings for store ${storeId}`);
-    const existingMappings = await fetchExistingMappings(storeId);
+    const [existingMappings, storeAisles] = await Promise.all([
+      fetchExistingMappings(storeId),
+      fetchStoreAisles(storeId),
+    ]);
 
-    if (existingMappings.length === 0) {
+    // Only genuinely blocked when the store declares no aisles AND nothing has
+    // ever been placed in it. A seeded store has seven departments, so this no
+    // longer fires just because nobody has scanned a directory.
+    if (existingMappings.length === 0 && storeAisles.length === 0) {
       return {
         success: false,
-        error: 'No existing aisle data for this store. Please scan a store directory first.',
+        error: 'This store has no aisles or departments set up yet.',
       };
     }
 
-    console.log(`[INFER] Found ${existingMappings.length} existing mappings`);
+    console.log(`[INFER] ${storeAisles.length} declared aisles, ${existingMappings.length} existing mappings`);
 
     // Build context for LLM
-    const aisleContext = buildAisleContext(existingMappings);
+    const aisleContext = buildAisleContext(existingMappings, storeAisles);
     console.log(`[INFER] Built aisle context (${aisleContext.length} chars)`);
 
     // Initialize Anthropic client

@@ -1913,9 +1913,33 @@ class ShoppingListViewModel: ObservableObject {
 
             if householdStores.isEmpty {
                 await createDefaultStore()
+            } else {
+                await backfillStandardSections()
             }
         } catch {
             logger.error("Failed to load stores: \(error)")
+        }
+    }
+
+    /// Stores created before departments were seeded for every store came up with
+    /// an empty layout, so their lists had no order at all. Fill them in once.
+    ///
+    /// Only touches stores with nothing at all — a store someone has curated is
+    /// left alone, and addMissingStandardSections is itself idempotent. Failures
+    /// are ignored on purpose: an unsorted list is a worse list, not a broken one,
+    /// and this runs on every load.
+    private func backfillStandardSections() async {
+        let empty = householdStores.filter { $0.aisleLayout.isEmpty }
+        guard !empty.isEmpty else { return }
+
+        logger.info("Backfilling standard departments into \(empty.count) store(s)")
+        for store in empty {
+            guard let updated = try? await StoreService.shared.addMissingStandardSections(to: store) else {
+                continue
+            }
+            if let index = householdStores.firstIndex(where: { $0.id == updated.id }) {
+                householdStores[index] = updated
+            }
         }
     }
 

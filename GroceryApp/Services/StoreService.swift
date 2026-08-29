@@ -31,9 +31,6 @@ class StoreService: ObservableObject {
     /// Adds any missing standard sections to a store and persists to backend.
     /// Safe to call repeatedly — only adds what isn't already there.
     func addMissingStandardSections(to store: HouseholdStore) async throws -> HouseholdStore {
-        // Stores without aisles have no perimeter sections to seed.
-        guard !store.hasNoAisles else { return store }
-
         let existingIds = Set(store.aisleLayout.map { $0.id })
         let missing = Self.standardSections.filter { !existingIds.contains($0.id) }
         guard !missing.isEmpty else { return store }
@@ -64,8 +61,12 @@ class StoreService: ObservableObject {
         }
         """
 
-        // Stores with no aisles get no standard perimeter sections seeded.
-        let initialAisles: [[String: Any]] = layoutType == .noAisles ? [] : Self.standardSections.map { aisle -> [String: Any] in
+        // Every store gets the standard departments, including no-aisle ones.
+        // They previously got nothing, which left a corner shop's list in no
+        // order at all — but a shop without numbered aisles still has a cooler,
+        // a produce rack and a bread shelf, and those are what these sections
+        // are. "No aisles" means no numbers, not no organisation.
+        let initialAisles: [[String: Any]] = Self.standardSections.map { aisle -> [String: Any] in
             var dict: [String: Any] = ["id": aisle.id, "number": aisle.number, "name": aisle.name, "displayOrder": aisle.displayOrder]
             if let description = aisle.description { dict["description"] = description }
             return dict

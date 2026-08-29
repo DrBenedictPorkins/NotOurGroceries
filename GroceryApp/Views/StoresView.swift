@@ -211,7 +211,7 @@ private struct StoreRowView: View {
                 HStack(spacing: 4) {
                     Image(systemName: store.hasNoAisles ? "basket" : "list.bullet")
                         .font(.system(size: 11, weight: .medium))
-                    Text(store.hasNoAisles ? "No aisles" : "\(store.aisleLayout.count) aisle\(store.aisleLayout.count == 1 ? "" : "s")")
+                    Text(store.hasNoAisles ? "\(store.aisleLayout.count) departments" : "\(store.aisleLayout.count) aisle\(store.aisleLayout.count == 1 ? "" : "s")")
                         .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundColor(DesignSystem.Colors.textSecondary)

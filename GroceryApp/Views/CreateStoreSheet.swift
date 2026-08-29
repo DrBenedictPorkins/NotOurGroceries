@@ -8,6 +8,7 @@ struct CreateStoreSheet: View {
     @State private var layoutType: StoreLayoutType = .aisles
     @State private var showAisleScanSheet = false
     @State private var createdStore: HouseholdStore?
+    @State private var createStoreFailed = false
     @State private var isSaving = false
     @FocusState private var focusedField: Field?
 
@@ -112,21 +113,54 @@ struct CreateStoreSheet: View {
         VStack(spacing: 32) {
             Spacer()
 
-            // Success confirmation
+            // This screen appears the moment Save is tapped, before the store
+            // actually exists, so the headline has to follow the real state. It
+            // used to show a green tick and "Store created!" while the mutation
+            // was still in flight — and if that mutation failed it said so
+            // permanently, with a spinner and no way forward.
             VStack(spacing: 16) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 56, weight: .thin))
-                    .foregroundColor(DesignSystem.Colors.success)
+                if createStoreFailed {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 56, weight: .thin))
+                        .foregroundColor(DesignSystem.Colors.neonPink)
 
-                Text("Store created!")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
+                    Text("Couldn't create the store")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
 
-                Text("Set up aisles now, or do it later from the store detail page.")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    Text("Nothing was saved. Go back and try again.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                } else if createdStore == nil {
+                    ProgressView()
+                        .scaleEffect(1.6)
+                        .tint(DesignSystem.Colors.dillGreen)
+                        .frame(height: 56)
+
+                    Text("Creating store…")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("One moment.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 56, weight: .thin))
+                        .foregroundColor(DesignSystem.Colors.success)
+
+                    Text("Store created!")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white)
+
+                    Text("Set up aisles now, or do it later from the store detail page.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
             }
 
             // Scan Aisle Sign - primary CTA
@@ -135,13 +169,10 @@ struct CreateStoreSheet: View {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }) {
                 HStack(spacing: 12) {
-                    if createdStore == nil {
-                        ProgressView()
-                            .tint(DesignSystem.Colors.dillGreen)
-                    } else {
-                        Image(systemName: "camera.viewfinder")
-                            .font(.system(size: 20, weight: .medium))
-                    }
+                    // Always the camera. A ProgressView here read as "scanning",
+                    // as though the app were already working on something.
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 20, weight: .medium))
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Scan Aisle Sign")
@@ -367,6 +398,8 @@ struct CreateStoreSheet: View {
                 isSaving = false
                 if let store = newStore {
                     createdStore = store
+                } else {
+                    createStoreFailed = true
                 }
                 if skipAisleSetup {
                     dismiss()

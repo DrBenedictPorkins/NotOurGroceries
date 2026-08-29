@@ -16,12 +16,16 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
     var aisleLayout: [StoreAisle]
     var layoutType: StoreLayoutType
 
-    /// True when this store has no aisle organization at all (farmers market, corner shop).
+    /// True when this store has no *numbered* aisles. It still has departments —
+    /// every shop that sells groceries has a cooler, a produce rack and a bread
+    /// shelf. What this flag means is "don't ask me for aisle numbers", not
+    /// "don't organise anything"; the unsorted case is what Quick List is for.
     var hasNoAisles: Bool { layoutType == .noAisles }
 
-    /// True when aisle-based navigation/inference should be attempted for this store.
-    /// A store flagged AISLES but with an empty layout has nothing to infer against either.
-    var supportsAisleNavigation: Bool { layoutType == .aisles && !aisleLayout.isEmpty }
+    /// True when aisle-based navigation/inference should be attempted.
+    /// Keyed on whether there is a layout to sort against, not on the type — a
+    /// no-aisle store seeded with standard departments sorts perfectly well.
+    var supportsAisleNavigation: Bool { !aisleLayout.isEmpty }
 
     init(
         id: String = UUID().uuidString,

@@ -8,9 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		1785903FD63E50BDBCE5B365 /* BatchAisleMappingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66658FDDA7D5B20B9E9E9047 /* BatchAisleMappingSheet.swift */; };
-		AA0000000000000000000900 /* PaperListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000900 /* PaperListView.swift */; };
 		AA0000000000000000000902 /* QuickListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000902 /* QuickListView.swift */; };
 		AA0000000000000000000901 /* QuickListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000901 /* QuickListStore.swift */; };
+		AA0000000000000000000903 /* NetworkStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000903 /* NetworkStatus.swift */; };
 		36B866D86A21E55F7AF2ED72 /* StoreAisleManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */; };
 		61C577F31452E1D49F5F8E7E /* ShoppingCompletionStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */; };
 		6F86254645EFD5A78889AB51 /* ReadyToShopSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */; };
@@ -34,7 +34,6 @@
 		AA0000000000000000000030 /* AtStoreModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000030 /* AtStoreModeView.swift */; };
 		AA0000000000000000000031 /* GroceryItemRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000031 /* GroceryItemRow.swift */; };
 		AA0000000000000000000096 /* ListMenuSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000096 /* ListMenuSheet.swift */; };
-		AA0000000000000000000095 /* PaperModeBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000095 /* PaperModeBanner.swift */; };
 		AA0000000000000000000032 /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* SearchBar.swift */; };
 		AA0000000000000000000033 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* ToastView.swift */; };
 		AA0000000000000000000034 /* ShoppingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* ShoppingListView.swift */; };
@@ -52,7 +51,6 @@
 		AA0000000000000000000053 /* HouseholdInviteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000053 /* HouseholdInviteView.swift */; };
 		AA0000000000000000000054 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000054 /* SubscriptionService.swift */; };
 		AA0000000000000000000055 /* ProductCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000055 /* ProductCache.swift */; };
-		AA0000000000000000000094 /* PaperMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000094 /* PaperMode.swift */; };
 		AA0000000000000000000093 /* LocalListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000093 /* LocalListStore.swift */; };
 		AA0000000000000000000056 /* AppLoadingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000056 /* AppLoadingState.swift */; };
 		AA0000000000000000000057 /* MarqueeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000057 /* MarqueeText.swift */; };
@@ -102,9 +100,9 @@
 
 /* Begin PBXFileReference section */
 		02C91CEFFA5AF53A106CA602 /* ShoppingCompletedSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShoppingCompletedSheet.swift; sourceTree = "<group>"; };
-		BB0000000000000000000900 /* PaperListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperListView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000902 /* QuickListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickListView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000901 /* QuickListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickListStore.swift; sourceTree = "<group>"; };
+		BB0000000000000000000903 /* NetworkStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkStatus.swift; sourceTree = "<group>"; };
 		15546147AB154BAB9998BE81 /* UserCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserCache.swift; sourceTree = "<group>"; };
 		1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShoppingCompletionStats.swift; sourceTree = "<group>"; };
 		40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreAisleManagementView.swift; sourceTree = "<group>"; };
@@ -132,7 +130,6 @@
 		BB0000000000000000000030 /* AtStoreModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtStoreModeView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000031 /* GroceryItemRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryItemRow.swift; sourceTree = "<group>"; };
 		BB0000000000000000000096 /* ListMenuSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMenuSheet.swift; sourceTree = "<group>"; };
-		BB0000000000000000000095 /* PaperModeBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperModeBanner.swift; sourceTree = "<group>"; };
 		BB0000000000000000000032 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
 		BB0000000000000000000033 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000034 /* ShoppingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListView.swift; sourceTree = "<group>"; };
@@ -145,7 +142,6 @@
 		BB0000000000000000000053 /* HouseholdInviteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HouseholdInviteView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000054 /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000055 /* ProductCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCache.swift; sourceTree = "<group>"; };
-		BB0000000000000000000094 /* PaperMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperMode.swift; sourceTree = "<group>"; };
 		BB0000000000000000000093 /* LocalListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalListStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000056 /* AppLoadingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLoadingState.swift; sourceTree = "<group>"; };
 		BB0000000000000000000057 /* MarqueeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarqueeText.swift; sourceTree = "<group>"; };
@@ -272,9 +268,9 @@
 				BB0000000000000000000020 /* AmplifyService.swift */,
 				BB0000000000000000000056 /* AppLoadingState.swift */,
 				BB0000000000000000000055 /* ProductCache.swift */,
-				BB0000000000000000000094 /* PaperMode.swift */,
 				BB0000000000000000000093 /* LocalListStore.swift */,
 				BB0000000000000000000901 /* QuickListStore.swift */,
+				BB0000000000000000000903 /* NetworkStatus.swift */,
 				BB0000000000000000000090 /* SpeechDictationService.swift */,
 				BB0000000000000000000091 /* ShopperReminderService.swift */,
 				BB0000000000000000000072 /* StoreService.swift */,
@@ -305,7 +301,6 @@
 			children = (
 				BB0000000000000000000050 /* RootView.swift */,
 				BB0000000000000000000902 /* QuickListView.swift */,
-				BB0000000000000000000900 /* PaperListView.swift */,
 				BB0000000000000000000002 /* ContentView.swift */,
 				BB0000000000000000000097 /* AppIdentity.swift */,
 				BB0000000000000000000030 /* AtStoreModeView.swift */,
@@ -336,7 +331,6 @@
 				BB0000000000000000000079 /* FullScreenImageView.swift */,
 				BB0000000000000000000031 /* GroceryItemRow.swift */,
 				BB0000000000000000000096 /* ListMenuSheet.swift */,
-				BB0000000000000000000095 /* PaperModeBanner.swift */,
 				BB0000000000000000000078 /* ImagePicker.swift */,
 				BB0000000000000000000058 /* ItemDetailSheet.swift */,
 				BB0000000000000000000057 /* MarqueeText.swift */,
@@ -503,16 +497,15 @@
 				AA0000000000000000000090 /* SpeechDictationService.swift in Sources */,
 				AA0000000000000000000091 /* ShopperReminderService.swift in Sources */,
 				AA0000000000000000000055 /* ProductCache.swift in Sources */,
-				AA0000000000000000000094 /* PaperMode.swift in Sources */,
 				AA0000000000000000000093 /* LocalListStore.swift in Sources */,
 				AA0000000000000000000901 /* QuickListStore.swift in Sources */,
+				AA0000000000000000000903 /* NetworkStatus.swift in Sources */,
 				BCE700C7876941359C07CABF /* UserCache.swift in Sources */,
 				AA0000000000000000000021 /* DesignSystem.swift in Sources */,
 				AA0000000000000000000022 /* ShoppingListViewModel.swift in Sources */,
 				AA0000000000000000000030 /* AtStoreModeView.swift in Sources */,
 				AA0000000000000000000031 /* GroceryItemRow.swift in Sources */,
 				AA0000000000000000000096 /* ListMenuSheet.swift in Sources */,
-				AA0000000000000000000095 /* PaperModeBanner.swift in Sources */,
 				AA0000000000000000000058 /* ItemDetailSheet.swift in Sources */,
 				AA0000000000000000000032 /* SearchBar.swift in Sources */,
 				AA0000000000000000000087 /* StatusSubtitleView.swift in Sources */,
@@ -526,7 +519,6 @@
 				AA0000000000000000000036 /* HouseholdView.swift in Sources */,
 				AA0000000000000000000050 /* RootView.swift in Sources */,
 				AA0000000000000000000902 /* QuickListView.swift in Sources */,
-				AA0000000000000000000900 /* PaperListView.swift in Sources */,
 				AA0000000000000000000051 /* AuthGateView.swift in Sources */,
 				AA0000000000000000000063 /* ForgotPasswordView.swift in Sources */,
 				AA0000000000000000000052 /* HouseholdSetupView.swift in Sources */,

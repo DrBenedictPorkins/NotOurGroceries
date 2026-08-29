@@ -8,11 +8,9 @@ struct ListMenuSheet: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @EnvironmentObject var amplifyService: AmplifyService
     @ObservedObject private var userCache = UserCache.shared
-    @ObservedObject private var paperMode = PaperMode.shared
 
     var onAtStore: () -> Void
     var onQuickList: () -> Void
-    var onPaperList: () -> Void
     var onSignOut: () -> Void
 
     private var displayName: String {
@@ -61,19 +59,6 @@ struct ListMenuSheet: View {
                             isPresented = false
                             onQuickList()
                         }
-
-                        row(
-                            icon: "doc.plaintext.fill",
-                            tint: DesignSystem.Colors.neonAmber,
-                            title: paperMode.isActive ? "On paper list" : "Paper List",
-                            detail: paperMode.isActive
-                                ? "Not talking to the server. Tap the banner to reconnect."
-                                : "No signal? Stop calling the server and just shop.",
-                            disabled: paperMode.isActive
-                        ) {
-                            isPresented = false
-                            onPaperList()
-                        }
                     }
 
                     section("This build") {
@@ -121,7 +106,7 @@ struct ListMenuSheet: View {
 
     /// Modes are only offered when nobody is mid-session.
     private var canStartShopping: Bool {
-        viewModel.shoppingStatus == .idle && !paperMode.isActive
+        viewModel.shoppingStatus == .idle
     }
 
     private var householdLine: String {

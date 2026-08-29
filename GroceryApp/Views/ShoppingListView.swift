@@ -15,13 +15,11 @@ struct ShoppingListView: View {
     @State private var showBulkImport = false
     @State private var showForceFinishAlert = false
     @State private var showForceFinishHoldSheet = false
-    @State private var showPaperModeAlert = false
     @State private var showQuickList = false
     @State private var showListMenu = false
     @State private var hintOn = false
     @State private var hasHinted = false
     @AppStorage("hasOpenedListMenu") private var hasOpenedListMenu = false
-    @ObservedObject private var paperMode = PaperMode.shared
 
     var body: some View {
         ZStack {
@@ -33,21 +31,32 @@ struct ShoppingListView: View {
                 .ignoresSafeArea()
                 .opacity(0.3)
 
-            // Paper mode replaces the screen rather than annotating it. A banner on
-            // the normal list left the two modes looking identical, which is the one
-            // thing paper mode must never be — you have to be able to tell at a
-            // glance that the household cannot see what you are doing.
-            if paperMode.isActive {
-                PaperListView(onReconnect: {
-                    Task { await viewModel.exitPaperMode() }
-                })
-                .environmentObject(viewModel)
-            } else {
             VStack(spacing: 0) {
                 // Custom Header
                 headerView
 
                 reconnectingLine
+
+                // Offline is a condition, not a mode: everything still works, it
+                // just isn't syncing. One line, not a screen and not a dialog.
+                if viewModel.isOffline {
+                    HStack(spacing: 7) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(offlineLine)
+                            .font(.system(size: 12, weight: .medium))
+                        Spacer()
+                    }
+                    .foregroundColor(DesignSystem.Colors.neonAmber)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(DesignSystem.Colors.neonAmber.opacity(0.12))
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
 
                 // Sort Options - show when list has items, or keep visible while undo is pending
                 if !viewModel.shoppingList.isEmpty || viewModel.undoSuggestionItem != nil {
@@ -204,10 +213,9 @@ struct ShoppingListView: View {
                     }
                 }
             }
-            }
 
             // Glowing border overlay when shopping is active
-            if viewModel.isSomeoneElseShopping && !paperMode.isActive {
+            if viewModel.isSomeoneElseShopping {
                 shoppingActiveBorderOverlay
             }
         }
@@ -258,32 +266,11 @@ struct ShoppingListView: View {
                 isPresented: $showListMenu,
                 onAtStore: { showStoreSelection = true },
                 onQuickList: { showQuickList = true },
-                onPaperList: { showPaperModeAlert = true },
                 onSignOut: { Task { try? await amplifyService.signOut() } }
             )
             .environmentObject(viewModel)
             .environmentObject(amplifyService)
             .presentationDragIndicator(.visible)
-        }
-        .alert("Can't reach the server", isPresented: $viewModel.showOfflinePrompt) {
-            Button("Use paper list") {
-                viewModel.enterPaperMode()
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            }
-            Button("Keep trying", role: .cancel) {
-                viewModel.keepTryingToReconnect()
-            }
-        } message: {
-            Text("Your saved list is here and ready to shop from. Paper list stops the app calling the server at all — no waiting, no spinners. Changes stay on this phone until you reconnect.")
-        }
-        .alert("Switch to paper list?", isPresented: $showPaperModeAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Use paper list") {
-                viewModel.enterPaperMode()
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            }
-        } message: {
-            Text("The app will stop talking to the server completely — no waiting, no spinners. You can cross things off and add items, but the changes stay on this phone until you reconnect.")
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -372,7 +359,7 @@ struct ShoppingListView: View {
     }
 
     private var canStartShopping: Bool {
-        viewModel.shoppingStatus == .idle && !paperMode.isActive
+        viewModel.shoppingStatus == .idle
     }
 
     private var atStoreButton: some View {
@@ -426,9 +413,15 @@ struct ShoppingListView: View {
         }
     }
 
+    private var offlineLine: String {
+        if let savedAt = viewModel.localSnapshotSavedAt {
+            return "Offline · your list as of \(LocalListStore.savedAtDescription(savedAt)) · changes saved here"
+        }
+        return "Offline · changes saved on this phone"
+    }
+
     /// The one line that changes with what's actually happening.
     private var headline: String {
-        if paperMode.isActive { return "Paper list" }
         if viewModel.isSomeoneElseShopping {
             return "\(viewModel.activeShopperDisplayName ?? "Someone") is shopping"
         }
@@ -437,9 +430,6 @@ struct ShoppingListView: View {
     }
 
     private var headlineStyle: AnyShapeStyle {
-        if paperMode.isActive {
-            return AnyShapeStyle(DesignSystem.Colors.neonAmber)
-        }
         if viewModel.isSomeoneElseShopping {
             return AnyShapeStyle(DesignSystem.Colors.dillGreen)
         }
@@ -457,11 +447,6 @@ struct ShoppingListView: View {
                 Text("Reconnecting…")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
-                Button("Use paper list") {
-                    viewModel.enterPaperMode()
-                }
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.neonAmber)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 6)
@@ -470,12 +455,6 @@ struct ShoppingListView: View {
 
     /// What the line under the headline says at rest.
     private var idleStatusText: String {
-        if paperMode.isActive {
-            if let savedAt = viewModel.localSnapshotSavedAt {
-                return "As of \(LocalListStore.savedAtDescription(savedAt)) · changes stay on this phone"
-            }
-            return "Changes stay on this phone"
-        }
         if viewModel.isSomeoneElseShopping {
             let done = viewModel.inCart.count
             let total = done + viewModel.shoppingList.count

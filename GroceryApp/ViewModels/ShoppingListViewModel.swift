@@ -292,11 +292,8 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Network Gate
 
-    /// Every network call in this view model goes through these two wrappers, so
-    /// paper mode has exactly one place to stop them. Twenty scattered guards
-    /// would drift apart the first time someone adds a mutation and forgets one.
+    /// Every network call in this view model goes through these two wrappers.
     private func apiMutate(_ request: GraphQLRequest<JSONValue>) async throws -> GraphQLResponse<JSONValue> {
-        guard !PaperMode.shared.blocksNetwork else { throw PaperModeActive() }
         return try await Amplify.API.mutate(request: request)
     }
 
@@ -306,14 +303,11 @@ class ShoppingListViewModel: ObservableObject {
     /// tears down sockets while the app is suspended, so the first request after
     /// coming back from the background very often fails on a connection that is
     /// perfectly healthy. With one attempt, that blip travelled all the way up to
-    /// "the server is unreachable, would you like to switch to a paper list" —
-    /// while the user was sitting on working wifi.
+    /// "the server is unreachable" — while the user sat on working wifi.
     ///
     /// Retrying here rather than at the call sites means every caller gets it,
     /// and the layers above only ever see failures that survived three attempts.
     private func apiQuery(_ request: GraphQLRequest<JSONValue>) async throws -> GraphQLResponse<JSONValue> {
-        guard !PaperMode.shared.blocksNetwork else { throw PaperModeActive() }
-
         let delays: [UInt64] = [400_000_000, 1_200_000_000]  // 0.4s, then 1.2s
         var lastError: Error?
 
@@ -329,24 +323,16 @@ class ShoppingListViewModel: ObservableObject {
                 if attempt < delays.count {
                     logger.info("apiQuery attempt \(attempt + 1) failed, retrying")
                     try? await Task.sleep(nanoseconds: delays[attempt])
-                    if PaperMode.shared.blocksNetwork { throw PaperModeActive() }
                 }
             }
         }
 
         logger.error("apiQuery failed after \(delays.count + 1) attempts")
-        throw lastError ?? PaperModeActive()
+        throw lastError ?? URLError(.cannotConnectToHost)
     }
 
     // MARK: - Data Loading
     func loadShoppingList(forceRefresh: Bool = false) async {
-        // Paper mode: the local copy is the list. Don't fetch, don't wait, don't
-        // spin — just keep showing what's already on screen.
-        if PaperMode.shared.blocksNetwork {
-            hasLoadedInitialData = true
-            return
-        }
-
         // Skip if already loaded (prevents jerky redraws on tab switch)
         if hasLoadedInitialData && !forceRefresh {
             return
@@ -672,10 +658,6 @@ class ShoppingListViewModel: ObservableObject {
         } catch {
             // On paper the item stays. Deleting what the user just typed because
             // we couldn't reach a server would be the worst bug in the mode.
-            if error is PaperModeActive {
-                pendingOptimisticIds.remove(itemId)
-                return
-            }
             // Remove optimistic item on error
             items.removeAll { $0.id == itemId }
             pendingOptimisticIds.remove(itemId)
@@ -769,7 +751,6 @@ class ShoppingListViewModel: ObservableObject {
             }
         } catch {
             // On paper the cross-off stands — no error buzz, no resync.
-            if error is PaperModeActive { return }
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             await loadShoppingList()
             showToast(message: "Failed to add item to cart", type: .error)
@@ -1117,7 +1098,6 @@ class ShoppingListViewModel: ObservableObject {
             }
         } catch {
             // On paper the local edit stands — it's the whole point of the mode.
-            if error is PaperModeActive { return }
             // Revert optimistic update
             if let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index] = item
@@ -1445,7 +1425,6 @@ class ShoppingListViewModel: ObservableObject {
     func setupSubscriptions() {
         // A GraphQL socket retrying its handshake forever is exactly the hang
         // paper mode exists to prevent, so don't open one.
-        guard !PaperMode.shared.blocksNetwork else { return }
         guard let householdId = householdId else { return }
 
         // Clear any existing cancellables to avoid duplicate handlers
@@ -1502,12 +1481,12 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Server Unreachable
 
-    /// Set when we couldn't reach the server but do have a local copy to shop from.
-    @Published var showOfflinePrompt = false
-    /// True while quietly retrying after the user declined paper mode.
+    /// True when requests are failing and we are showing the local copy. A
+    /// condition, not a mode: everything still works, it just isn't syncing.
+    @Published private(set) var isOffline = false
+    /// True while quietly retrying in the background.
     @Published private(set) var isRetryingConnection = false
 
-    private var offeredPaperThisOutage = false
     private var consecutiveLoadFailures = 0
     private var reconnectTask: Task<Void, Never>?
 
@@ -1532,23 +1511,21 @@ class ShoppingListViewModel: ObservableObject {
     /// Be sure before making it; staying quiet costs nothing, because the list
     /// on screen is still there either way.
     private func handleServerUnreachable() {
-        guard !PaperMode.shared.blocksNetwork else { return }
-        guard !offeredPaperThisOutage else { return }
-        guard !items.isEmpty else { return }   // nothing to offer
-
         consecutiveLoadFailures += 1
 
         // No interface at all — airplane mode, no bars, wifi off. Nothing is
         // ambiguous about this, so don't make them fail twice to hear it.
-        let networkIsPlainlyGone = !PaperMode.shared.pathIsSatisfied
+        let networkIsPlainlyGone = !NetworkStatus.shared.pathIsSatisfied
 
         guard networkIsPlainlyGone || consecutiveLoadFailures >= 2 else {
             logger.info("Load failed but the network looks fine — staying quiet")
             return
         }
 
-        offeredPaperThisOutage = true
-        showOfflinePrompt = true
+        guard !isOffline else { return }
+        isOffline = true
+        logger.info("Going offline — showing the local copy")
+        keepTryingToReconnect()
     }
 
     /// Called whenever a load actually lands. Clears the failure count and
@@ -1557,7 +1534,10 @@ class ShoppingListViewModel: ObservableObject {
     /// stayed silent through a genuine outage for the rest of the session.
     private func noteServerReachable() {
         consecutiveLoadFailures = 0
-        offeredPaperThisOutage = false
+        if isOffline {
+            isOffline = false
+            showToast(message: "Back online", type: .success)
+        }
     }
 
     /// User said no to paper. Keep trying — store wifi often shows up a minute
@@ -1569,7 +1549,7 @@ class ShoppingListViewModel: ObservableObject {
         reconnectTask = Task { @MainActor in
             while !Task.isCancelled && isRetryingConnection {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
-                if Task.isCancelled || PaperMode.shared.blocksNetwork { break }
+                if Task.isCancelled { break }
 
                 await loadShoppingList(forceRefresh: true)
 
@@ -1592,34 +1572,6 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     // MARK: - Paper List Mode
-
-    /// Go to paper. Everything that reaches the network stops here — not just
-    /// mutations, but the live sockets and the interval timers behind them.
-    func enterPaperMode() {
-        PaperMode.shared.enter()
-        stopRetryingToReconnect()
-
-        teardownSubscriptions()
-        stopAbandonedCheckTimer()
-        ShopperReminderService.shared.cancel()
-
-        // Whatever is on screen right now becomes the paper list.
-        LocalListStore.save(items: items, householdId: householdId)
-        localSnapshotSavedAt = Date()
-
-        logger.info("Entered paper mode with \(self.items.count) items")
-    }
-
-    /// Come back to normal operation. Deliberately does not push anything —
-    /// applying a paper trip is a separate, user-approved step.
-    func exitPaperMode() async {
-        PaperMode.shared.exit()
-        logger.info("Left paper mode")
-
-        await loadShoppingList(forceRefresh: true)
-        await loadStores(forceRefresh: true)
-        setupSubscriptions()
-    }
 
     // MARK: - Remote Update Helpers
 
@@ -1876,7 +1828,7 @@ class ShoppingListViewModel: ObservableObject {
         // On paper, a write never reaching the server is the design, not a fault.
         // Reporting it as an error would tell the user something broke when
         // nothing did — and it would fire on essentially every tap.
-        if PaperMode.shared.blocksNetwork && type == .error { return }
+        if isOffline && type == .error { return }
 
         print("showToast called: '\(message)' userName: '\(userName)' type: \(type)")
         toastMessage = message
@@ -1971,7 +1923,6 @@ class ShoppingListViewModel: ObservableObject {
     /// setup. No aisles defined — the map fills itself in as items get assigned
     /// while shopping, rather than being declared up front.
     private func createDefaultStore() async {
-        guard !PaperMode.shared.blocksNetwork else { return }
 
         logger.info("No stores for this household — creating the default one")
         _ = await createStore(

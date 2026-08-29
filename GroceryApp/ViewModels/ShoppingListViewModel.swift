@@ -2156,6 +2156,14 @@ class ShoppingListViewModel: ObservableObject {
                     selectedHouseholdStore = store
                     shoppingStartedAt = Date()
 
+                    // Drop mappings pointing at aisles this store no longer has,
+                    // before working out what still needs inferring. Otherwise a
+                    // bad mapping counts as "mapped" and permanently blocks the
+                    // item from ever being re-inferred.
+                    if let pruned = try? await StoreService.shared.pruneOrphanedMappings(storeId: store.id), pruned > 0 {
+                        logger.info("Pruned \(pruned) orphaned mapping(s) for \(store.name)")
+                    }
+
                     // Load mappings for the store
                     if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
                         productAisleMappings[store.id] = mappings

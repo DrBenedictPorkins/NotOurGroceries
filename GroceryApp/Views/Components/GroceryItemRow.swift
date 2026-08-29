@@ -32,24 +32,6 @@ struct GroceryItemRow: View {
         return viewModel.householdStores.first
     }
 
-    /// Get the effective aisle string for this item
-    private var aisleString: String? {
-        guard let store = currentStore else { return nil }
-        let mappings = StoreService.shared.productMappings[store.id] ?? []
-
-        let mapping = mappings.first { mapping in
-            if let productId = item.productId, let mappingProductId = mapping.productId {
-                return productId == mappingProductId
-            }
-            if let mappingName = mapping.normalizedName {
-                return item.normalizedName == mappingName
-            }
-            return false
-        }
-
-        return mapping?.effectiveAisle
-    }
-
     /// Display name of who last added this item to the active list. "-you-" for current user.
     private var addedByDisplayName: String {
         item.addedBy == currentUserId ? "-you-" : userCache.displayName(for: item.addedBy)
@@ -341,10 +323,9 @@ struct GroceryItemRow: View {
                 quantityBadge(quantity)
             }
 
-            // Aisle badge (only show when actively shopping at a store)
-            if viewModel.shoppingStatus == .atStore, let aisle = aisleString {
-                aisleBadge(aisle)
-            }
+            // No aisle badge. It only ever rendered while at a store, which is
+            // the one screen that already groups rows under an aisle heading — so
+            // every row repeated the header directly above it.
         }
     }
 
@@ -428,26 +409,6 @@ struct GroceryItemRow: View {
     }
 
     // MARK: - Aisle Badge
-
-    private func aisleBadge(_ aisle: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: "mappin.circle.fill")
-                .font(.system(size: 10))
-            Text(aisle)
-                .font(.system(size: 11, weight: .medium))
-        }
-        .foregroundColor(DesignSystem.Colors.neonPurple)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(DesignSystem.Colors.neonPurple.opacity(0.15))
-                .overlay(
-                    Capsule()
-                        .stroke(DesignSystem.Colors.neonPurple.opacity(0.3), lineWidth: 1)
-                )
-        )
-    }
 
     // MARK: - Photo Badge
 

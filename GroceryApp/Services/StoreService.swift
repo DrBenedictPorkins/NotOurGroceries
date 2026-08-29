@@ -501,6 +501,33 @@ class StoreService: ObservableObject {
         return deletedCount
     }
 
+    /// Delete mappings pointing at an aisle the store no longer declares.
+    ///
+    /// Inference could previously invent an aisle when nothing fit — literally
+    /// "Not mapped (likely Baking/Dry Goods aisle)" — and that got saved and then
+    /// rendered as a section header. Writes are guarded now, but the bad rows
+    /// already exist, and because inference only runs for *unmapped* items they
+    /// were self-perpetuating: re-running Map Aisles skipped them precisely
+    /// because they were mapped.
+    ///
+    /// Matches the same id/name/number rule the display uses, so a mapping that
+    /// resolves to a real aisle by any of those is kept.
+    @discardableResult
+    func pruneOrphanedMappings(storeId: String) async throws -> Int {
+        guard let store = householdStores.first(where: { $0.id == storeId }) else { return 0 }
+        let valid = Set(store.aisleLayout.flatMap { [$0.id, $0.name, $0.number] })
+        guard !valid.isEmpty else { return 0 }
+
+        let mappings = try await fetchMappings(storeId: storeId)
+        var deleted = 0
+        for mapping in mappings where !valid.contains(mapping.aisleId) {
+            try await deleteMapping(id: mapping.id, storeId: storeId)
+            deleted += 1
+            print("[PRUNE] removed \(mapping.normalizedName ?? "?") -> \(mapping.aisleId)")
+        }
+        return deleted
+    }
+
     /// Fetch all product mappings for a store (with pagination)
     func fetchMappings(storeId: String) async throws -> [ProductAisleMapping] {
         let document = """

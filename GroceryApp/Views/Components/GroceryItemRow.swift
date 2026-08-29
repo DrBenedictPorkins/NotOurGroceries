@@ -115,6 +115,18 @@ struct GroceryItemRow: View {
                         }
                         .tint(DesignSystem.Colors.neonAmber)
                     }
+                } else if item.status == .suggestion {
+                    // On a suggestion, swipe-left is otherwise dead — there is
+                    // nowhere to archive it to. Delete is the only thing it can
+                    // mean here, and it is the only place a mis-dictated item
+                    // ("cucumber diapers") can be got rid of once it has settled
+                    // into the archive. Still confirms; still no full swipe.
+                    Button(role: .destructive) {
+                        showDeleteConfirmation = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                    .tint(.red)
                 }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: true) {

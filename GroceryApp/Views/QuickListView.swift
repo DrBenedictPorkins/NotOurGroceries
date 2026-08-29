@@ -30,6 +30,8 @@ struct QuickListView: View {
                 } else {
                     list
                 }
+
+                suggestionsStrip
             }
         }
         .sheet(isPresented: $showImport) {
@@ -95,9 +97,16 @@ struct QuickListView: View {
 
     private var entryField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "plus.circle.fill")
-                .font(.system(size: 18))
-                .foregroundColor(DesignSystem.Colors.dillGreen)
+            // Was a decorative Image, so tapping it did nothing and the only way
+            // to commit was the return key.
+            Button(action: commit) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(entry.trimmingCharacters(in: .whitespaces).isEmpty
+                                     ? DesignSystem.Colors.textTertiary
+                                     : DesignSystem.Colors.dillGreen)
+            }
+            .disabled(entry.trimmingCharacters(in: .whitespaces).isEmpty)
 
             TextField("Add something", text: $entry)
                 .textFieldStyle(.plain)
@@ -109,6 +118,12 @@ struct QuickListView: View {
                 // .onSubmit keeps focus, so a run of items goes in without
                 // reaching for the keyboard again between each one.
                 .onSubmit(commit)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { entryFocused = false }
+                    }
+                }
 
             // Same import sheet the main list uses: speak, camera, photos, paste.
             // A scratch list still deserves dictation — saying six things is the
@@ -134,8 +149,20 @@ struct QuickListView: View {
     }
 
     private func commit() {
-        store.add(entry)
+        let trimmed = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Submitting an empty field means "I'm done adding", so let go of the
+        // keyboard. It used to refocus unconditionally, which made Done reopen
+        // the keyboard it had just closed and left no way out.
+        guard !trimmed.isEmpty else {
+            entryFocused = false
+            return
+        }
+
+        store.add(trimmed)
         entry = ""
+        // Keep focus only after a real add, so a run of items goes in without
+        // reaching for the field again.
         entryFocused = true
     }
 
@@ -181,6 +208,67 @@ struct QuickListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    /// Your own purchase history, browsable here for the same reason it works on
+    /// the main list: scrolling past things is how you remember you need them.
+    /// Tapping copies the name onto this list — it never touches the household,
+    /// and the history itself is untouched. Already-cached, so it works offline.
+    @ViewBuilder
+    private var suggestionsStrip: some View {
+        let available = viewModel.suggestions.filter { suggestion in
+            !store.lines.contains { $0.name.caseInsensitiveCompare(suggestion.name) == .orderedSame }
+        }
+
+        if !available.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("FROM YOUR USUAL")
+                        .font(.system(size: 11, weight: .bold))
+                        .kerning(0.8)
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                    Spacer()
+                    Text("\(available.count)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+                .padding(.horizontal, 20)
+
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(available) { suggestion in
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                store.add(suggestion.name)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(DesignSystem.Colors.dillGreen)
+                                    Text(suggestion.name)
+                                        .font(.system(size: 15))
+                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 9)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .scrollDismissesKeyboard(.immediately)
+                .frame(maxHeight: 220)
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+            .background(
+                DesignSystem.Colors.secondaryBackground
+                    .ignoresSafeArea(edges: .bottom)
+            )
+        }
     }
 
     private var empty: some View {

@@ -70,9 +70,6 @@ struct BulkImportSheet: View {
     var onCommit: (([String]) -> Void)? = nil
 
     @State private var rawText = ""
-    /// Dictating a long list is expensive to redo, so the draft outlives the sheet.
-    /// Losing 300 spoken words to a stray tap is not a recoverable mistake.
-    @AppStorage("bulkImportDraft") private var savedDraft = ""
     @State private var selectedImage: UIImage? = nil
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -123,9 +120,14 @@ struct BulkImportSheet: View {
         // something to lose to a gesture.
         .interactiveDismissDisabled(isBusy)
         .onAppear {
-            if rawText.isEmpty && !savedDraft.isEmpty {
-                rawText = savedDraft
-            }
+            // Opens empty, every time. A persisted draft used to outlive the
+            // sheet so a stray dismissal couldn't cost a long dictation, but in
+            // practice it resurrected stale text on nearly every open, which is
+            // worse: you are re-reading and deleting someone else's leftovers
+            // before you can start. Accidental dismissal is already guarded by
+            // interactiveDismissDisabled while parsing.
+            rawText = ""
+            UserDefaults.standard.removeObject(forKey: "bulkImportDraft")
             editorFocused = true
             dictation.onCommit = { chunk in
                 if rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -137,9 +139,6 @@ struct BulkImportSheet: View {
         }
         .onDisappear {
             if dictation.isRecording { dictation.stop() }
-        }
-        .onChange(of: rawText) { _, text in
-            savedDraft = text
         }
         .sheet(isPresented: $showCamera) {
             CameraPicker(image: $selectedImage)
@@ -896,8 +895,6 @@ struct BulkImportSheet: View {
                 }
             }
             await MainActor.run {
-                // The draft did its job — don't resurrect it next time.
-                savedDraft = ""
                 rawText = ""
                 isPresented = false
             }

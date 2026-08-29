@@ -1016,8 +1016,20 @@ class AisleExtractionService: ObservableObject {
     ) async throws -> Int {
         var savedCount = 0
 
+        // Only persist an aisle the store actually declares. Inference used to be
+        // able to invent one ("Not mapped (likely Baking/Dry Goods aisle)") and it
+        // was saved and then rendered as a section header.
+        let store = await StoreService.shared.householdStores.first(where: { $0.id == storeId })
+        let validAisleIds: Set<String> = Set(
+            (store?.aisleLayout.map { $0.id } ?? []) + (store?.aisleLayout.map { $0.name } ?? [])
+        )
+
         for item in items {
             guard let result = results[item.id] else { continue }
+            guard validAisleIds.isEmpty || validAisleIds.contains(result.suggestedAisle) else {
+                print("[INFER] Discarding invented aisle \(result.suggestedAisle) for \(item.productName)")
+                continue
+            }
 
             do {
                 try await createMappingFromInference(

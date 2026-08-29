@@ -51,7 +51,7 @@ struct AtStoreModeView: View {
         // This ensures we show aisles that have mapped items, regardless of aisleLayout
         let result: [AisleGroup] = groups.map { (aisleId, items) in
             // Try to find display order from store layout, default to sorting by aisle ID
-            let displayOrder = store.aisleLayout.first(where: { $0.id == aisleId })?.displayOrder ?? 0
+            let displayOrder = store.aisleLayout.first(where: { $0.id == aisleId || $0.name == aisleId || $0.number == aisleId })?.displayOrder ?? 0
 
             // Format the display name
             let displayName = formatAisleDisplayName(aisleId, store: store)
@@ -82,7 +82,7 @@ struct AtStoreModeView: View {
     /// Format aisle display name from aisle ID
     private func formatAisleDisplayName(_ aisleId: String, store: HouseholdStore) -> String {
         // First check if we have a name in store layout
-        if let aisle = store.aisleLayout.first(where: { $0.id == aisleId }) {
+        if let aisle = store.aisleLayout.first(where: { $0.id == aisleId || $0.name == aisleId || $0.number == aisleId }) {
             return aisleHeaderName(aisle)
         }
 
@@ -647,7 +647,7 @@ struct AtStoreModeView: View {
             )
 
             // Find the aisle name for feedback
-            if let aisle = store.aisleLayout.first(where: { $0.id == aisleId }) {
+            if let aisle = store.aisleLayout.first(where: { $0.id == aisleId || $0.name == aisleId || $0.number == aisleId }) {
                 await MainActor.run {
                     viewModel.toastMessage = "Assigned to Aisle \(aisle.number)"
                     viewModel.toastType = .success

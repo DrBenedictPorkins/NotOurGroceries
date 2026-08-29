@@ -208,7 +208,7 @@ Think about:
 
 Respond with ONLY a JSON object (no other text):
 {
-  "aisle": "the aisle number or name",
+  "aisle": "the exact id shown in parentheses above, e.g. standard-produce. Never invent one. Use null if nothing fits.",
   "confidence": 0.0 to 1.0,
   "reasoning": "1-2 short sentences max explaining your choice"
 }
@@ -285,7 +285,7 @@ For EACH product, determine which aisle it is most likely in based on the store 
 
 Respond with ONLY a JSON array (no other text):
 [
-  {"productName": "exact product name", "aisle": "aisle number or name", "confidence": 0.0 to 1.0, "reasoning": "1 sentence explanation"},
+  {"productName": "exact product name", "aisle": "the exact id shown in parentheses above, e.g. standard-produce. Never invent one. Use null if nothing fits.", "confidence": 0.0 to 1.0, "reasoning": "1 sentence explanation"},
   ...
 ]
 

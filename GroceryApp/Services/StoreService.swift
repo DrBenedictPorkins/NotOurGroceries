@@ -26,6 +26,17 @@ class StoreService: ObservableObject {
         StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: 904, description: "Sliced meats, deli cheese, prepared foods, and cold cuts"),
         StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: 905, description: "Fresh bread, rolls, muffins, cakes, pastries, and baked goods"),
         StoreAisle(id: "standard-frozen",   number: "", name: "Frozen",         displayOrder: 906, description: "Frozen vegetables, meals, pizza, ice cream, and frozen meats"),
+        // Centre of the store. The seven above are all perimeter, so brown sugar,
+        // salsa and soy sauce had nowhere to go — inference invented placeholder
+        // aisles for them and those got saved and rendered as real section
+        // headers. Most of a shop is these.
+        StoreAisle(id: "standard-pantry",     number: "", name: "Pantry & Dry Goods", displayOrder: 907, description: "Flour, sugar, rice, pasta, beans, cereal, oats, and dry staples"),
+        StoreAisle(id: "standard-canned",     number: "", name: "Canned Goods",       displayOrder: 908, description: "Canned vegetables, beans, soup, tuna, tomatoes, and broth"),
+        StoreAisle(id: "standard-condiments", number: "", name: "Condiments & Sauces", displayOrder: 909, description: "Ketchup, mustard, mayo, salsa, soy sauce, oils, vinegar, and dressings"),
+        StoreAisle(id: "standard-baking",     number: "", name: "Baking",             displayOrder: 910, description: "Baking mixes, brown sugar, chocolate chips, spices, and extracts"),
+        StoreAisle(id: "standard-snacks",     number: "", name: "Snacks",             displayOrder: 911, description: "Chips, crackers, nuts, popcorn, cookies, and sweets"),
+        StoreAisle(id: "standard-beverages",  number: "", name: "Beverages",          displayOrder: 912, description: "Water, juice, soda, coffee, tea, and drink mixes"),
+        StoreAisle(id: "standard-household",  number: "", name: "Household",          displayOrder: 913, description: "Cleaning supplies, paper goods, foil, bags, and toiletries"),
     ]
 
     /// Adds any missing standard sections to a store and persists to backend.

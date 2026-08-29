@@ -15,6 +15,7 @@ struct QuickListView: View {
     @State private var entry = ""
     @FocusState private var entryFocused: Bool
     @State private var showClearConfirmation = false
+    @State private var showDoneConfirmation = false
     @State private var showImport = false
     @State private var mainListExpanded = false
 
@@ -59,11 +60,28 @@ struct QuickListView: View {
 
             Spacer()
 
+            // Two exits, both of which finish with an empty list. Done means the
+            // errand is over, so it clears and closes. Clear means start over, so
+            // it clears and stays put. Making Done non-destructive was tried and
+            // reverted — "Done" on a shopping list reads as "I'm finished", and a
+            // Done that leaves everything behind reads as broken.
+            if !store.isEmpty {
+                Button {
+                    showClearConfirmation = true
+                } label: {
+                    Text("Clear")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                }
+            }
+
             Button {
                 if store.isEmpty {
                     isPresented = false
                 } else {
-                    showClearConfirmation = true
+                    showDoneConfirmation = true
                 }
             } label: {
                 Text(store.isEmpty ? "Close" : "Done")
@@ -82,11 +100,19 @@ struct QuickListView: View {
         .confirmationDialog("Clear the quick list?", isPresented: $showClearConfirmation, titleVisibility: .visible) {
             Button("Clear it", role: .destructive) {
                 store.clear()
-                isPresented = false
             }
             Button("Keep it", role: .cancel) { }
         } message: {
-            Text("This list is only on this phone and isn't saved anywhere. Clearing it is permanent.")
+            Text("Removes all \(store.lines.count) items and starts over. This list is only on this phone, so there is nothing to undo.")
+        }
+        .confirmationDialog("Finished the trip?", isPresented: $showDoneConfirmation, titleVisibility: .visible) {
+            Button("Done — clear the list", role: .destructive) {
+                store.clear()
+                isPresented = false
+            }
+            Button("Keep it open", role: .cancel) { }
+        } message: {
+            Text("Clears all \(store.lines.count) items and closes. To leave without losing it, swipe down instead.")
         }
     }
 
@@ -211,6 +237,7 @@ struct QuickListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.immediately)
+        .padding(.bottom, 6)
     }
 
     /// What the big shop currently looks like, for reference only.
@@ -276,6 +303,11 @@ struct QuickListView: View {
                 }
             }
             .background(DesignSystem.Colors.secondaryBackground.opacity(0.5))
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(DesignSystem.Colors.textTertiary.opacity(0.25))
+                    .frame(height: 1)
+            }
         }
     }
 
@@ -344,12 +376,20 @@ struct QuickListView: View {
                 .scrollDismissesKeyboard(.immediately)
                 .frame(maxHeight: 220)
             }
-            .padding(.top, 10)
+            .padding(.top, 12)
             .padding(.bottom, 8)
             .background(
                 DesignSystem.Colors.secondaryBackground
                     .ignoresSafeArea(edges: .bottom)
             )
+            // A rule at the top of each reference block. Without it the three
+            // lists ran together and there was no cue that anything sat below the
+            // working list once it got long enough to fill the screen.
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(DesignSystem.Colors.textTertiary.opacity(0.25))
+                    .frame(height: 1)
+            }
         }
     }
 

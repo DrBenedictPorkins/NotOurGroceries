@@ -876,13 +876,11 @@ struct BulkImportSheet: View {
         phase = .adding(done: 0, total: total)
 
         if let onCommit {
-            // Local target: no household write, no product matching, no aisle
-            // inference. Quantity is folded into the line because a scratch list
-            // has no fields.
-            onCommit(selected.map { item in
-                if let q = item.quantity, !q.isEmpty { return "\(item.name) — \(q)" }
-                return item.name
-            })
+            // Names only. Folding the quantity in produced "Salt — ½ teaspoon",
+            // which is a recipe measurement, not a shopping instruction — you buy
+            // a box of salt. It also broke deduplication, since "Milk — 2 cups"
+            // and "Milk" are different strings.
+            onCommit(selected.map { $0.name })
             isPresented = false
             return
         }

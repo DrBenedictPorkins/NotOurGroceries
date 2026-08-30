@@ -3,6 +3,60 @@ import type { Schema } from '../resource';
 
 type Handler = Schema['transcribeAudio']['functionHandler'];
 
+/**
+ * `whisper-1` was trained heavily on YouTube captions, so on trailing silence it
+ * completes with caption boilerplate — "Thank you for watching" turning up at
+ * the end of a shopping list, reported from real use. `gpt-4o-mini-transcribe`
+ * uses the same endpoint, costs less, and does this far less.
+ */
+const MODEL = 'gpt-4o-mini-transcribe';
+
+/**
+ * Caption boilerplate to strip off the end.
+ *
+ * A better model lowers the odds; it does not make them zero, and this costs
+ * nothing. Only matched at the very end of the transcript and only as a whole
+ * line or sentence — somebody dictating "thanks" mid-list keeps their word.
+ */
+const HALLUCINATED_TAILS = [
+  'thank you for watching',
+  'thanks for watching',
+  'thank you for watching!',
+  'thanks for watching!',
+  'thank you.',
+  'thank you',
+  'bye',
+  'bye.',
+  'please subscribe',
+  'subscribe to my channel',
+  'see you next time',
+  'see you in the next video',
+];
+
+export function stripHallucinatedTail(text: string): string {
+  let out = text.trim();
+
+  // Repeatedly, because Whisper sometimes stacks two of them.
+  for (let pass = 0; pass < 3; pass++) {
+    const lower = out.toLowerCase();
+    const hit = HALLUCINATED_TAILS.find((phrase) => {
+      if (!lower.endsWith(phrase)) return false;
+      // Must start at a word boundary, or "goodbye" loses its ending. Testing
+      // the raw text rather than a trimmed copy — trimming first ate the very
+      // newline that marks the boundary in "milk\neggs\nThanks for watching".
+      const before = out.slice(0, out.length - phrase.length);
+      return before === '' || /\s$/.test(before) || /[.!?,]$/.test(before.trimEnd());
+    });
+    if (!hit) break;
+
+    const trimmed = out.slice(0, out.length - hit.length).trimEnd().replace(/[.,!?]+$/, '').trimEnd();
+    console.log('[TRANSCRIBE] stripped tail', JSON.stringify({ phrase: hit }));
+    out = trimmed;
+  }
+
+  return out.trim();
+}
+
 let secretsResolved = false;
 async function resolveAmplifySecrets(): Promise<void> {
   if (secretsResolved) return;
@@ -43,7 +97,7 @@ export const handler: Handler = async (event) => {
 
   push(`--${boundary}\r\n`);
   push(`Content-Disposition: form-data; name="model"\r\n\r\n`);
-  push(`whisper-1\r\n`);
+  push(`${MODEL}\r\n`);
 
   push(`--${boundary}\r\n`);
   push(`Content-Disposition: form-data; name="response_format"\r\n\r\n`);
@@ -74,8 +128,13 @@ export const handler: Handler = async (event) => {
     throw new Error(`Whisper API error: ${response.status}`);
   }
 
-  const transcript = (await response.text()).trim();
-  console.log('[TRANSCRIBE] success', JSON.stringify({ elapsedMs, chars: transcript.length }));
+  const raw = (await response.text()).trim();
+  const transcript = stripHallucinatedTail(raw);
+  console.log('[TRANSCRIBE] success', JSON.stringify({
+    elapsedMs,
+    chars: transcript.length,
+    strippedChars: raw.length - transcript.length,
+  }));
 
   return transcript;
 };

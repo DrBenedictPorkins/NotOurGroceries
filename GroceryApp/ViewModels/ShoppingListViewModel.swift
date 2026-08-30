@@ -539,6 +539,17 @@ class ShoppingListViewModel: ObservableObject {
 
         _ = await (itemsTask, storesTask)
 
+        // Who is shopping, and whether anybody still is.
+        //
+        // This was missing, and the symptom is nasty because everything else on
+        // screen looks right: the items refresh, the cart empties, and the
+        // "someone is shopping" banner stays up. Observed after the other member
+        // had finished twice. Status only arrives by subscription or on launch,
+        // so a dropped subscription left it wrong until the app was restarted —
+        // and pull-to-refresh, the obvious thing to try, went through here and
+        // did not touch it.
+        _ = await fetchHouseholdShoppingStatus()
+
         // Refresh mappings for current store
         if let storeId = shoppingStoreId ?? householdStores.first?.id {
             _ = try? await StoreService.shared.fetchMappings(storeId: storeId)
@@ -764,6 +775,10 @@ class ShoppingListViewModel: ObservableObject {
             logger.info("inCart count: \(self.inCart.count)")
         }
 
+        // She crossed something off. That is the activity the reminder is about,
+        // whether or not the write reaches the server.
+        bumpShopperActivity()
+
         // Haptic feedback
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
 
@@ -804,8 +819,8 @@ class ShoppingListViewModel: ObservableObject {
             let response = try await apiMutate(request)
 
             switch response {
-            case .success(_):
-                bumpShopperActivity()
+            case .success:
+                break
             case .failure(let error):
                 await queueOrRevert(itemId: item.id, kind: .update, error: error,
                                     failureMessage: "Failed to add item to cart")
@@ -2426,8 +2441,17 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     /// Push the shopper-inactivity reminder out to `shopperInactivityReminder` from now.
-    /// Called on session start and on every successful `moveToCart` — silent no-op
-    /// if the current user is not the active shopper.
+    ///
+    /// Called on session start and on every cross-off the user makes — not on
+    /// every one the server confirms. That distinction is the bug it was written
+    /// with: the bump lived inside `case .success`, so on a weak signal the
+    /// writes failed, the timer was never pushed out, and "Nothing crossed off in
+    /// a while" arrived while she was at 14 of 24 items in the shop.
+    ///
+    /// The reminder exists to ask "have you forgotten to tap Done", which is a
+    /// question about the person, not about the network.
+    ///
+    /// Silent no-op if the current user is not the active shopper.
     func bumpShopperActivity() {
         guard isCurrentUserShopping else { return }
         ShopperReminderService.shared.schedule(after: Self.shopperInactivityReminder)

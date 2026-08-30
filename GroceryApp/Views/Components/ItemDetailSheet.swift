@@ -643,8 +643,17 @@ struct ItemDetailSheet: View {
     }
 
     /// Assign item to aisle by name - creates the aisle if it doesn't exist
+    ///
+    /// Every exit from here used to be silent: three bare `return`s and a
+    /// `catch { print }`. On a weak connection the mutation threw, the message
+    /// went to a console nobody can see, and the sheet just sat there — reported
+    /// from a real shop as "aisle save does not work". A save that did not happen
+    /// has to say so; there is no version of this where silence is right.
     private func assignToAisleByName(_ aisleName: String) async {
-        guard var store = currentStore else { return }
+        guard var store = currentStore else {
+            reportAisleFailure("No store selected — pick one before setting an aisle.")
+            return
+        }
 
         // Check if aisle already exists (case-insensitive match on number or name)
         let lowerName = aisleName.lowercased()
@@ -661,19 +670,32 @@ struct ItemDetailSheet: View {
                 targetAisle = store.aisleLayout.last
             } catch {
                 print("Failed to create aisle: \(error)")
+                reportAisleFailure("Couldn't add aisle \(aisleName). Check your connection and try again.")
                 return
             }
         }
 
-        guard let aisle = targetAisle else { return }
+        guard let aisle = targetAisle else {
+            reportAisleFailure("Couldn't find or create aisle \(aisleName).")
+            return
+        }
 
         // Upsert mapping
         do {
+            // `aisle.id`, not `aisle.number`. The standard departments carry an
+            // empty number — "Bakery" has no aisle number — so writing the number
+            // stored an empty aisleId, the mutation succeeded, the toast said
+            // "Aisle saved: Bakery", and the item never moved. Scanned aisles have
+            // real numbers, which is why typing "6" worked and typing a
+            // department name did not.
+            //
+            // Lookup matches on id, name or number, so the id is the safe one to
+            // write and the only one that is always present.
             try await StoreService.shared.assignProductToAisle(
                 productId: item.productId,
                 normalizedName: item.productId == nil ? item.normalizedName : nil,
                 storeId: store.id,
-                aisleId: aisle.number
+                aisleId: aisle.id
             )
 
             // Refresh mappings and notify observers
@@ -687,7 +709,19 @@ struct ItemDetailSheet: View {
             dismiss()
         } catch {
             print("Failed to assign aisle: \(error)")
+            // The one she actually hit. Not queued anywhere either — the outbox
+            // carries item changes only — so this is lost unless she retries,
+            // and she can only know to retry if we say so. Sheet stays open on
+            // purpose, with what she typed still in the field.
+            reportAisleFailure("Couldn't save aisle \(aisleName). Nothing was changed — try again when you have signal.")
         }
+    }
+
+    private func reportAisleFailure(_ message: String) {
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+        viewModel.toastMessage = message
+        viewModel.toastType = .error
+        viewModel.showToast = true
     }
 
     /// Format aisle display name flexibly - handles numbers, alphanumeric, or words
@@ -728,7 +762,11 @@ struct ItemDetailSheet: View {
             )
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         } catch {
+            // Same silence as saving had. The field is cleared optimistically
+            // before this runs, so without a message the aisle looks removed and
+            // comes back on the next refresh.
             print("Failed to clear aisle assignment: \(error)")
+            reportAisleFailure("Couldn't clear the aisle. It's still set — try again when you have signal.")
         }
     }
 

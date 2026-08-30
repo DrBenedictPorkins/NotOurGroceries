@@ -36,7 +36,14 @@ class StoreService: ObservableObject {
         StoreAisle(id: "standard-baking",     number: "", name: "Baking",             displayOrder: 910, description: "Baking mixes, brown sugar, chocolate chips, spices, and extracts"),
         StoreAisle(id: "standard-snacks",     number: "", name: "Snacks",             displayOrder: 911, description: "Chips, crackers, nuts, popcorn, cookies, and sweets"),
         StoreAisle(id: "standard-beverages",  number: "", name: "Beverages",          displayOrder: 912, description: "Water, juice, soda, coffee, tea, and drink mixes"),
-        StoreAisle(id: "standard-household",  number: "", name: "Household",          displayOrder: 913, description: "Cleaning supplies, paper goods, foil, bags, and toiletries"),
+        StoreAisle(id: "standard-household",  number: "", name: "Household",          displayOrder: 913, description: "Cleaning supplies, paper goods, foil, bags, trash bags, and laundry"),
+        // Household used to absorb toiletries and anything medicinal, so Unisom
+        // landed next to the bin bags. They are different parts of the store and
+        // a shopper walking the list would have to double back.
+        StoreAisle(id: "standard-personal",   number: "", name: "Personal Care",       displayOrder: 914, description: "Shampoo, soap, deodorant, toothpaste, razors, and cosmetics"),
+        StoreAisle(id: "standard-pharmacy",   number: "", name: "Pharmacy & Health",   displayOrder: 915, description: "Over-the-counter medicine, sleep aids, vitamins, supplements, and first aid"),
+        StoreAisle(id: "standard-baby",       number: "", name: "Baby",                displayOrder: 916, description: "Nappies, wipes, formula, baby food, and baby care"),
+        StoreAisle(id: "standard-pet",        number: "", name: "Pet",                 displayOrder: 917, description: "Pet food, treats, litter, and pet supplies"),
     ]
 
     /// Adds any missing standard sections to a store and persists to backend.

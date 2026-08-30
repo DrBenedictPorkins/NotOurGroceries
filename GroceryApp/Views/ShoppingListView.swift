@@ -265,8 +265,7 @@ struct ShoppingListView: View {
             ListMenuSheet(
                 isPresented: $showListMenu,
                 onAtStore: { showStoreSelection = true },
-                onQuickList: { showQuickList = true },
-                onSignOut: { Task { try? await amplifyService.signOut() } }
+                onQuickList: { showQuickList = true }
             )
             .environmentObject(viewModel)
             .environmentObject(amplifyService)
@@ -346,6 +345,8 @@ struct ShoppingListView: View {
 
             Spacer(minLength: 0)
 
+            shareButton
+
             // Primary action stays visible. The other modes live in the title
             // panel — nothing here for a thumb to confuse it with.
             if canStartShopping {
@@ -360,6 +361,30 @@ struct ShoppingListView: View {
 
     private var canStartShopping: Bool {
         viewModel.shoppingStatus == .idle
+    }
+
+    /// Hand the list to someone who is not in the household.
+    ///
+    /// Sits between the title and At Store, and simply is not there when there
+    /// is nothing to send — the title is left-anchored and At Store is pinned
+    /// right, so it appearing and disappearing moves neither of them.
+    @ViewBuilder
+    private var shareButton: some View {
+        if !viewModel.shoppingList.isEmpty || !viewModel.inCart.isEmpty {
+            ShareLink(
+                item: ShareText.shoppingList(
+                    active: viewModel.shoppingList,
+                    inCart: viewModel.inCart,
+                    storeName: viewModel.selectedHouseholdStore?.name
+                )
+            ) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+        }
     }
 
     private var atStoreButton: some View {

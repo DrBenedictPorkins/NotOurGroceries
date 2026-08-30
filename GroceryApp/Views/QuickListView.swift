@@ -4,9 +4,9 @@ import SwiftUI
 ///
 /// Everything about it is deliberately narrower than the main list: no store, no
 /// aisles, no suggestions, no sync, no history. It is one column of text you can
-/// tick. The old Quick Trip failed because it looked like the main list and
-/// borrowed its items; this one cannot be confused with anything because there
-/// is nothing else on the screen.
+/// tick. The earlier version failed because it looked like the main list and
+/// borrowed its items; this one is a separate list that happens to sit next to
+/// them, and nothing you do here reaches the household.
 struct QuickListView: View {
     @ObservedObject private var store = QuickListStore.shared
     @EnvironmentObject var viewModel: ShoppingListViewModel
@@ -21,7 +21,7 @@ struct QuickListView: View {
 
     var body: some View {
         ZStack {
-            DesignSystem.Colors.background.ignoresSafeArea()
+            DesignSystem.Colors.secondaryBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
@@ -50,7 +50,7 @@ struct QuickListView: View {
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Quick list")
+                Text("Quick Trip")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundColor(DesignSystem.Colors.textPrimary)
                 Text(subtitle)
@@ -65,6 +65,18 @@ struct QuickListView: View {
             // it clears and stays put. Making Done non-destructive was tried and
             // reverted — "Done" on a shopping list reads as "I'm finished", and a
             // Done that leaves everything behind reads as broken.
+            // Same idea as the main list: only there when there is something to
+            // send, and its absence moves nothing.
+            if !store.isEmpty {
+                ShareLink(item: ShareText.quickTrip(lines: store.lines)) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+            }
+
             if !store.isEmpty {
                 Button {
                     showClearConfirmation = true
@@ -97,7 +109,7 @@ struct QuickListView: View {
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 12)
-        .confirmationDialog("Clear the quick list?", isPresented: $showClearConfirmation, titleVisibility: .visible) {
+        .confirmationDialog("Clear the quick trip?", isPresented: $showClearConfirmation, titleVisibility: .visible) {
             Button("Clear it", role: .destructive) {
                 store.clear()
             }
@@ -107,6 +119,10 @@ struct QuickListView: View {
         }
         .confirmationDialog("Finished the trip?", isPresented: $showDoneConfirmation, titleVisibility: .visible) {
             Button("Done — clear the list", role: .destructive) {
+                TripStats.shared.recordQuickTrip(
+                    itemNames: store.lines.map(\.name),
+                    picked: store.lines.filter(\.checked).count
+                )
                 store.clear()
                 isPresented = false
             }
@@ -240,12 +256,15 @@ struct QuickListView: View {
         .padding(.bottom, 6)
     }
 
-    /// What the big shop currently looks like, for reference only.
+    /// What the big shop currently looks like.
     ///
-    /// Deliberately inert. Tapping to copy an item across was considered and
-    /// rejected: the quick list holds plain strings with no link back to the
-    /// GroceryItem, so a copy is a duplicate, and ticking the copy could never
-    /// update the original. Two rows for one carton of milk, one of which lies.
+    /// Read-only in the sense that matters: nothing you tap here changes the
+    /// household list. Tapping copies the name onto the quick trip, because
+    /// seeing "milk" on the big shop and then having to type it out — or hunt
+    /// for it in suggestions — is the whole reason the main list is on screen.
+    ///
+    /// The copy is a plain string with no link back to the GroceryItem. Ticking
+    /// it here does not cross the item off the big shop, and is not meant to.
     ///
     /// Collapsed by default because it is context, not the thing you came here
     /// to do.
@@ -264,9 +283,6 @@ struct QuickListView: View {
                         Text("MAIN LIST")
                             .font(.system(size: 11, weight: .bold))
                             .kerning(0.8)
-                        Text("read-only")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.7))
                         Spacer()
                         Text("\(main.count)")
                             .font(.system(size: 11, weight: .semibold))
@@ -282,19 +298,33 @@ struct QuickListView: View {
                     ScrollView(.vertical, showsIndicators: true) {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             ForEach(main) { item in
-                                HStack(spacing: 10) {
-                                    Text(item.name)
-                                        .font(.system(size: 15))
-                                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                                    if let quantity = item.quantity, !quantity.isEmpty {
-                                        Text(quantity)
-                                            .font(.system(size: 13))
-                                            .foregroundColor(DesignSystem.Colors.textTertiary.opacity(0.7))
+                                let taken = alreadyTaken(item.name)
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    store.add(item.name)
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: taken ? "checkmark" : "plus")
+                                            .font(.system(size: 12, weight: .bold))
+                                            .foregroundColor(taken
+                                                             ? DesignSystem.Colors.textTertiary.opacity(0.6)
+                                                             : DesignSystem.Colors.dillGreen)
+                                        Text(item.name)
+                                            .font(.system(size: 15))
+                                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        if let quantity = item.quantity, !quantity.isEmpty {
+                                            Text(quantity)
+                                                .font(.system(size: 13))
+                                                .foregroundColor(DesignSystem.Colors.textTertiary)
+                                        }
+                                        Spacer()
                                     }
-                                    Spacer()
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 9)
+                                    .contentShape(Rectangle())
                                 }
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 8)
+                                .buttonStyle(.plain)
+                                .disabled(taken)
                             }
                         }
                     }
@@ -302,7 +332,7 @@ struct QuickListView: View {
                     .scrollDismissesKeyboard(.immediately)
                 }
             }
-            .background(DesignSystem.Colors.secondaryBackground.opacity(0.5))
+            .background(DesignSystem.Colors.secondaryBackground)
             .overlay(alignment: .top) {
                 Rectangle()
                     .fill(DesignSystem.Colors.textTertiary.opacity(0.25))
@@ -315,38 +345,29 @@ struct QuickListView: View {
     /// the main list: scrolling past things is how you remember you need them.
     /// Tapping copies the name onto this list — it never touches the household,
     /// and the history itself is untouched. Already-cached, so it works offline.
+    ///
+    /// Just the suggestions, as everywhere else in the app. It briefly also
+    /// carried whatever was on the main list, because those two sets are
+    /// mutually exclusive by status and a big-shop item was otherwise impossible
+    /// to take on the errand without typing it. The MAIN LIST block above is
+    /// tappable now, so that item is one tap away where you actually saw it.
     @ViewBuilder
     private var suggestionsStrip: some View {
-        // Everything the household knows about, not just the archive: suggestions
-        // plus whatever is currently on the main list. Those two are mutually
-        // exclusive by status, so an item sitting on the big shop would otherwise
-        // vanish from here — visible under MAIN LIST but impossible to take on
-        // the errand without typing it. This is the strip as it would look if the
-        // main list were empty.
-        //
-        // An item on the main list therefore appears twice: greyed above as
-        // "already on the big shop", and tappable here as "you can grab it too".
-        // Different questions, same item.
-        var seen = Set<String>()
-        let known = (viewModel.suggestions + viewModel.shoppingList).filter { item in
-            seen.insert(item.normalizedName).inserted
-        }
-        let available = known.filter { item in
-            !store.lines.contains { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }
-        }
+        let available = viewModel.suggestions.filter { !alreadyTaken($0.name) }
 
         if !available.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("FROM YOUR USUAL")
+                HStack(spacing: 6) {
+                    Image(systemName: "lightbulb.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("SUGGESTIONS")
                         .font(.system(size: 11, weight: .bold))
                         .kerning(0.8)
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
                     Spacer()
                     Text("\(available.count)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
                 }
+                .foregroundColor(DesignSystem.Colors.neonAmber)
                 .padding(.horizontal, 20)
 
                 ScrollView(.vertical, showsIndicators: true) {
@@ -359,10 +380,10 @@ struct QuickListView: View {
                                 HStack(spacing: 10) {
                                     Image(systemName: "plus")
                                         .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(DesignSystem.Colors.dillGreen)
+                                        .foregroundColor(DesignSystem.Colors.neonAmber)
                                     Text(suggestion.name)
                                         .font(.system(size: 15))
-                                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                                        .foregroundColor(DesignSystem.Colors.neonAmber.opacity(0.85))
                                     Spacer()
                                 }
                                 .padding(.horizontal, 20)
@@ -379,7 +400,8 @@ struct QuickListView: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
             .background(
-                DesignSystem.Colors.secondaryBackground
+                DesignSystem.Colors.neonAmber.opacity(0.03)
+                    .background(DesignSystem.Colors.secondaryBackground)
                     .ignoresSafeArea(edges: .bottom)
             )
             // A rule at the top of each reference block. Without it the three
@@ -391,6 +413,12 @@ struct QuickListView: View {
                     .frame(height: 1)
             }
         }
+    }
+
+    /// Already on the quick trip. Matched on the name because that is all this
+    /// list stores — there is no id to compare against.
+    private func alreadyTaken(_ name: String) -> Bool {
+        store.lines.contains { $0.name.caseInsensitiveCompare(name) == .orderedSame }
     }
 
     private var empty: some View {

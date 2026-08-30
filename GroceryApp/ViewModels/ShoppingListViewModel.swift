@@ -448,6 +448,16 @@ class ShoppingListViewModel: ObservableObject {
                 }
             } while nextToken != nil && !parseFailed && !loadFailed
 
+            // Refusing to overwrite while the outbox has work is the whole point
+            // of the outbox: a successful fetch here would replace the local copy
+            // with the server's, discarding exactly the changes waiting to be
+            // pushed. The reconnect path flushes first and then refetches.
+            if !Outbox.shared.isEmpty {
+                logger.info("Skipping list overwrite — \(Outbox.shared.count) change(s) still pending")
+                noteServerReachable()
+                return
+            }
+
             if !parseFailed && !loadFailed {
                 self.items = fetched
                 applySorting()
@@ -661,12 +671,15 @@ class ShoppingListViewModel: ObservableObject {
                 }
             }
         } catch {
-            // On paper the item stays. Deleting what the user just typed because
-            // we couldn't reach a server would be the worst bug in the mode.
-            // Remove optimistic item on error
-            items.removeAll { $0.id == itemId }
             pendingOptimisticIds.remove(itemId)
-            showToast(message: "Failed to add item", type: .error)
+            // Deleting what the user just typed because we could not reach a
+            // server would be the worst bug in the app. Offline it stays and is
+            // queued; only a genuine rejection removes it.
+            let queued = await queueOrRevert(itemId: itemId, kind: .create, error: error,
+                                             failureMessage: "Failed to add item")
+            if !queued {
+                items.removeAll { $0.id == itemId }
+            }
             print("Add item error: \(error)")
         }
     }
@@ -749,17 +762,12 @@ class ShoppingListViewModel: ObservableObject {
             case .success(_):
                 bumpShopperActivity()
             case .failure(let error):
-                print("moveToCart FAILURE: \(error)")
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
-                await loadShoppingList()
-                showToast(message: "Failed to add item to cart", type: .error)
+                await queueOrRevert(itemId: item.id, kind: .update, error: error,
+                                    failureMessage: "Failed to add item to cart")
             }
         } catch {
-            // On paper the cross-off stands — no error buzz, no resync.
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
-            await loadShoppingList()
-            showToast(message: "Failed to add item to cart", type: .error)
-            print("Move to cart error: \(error)")
+            await queueOrRevert(itemId: item.id, kind: .update, error: error,
+                                failureMessage: "Failed to add item to cart")
         }
     }
 
@@ -868,14 +876,66 @@ class ShoppingListViewModel: ObservableObject {
                 showToast(message: "Failed to move item", type: .error)
             }
         } catch {
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
-            await loadShoppingList()
-            showToast(message: "Failed to move item", type: .error)
+            await queueOrRevert(itemId: item.id, kind: .update, error: error,
+                                failureMessage: "Failed to move item")
             print("Move to suggestion error: \(error)")
         }
     }
 
     // MARK: - Restore Item
+    // MARK: - Restore a finished trip
+
+    /// Put the last trip's list back the way it was.
+    ///
+    /// Finishing a trip sweeps everything into suggestions, which is right most
+    /// of the time and wrong the once — the trip that got cut short, or the one
+    /// you finished at the wrong store. The names are already on this phone, so
+    /// rebuilding costs nothing but a tap.
+    ///
+    /// Items are matched against existing suggestions by normalised name and
+    /// flipped back to active. Only a name with no match at all is created, so
+    /// restoring twice does not leave two cartons of milk on the list.
+    ///
+    /// Returns how many items ended up back on the list.
+    @discardableResult
+    func restoreLastTrip() async -> Int {
+        if isListLockedByOtherSession {
+            warnListReadOnly()
+            return 0
+        }
+
+        guard let trip = TripStats.shared.restorableTrip else { return 0 }
+
+        var restored = 0
+        for name in trip.everythingOnTheList {
+            let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+            // Already on the list — nothing to do, and nothing to duplicate.
+            if shoppingList.contains(where: { $0.normalizedName == key })
+                || inCart.contains(where: { $0.normalizedName == key }) {
+                continue
+            }
+
+            if let suggestion = suggestions.first(where: { $0.normalizedName == key }) {
+                await restoreItem(suggestion)
+            } else {
+                await addItem(name: name)
+            }
+            restored += 1
+        }
+
+        if restored > 0 {
+            showToast(message: restored == 1
+                      ? "Put 1 item back on the list"
+                      : "Put \(restored) items back on the list",
+                      type: .success)
+        } else {
+            showToast(message: "Everything from that trip is already on the list", type: .info)
+        }
+
+        return restored
+    }
+
     func restoreItem(_ item: GroceryItem) async {
         // Same rule as addItem — read-only while someone else is out.
         if isListLockedByOtherSession {
@@ -957,15 +1017,13 @@ class ShoppingListViewModel: ObservableObject {
             case .success:
                 break
             case .failure(let error):
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
-                await loadShoppingList()
-                showToast(message: "Failed to restore item", type: .error)
+                await queueOrRevert(itemId: item.id, kind: .update, error: error,
+                                    failureMessage: "Failed to restore item")
                 print("Restore error: \(error)")
             }
         } catch {
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
-            await loadShoppingList()
-            showToast(message: "Failed to restore item", type: .error)
+            await queueOrRevert(itemId: item.id, kind: .update, error: error,
+                                failureMessage: "Failed to restore item")
             print("Restore error: \(error)")
         }
     }
@@ -1027,15 +1085,13 @@ class ShoppingListViewModel: ObservableObject {
             case .success:
                 showToast(message: "Deleted \(item.name)")
             case .failure(let error):
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
-                await loadShoppingList()
-                showToast(message: "Failed to delete item", type: .error)
+                await queueOrRevert(itemId: item.id, kind: .delete, error: error,
+                                    failureMessage: "Failed to delete item")
                 print("Delete error: \(error)")
             }
         } catch {
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
-            await loadShoppingList()
-            showToast(message: "Failed to delete item", type: .error)
+            await queueOrRevert(itemId: item.id, kind: .delete, error: error,
+                                failureMessage: "Failed to delete item")
             print("Delete error: \(error)")
         }
     }
@@ -1094,20 +1150,20 @@ class ShoppingListViewModel: ObservableObject {
             case .success:
                 logger.info("Updated notes for \(item.name)")
             case .failure(let error):
-                // Revert optimistic update
-                if let index = items.firstIndex(where: { $0.id == item.id }) {
+                if await !queueOrRevert(itemId: item.id, kind: .update, error: error,
+                                        failureMessage: "Failed to update notes"),
+                   let index = items.firstIndex(where: { $0.id == item.id }) {
                     items[index] = item
                 }
-                showToast(message: "Failed to update notes", type: .error)
                 logger.error("Update notes failed: \(error)")
             }
         } catch {
             // On paper the local edit stands — it's the whole point of the mode.
-            // Revert optimistic update
-            if let index = items.firstIndex(where: { $0.id == item.id }) {
+            if await !queueOrRevert(itemId: item.id, kind: .update, error: error,
+                                    failureMessage: "Failed to update notes"),
+               let index = items.firstIndex(where: { $0.id == item.id }) {
                 items[index] = item
             }
-            showToast(message: "Failed to update notes", type: .error)
             logger.error("Update notes error: \(error)")
         }
     }
@@ -1556,6 +1612,10 @@ class ShoppingListViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
                 if Task.isCancelled { break }
 
+                // Push what we did offline before pulling anything down.
+                let flushed = await flushOutbox()
+                guard flushed else { continue }
+
                 await loadShoppingList(forceRefresh: true)
 
                 if !isShowingLocalSnapshot {
@@ -1577,6 +1637,164 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     // MARK: - Paper List Mode
+
+    // MARK: - Outbox
+
+    /// A mutation failed. Decide whether the local change survives.
+    ///
+    /// The old behaviour was always to call `loadShoppingList()`, which refetches
+    /// and reverts. That is right when the server rejected the change, and wrong
+    /// when the server was simply unreachable — it threw away the cross-off you
+    /// just made in a dead zone and told you it had failed.
+    ///
+    /// Returns true if the change was kept and queued.
+    @discardableResult
+    private func queueOrRevert(
+        itemId: String,
+        kind: Outbox.Kind,
+        error: Error,
+        failureMessage: String
+    ) async -> Bool {
+        let looksOffline = !NetworkStatus.shared.pathIsSatisfied || isOffline
+
+        guard looksOffline else {
+            // The server was reachable and said no. Reverting is correct.
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            await loadShoppingList()
+            showToast(message: failureMessage, type: .error)
+            print("[OUTBOX] not queuing — server reachable, rejected: \(String(describing: error))")
+            return false
+        }
+
+        Outbox.shared.enqueue(itemId, kind)
+        if !isOffline {
+            isOffline = true
+            keepTryingToReconnect()
+        }
+        print("[OUTBOX] queued \(kind.rawValue) for \(itemId) (\(Outbox.shared.count) pending)")
+        return true
+    }
+
+
+    /// Push everything queued while offline, then refetch.
+    ///
+    /// Order matters and is the whole point: creates first so later updates have
+    /// something to land on, then updates, then deletes. The refetch only runs if
+    /// the queue drained — refetching with work still pending would overwrite it,
+    /// which is exactly the bug this exists to fix.
+    func flushOutbox() async -> Bool {
+        guard !Outbox.shared.isEmpty else { return true }
+
+        let queued = Outbox.shared.entries
+        print("[OUTBOX] flushing \(queued.count) change(s)")
+
+        let order: [Outbox.Kind] = [.create, .update, .delete]
+        var allSucceeded = true
+
+        for kind in order {
+            for entry in queued where entry.kind == kind {
+                let ok: Bool
+                switch kind {
+                case .create: ok = await pushCreate(entry.id)
+                case .update: ok = await pushUpdate(entry.id)
+                case .delete: ok = await pushDelete(entry.id)
+                }
+                if ok {
+                    Outbox.shared.remove(entry.id)
+                } else {
+                    allSucceeded = false
+                    print("[OUTBOX] \(kind.rawValue) failed for \(entry.id), keeping it queued")
+                }
+            }
+        }
+
+        print("[OUTBOX] flush \(allSucceeded ? "complete" : "incomplete — \(Outbox.shared.count) left")")
+        return allSucceeded
+    }
+
+    /// An item created offline: the server has never seen it, so this is a create
+    /// with the id the client already assigned.
+    private func pushCreate(_ itemId: String) async -> Bool {
+        guard let item = items.first(where: { $0.id == itemId }) else {
+            // Created and then deleted while offline, and the queue was collapsed
+            // to nothing. Not an error.
+            return true
+        }
+        let document = """
+        mutation CreateGroceryItem($input: CreateGroceryItemInput!) {
+            createGroceryItem(input: $input) { id version }
+        }
+        """
+        var input: [String: Any] = [
+            "id": item.id,
+            "householdId": item.householdId,
+            "name": item.name,
+            "normalizedName": item.normalizedName,
+            "status": item.status.rawValue,
+            "isCustom": item.isCustom,
+            "addedBy": item.addedBy,
+            "addedAt": ISO8601DateFormatter().string(from: item.addedAt),
+            "version": item.version
+        ]
+        if let quantity = item.quantity { input["quantity"] = quantity }
+        if let notes = item.notes { input["notes"] = notes }
+        if let productId = item.productId { input["productId"] = productId }
+        input["notesEphemeral"] = item.notesEphemeral
+
+        return await runOutboxMutation(document, ["input": input])
+    }
+
+    /// The server has this item; the local copy is newer. Pushes the whole
+    /// mutable state rather than a diff, because the outbox records that an item
+    /// changed, not how many times.
+    private func pushUpdate(_ itemId: String) async -> Bool {
+        guard let item = items.first(where: { $0.id == itemId }) else { return true }
+        let document = """
+        mutation UpdateGroceryItem($input: UpdateGroceryItemInput!) {
+            updateGroceryItem(input: $input) { id version }
+        }
+        """
+        var input: [String: Any] = [
+            "id": item.id,
+            "status": item.status.rawValue,
+            "version": item.version,
+            "addedBy": item.addedBy,
+            "addedAt": ISO8601DateFormatter().string(from: item.addedAt),
+            "notesEphemeral": item.notesEphemeral
+        ]
+        input["notes"] = item.notes ?? ""
+        input["quantity"] = item.quantity ?? ""
+
+        return await runOutboxMutation(document, ["input": input])
+    }
+
+    private func pushDelete(_ itemId: String) async -> Bool {
+        let document = """
+        mutation DeleteGroceryItem($input: DeleteGroceryItemInput!) {
+            deleteGroceryItem(input: $input) { id }
+        }
+        """
+        return await runOutboxMutation(document, ["input": ["id": itemId]])
+    }
+
+    private func runOutboxMutation(_ document: String, _ variables: [String: Any]) async -> Bool {
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: variables,
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+        do {
+            switch try await apiMutate(request) {
+            case .success: return true
+            case .failure(let error):
+                print("[OUTBOX] mutation rejected: \(String(describing: error))")
+                return false
+            }
+        } catch {
+            return false
+        }
+    }
 
     // MARK: - Remote Update Helpers
 
@@ -2333,6 +2551,18 @@ class ShoppingListViewModel: ObservableObject {
                     // Set stats and show completion sheet
                     shoppingCompletionStats = stats
                     showShoppingCompletedSheet = true
+
+                    // Same numbers, kept on this phone so the list menu can show
+                    // a running tally. Recorded here because this is the only
+                    // point where a trip is definitely finished.
+                    TripStats.shared.recordTrip(
+                        storeName: storeName,
+                        itemNames: itemsInCart.map(\.name),
+                        leftBehindNames: itemsOnList.map(\.name),
+                        customLearned: customItemsInCart.count,
+                        startedAt: startTime,
+                        endedAt: endTime
+                    )
 
                     logger.info("Exited shopping mode - picked up \(stats.itemsPickedUp) items in \(stats.formattedDuration)")
                 }

@@ -1,0 +1,140 @@
+import XCTest
+@testable import GroceryApp
+
+/// Aisle ids are storage keys, and they leaked onto screen — the batch mapper
+/// offered "standard-household" as if that were somewhere you could walk to.
+/// These tests pin the rule that an id never reaches the user unresolved.
+final class AisleNamingTests: XCTestCase {
+
+    private func aisle(id: String, number: String = "", name: String) -> StoreAisle {
+        StoreAisle(id: id, number: number, name: name, displayOrder: 0, description: "")
+    }
+
+    // MARK: - The store's own layout wins
+
+    func testUsesTheStoresOwnNameForTheAisle() {
+        let layout = [aisle(id: "a1", number: "7", name: "Baking")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "a1", in: layout), "Aisle 7 — Baking")
+    }
+
+    func testNamesAnUnnumberedSectionPlainly() {
+        let layout = [aisle(id: "standard-dairy", name: "Dairy & Eggs")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "standard-dairy", in: layout), "Dairy & Eggs")
+    }
+
+    func testMatchesOnIdNameOrNumber() {
+        // Which of the three got written depends on the build that saved the
+        // mapping, so all three have to resolve.
+        let layout = [aisle(id: "a1", number: "7", name: "Baking")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "a1", in: layout), "Aisle 7 — Baking")
+        XCTAssertEqual(AisleNaming.displayName(for: "Baking", in: layout), "Aisle 7 — Baking")
+        XCTAssertEqual(AisleNaming.displayName(for: "7", in: layout), "Aisle 7 — Baking")
+    }
+
+    func testMatchingIgnoresCaseAndSurroundingSpace() {
+        let layout = [aisle(id: "standard-dairy", name: "Dairy & Eggs")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "  STANDARD-DAIRY ", in: layout), "Dairy & Eggs")
+        XCTAssertEqual(AisleNaming.displayName(for: "dairy & eggs", in: layout), "Dairy & Eggs")
+    }
+
+    func testANonNumericAisleNumberIsNotCalledAnAisleNumber() {
+        // Some stores label sections "A", "B", "Back wall".
+        let layout = [aisle(id: "a1", number: "B", name: "Baking")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "a1", in: layout), "B — Baking")
+    }
+
+    // MARK: - Falling back
+
+    func testABareNumberIsAnAisleNumber() {
+        XCTAssertEqual(AisleNaming.displayName(for: "12", in: []), "Aisle 12")
+    }
+
+    func testResolvesStandardIdsWithoutALayout() {
+        // A store that has not been backfilled yet still has mappings pointing
+        // at standard ids, and they have to read as words.
+        XCTAssertEqual(AisleNaming.displayName(for: "standard-frozen", in: []), "Frozen")
+        XCTAssertEqual(AisleNaming.displayName(for: "standard-household", in: []), "Household")
+        XCTAssertEqual(AisleNaming.displayName(for: "standard-pharmacy", in: []), "Pharmacy & Health")
+    }
+
+    func testTidiesAnUnknownStandardStyleId() {
+        // Shape of one of ours but not one of ours — a model made it up, or it
+        // predates a rename. Still better as words than as a slug.
+        XCTAssertEqual(AisleNaming.displayName(for: "standard-pet-food", in: []), "Pet Food")
+    }
+
+    func testAnUnrecognisedIdIsShownAsItIs() {
+        // Hiding it behind "Unknown" loses the only clue about what went wrong.
+        XCTAssertEqual(AisleNaming.displayName(for: "Back cooler", in: []), "Back cooler")
+    }
+
+    func testAnEmptyIdIsNamedNotBlank() {
+        XCTAssertEqual(AisleNaming.displayName(for: "", in: []), "Unsorted")
+        XCTAssertEqual(AisleNaming.displayName(for: "   ", in: []), "Unsorted")
+    }
+
+    func testAnAisleWithNeitherNameNorNumberIsNamedNotBlank() {
+        let layout = [aisle(id: "a1", name: "")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "a1", in: layout), "Unsorted")
+    }
+
+    // MARK: - Header form
+
+    func testHeaderNameIsTheSameNameUpperCased() {
+        let layout = [aisle(id: "standard-dairy", name: "Dairy & Eggs")]
+
+        XCTAssertEqual(AisleNaming.headerName(for: "standard-dairy", in: layout), "DAIRY & EGGS")
+    }
+
+    // MARK: - The standard set
+
+    func testStandardIdsAreUnique() {
+        let ids = StoreService.standardSections.map(\.id)
+
+        XCTAssertEqual(Set(ids).count, ids.count,
+                       "a duplicate id would make backfill and lookup disagree")
+    }
+
+    func testEveryStandardSectionResolvesToItsOwnName() {
+        for section in StoreService.standardSections {
+            XCTAssertEqual(AisleNaming.displayName(for: section.id, in: []), section.name,
+                           "\(section.id) does not resolve to its name")
+        }
+    }
+
+    func testMedicineHasSomewhereToGoThatIsNotHousehold() {
+        // Unisom was being filed under Household, next to the bin bags.
+        let ids = Set(StoreService.standardSections.map(\.id))
+
+        XCTAssertTrue(ids.contains("standard-pharmacy"))
+        XCTAssertTrue(ids.contains("standard-personal"))
+
+        let household = StoreService.standardSections.first { $0.id == "standard-household" }
+        XCTAssertNotNil(household)
+        XCTAssertFalse((household!.description ?? "").lowercased().contains("toiletries"),
+                       "toiletries belong to Personal Care now")
+    }
+
+    func testStandardSectionsHaveDistinctDisplayOrders() {
+        let orders = StoreService.standardSections.map(\.displayOrder)
+
+        XCTAssertEqual(Set(orders).count, orders.count,
+                       "equal orders sort unstably, so the walk order changes between launches")
+    }
+
+    func testStandardSectionsAllDescribeThemselves() {
+        // The description is what the inference prompt reads; an empty one makes
+        // that section invisible to the model.
+        for section in StoreService.standardSections {
+            XCTAssertFalse(section.name.trimmingCharacters(in: .whitespaces).isEmpty)
+            XCTAssertFalse((section.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
+                           "\(section.id) has no description")
+        }
+    }
+}

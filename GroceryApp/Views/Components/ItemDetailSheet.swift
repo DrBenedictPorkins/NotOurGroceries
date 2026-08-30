@@ -496,7 +496,8 @@ struct ItemDetailSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "mappin.circle.fill")
                     .foregroundColor(DesignSystem.Colors.dillGreen)
-                Text("Aisle \(cleanAisleName(result.suggestedAisle))")
+                Text(AisleNaming.displayName(for: result.suggestedAisle,
+                                             in: currentStore?.aisleLayout ?? []))
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
             }
@@ -606,7 +607,8 @@ struct ItemDetailSheet: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
 
             // Set toast message before dismissing so it shows on the main view
-            viewModel.toastMessage = "Aisle saved: \(result.suggestedAisle)"
+            viewModel.toastMessage = "Aisle saved: " + AisleNaming.displayName(
+                for: result.suggestedAisle, in: currentStore?.aisleLayout ?? [])
             viewModel.toastType = .success
             viewModel.showToast = true
 

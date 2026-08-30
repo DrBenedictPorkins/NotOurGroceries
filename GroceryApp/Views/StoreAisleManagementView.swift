@@ -339,7 +339,13 @@ struct StoreAisleManagementView: View {
 
     private var actionButtonsView: some View {
         HStack(spacing: 12) {
-            // Scan Directory Button
+            // Scan Directory Button.
+            //
+            // Hidden for a store with no aisles: there is no directory board to
+            // photograph, so the scan has nothing to read. StoreDetailView has
+            // always gated this; the cog in At Store mode reaches the same
+            // screen by a different route and did not.
+            if !currentStore.hasNoAisles {
             Button(action: {
                 showAisleScanSheet = true
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -361,6 +367,7 @@ struct StoreAisleManagementView: View {
                                 .stroke(DesignSystem.Colors.dillGreen, lineWidth: 1)
                         )
                 )
+            }
             }
 
             // Cleanup Invalid Button (only show if there are invalid mappings)

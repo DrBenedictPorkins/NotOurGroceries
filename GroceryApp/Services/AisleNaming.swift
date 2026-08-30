@@ -1,0 +1,87 @@
+import Foundation
+
+/// Turning an aisle id into something a person would say out loud.
+///
+/// Aisle ids are storage keys — `standard-frozen`, `7`, or whatever a store's
+/// own layout calls them. They leaked onto screen anywhere a view printed the id
+/// straight out of a mapping, so the batch mapper offered "standard-household"
+/// as if that were the name of a place in the shop.
+///
+/// Resolution order, most authoritative first:
+/// 1. the store's own layout, which is the only source that knows a section is
+///    called "Aisle 7 — Baking" in this particular shop;
+/// 2. a bare number, which is an aisle number;
+/// 3. one of the built-in `standard-` ids, tidied up;
+/// 4. the id itself, because a name we cannot improve on is better than a
+///    placeholder that hides it.
+enum AisleNaming {
+
+    /// Human-readable name for an aisle id, in title case.
+    static func displayName(for aisleId: String, in layout: [StoreAisle]) -> String {
+        let id = aisleId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty else { return "Unsorted" }
+
+        if let aisle = match(id, in: layout) {
+            return label(for: aisle)
+        }
+
+        if let number = Int(id) {
+            return "Aisle \(number)"
+        }
+
+        if let tidied = tidiedStandardId(id) {
+            return tidied
+        }
+
+        return id
+    }
+
+    /// The same name, upper-cased for a section header.
+    static func headerName(for aisleId: String, in layout: [StoreAisle]) -> String {
+        displayName(for: aisleId, in: layout).uppercased()
+    }
+
+    /// An id can be stored as the aisle's id, its name, or its number depending
+    /// on which build wrote the mapping, so all three are worth matching.
+    static func match(_ aisleId: String, in layout: [StoreAisle]) -> StoreAisle? {
+        let key = aisleId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return layout.first {
+            $0.id.lowercased() == key
+                || $0.name.trimmingCharacters(in: .whitespaces).lowercased() == key
+                || $0.number.trimmingCharacters(in: .whitespaces).lowercased() == key
+        }
+    }
+
+    /// "Aisle 7 — Baking" when a store numbers its aisles, just the name when it
+    /// does not, and the number alone when that is all it has.
+    private static func label(for aisle: StoreAisle) -> String {
+        let number = aisle.number.trimmingCharacters(in: .whitespaces)
+        let name = aisle.name.trimmingCharacters(in: .whitespaces)
+
+        switch (number.isEmpty, name.isEmpty) {
+        case (true, true):   return "Unsorted"
+        case (true, false):  return name
+        case (false, true):  return Int(number) != nil ? "Aisle \(number)" : number
+        case (false, false): return Int(number) != nil ? "Aisle \(number) — \(name)" : "\(number) — \(name)"
+        }
+    }
+
+    /// `standard-frozen` → `Frozen`, by looking it up rather than guessing, so
+    /// the name matches what the section is actually called elsewhere.
+    private static func tidiedStandardId(_ id: String) -> String? {
+        guard id.lowercased().hasPrefix("standard-") else { return nil }
+
+        if let known = StoreService.standardSections.first(where: {
+            $0.id.lowercased() == id.lowercased()
+        }) {
+            return known.name
+        }
+
+        // An id in the standard shape that is not one of ours — a model made it
+        // up, or it predates a rename. Better as words than as a slug.
+        return id.dropFirst("standard-".count)
+            .split(separator: "-")
+            .map(\.capitalized)
+            .joined(separator: " ")
+    }
+}

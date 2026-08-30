@@ -11,6 +11,11 @@
 		AA0000000000000000000902 /* QuickListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000902 /* QuickListView.swift */; };
 		AA0000000000000000000901 /* QuickListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000901 /* QuickListStore.swift */; };
 		AA0000000000000000000903 /* NetworkStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000903 /* NetworkStatus.swift */; };
+		AA0000000000000000000904 /* Outbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000904 /* Outbox.swift */; };
+		AA0000000000000000000905 /* TripStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000905 /* TripStats.swift */; };
+		AA0000000000000000000906 /* ShareText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000906 /* ShareText.swift */; };
+		AA0000000000000000000907 /* TrackRecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000907 /* TrackRecordView.swift */; };
+		AA0000000000000000000908 /* AisleNaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000908 /* AisleNaming.swift */; };
 		36B866D86A21E55F7AF2ED72 /* StoreAisleManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */; };
 		61C577F31452E1D49F5F8E7E /* ShoppingCompletionStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */; };
 		6F86254645EFD5A78889AB51 /* ReadyToShopSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */; };
@@ -83,6 +88,9 @@
 		TT0000000000000000000140 /* ListPartitioningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000240 /* ListPartitioningTests.swift */; };
 		TT0000000000000000000141 /* SortStabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000241 /* SortStabilityTests.swift */; };
 		TT0000000000000000000142 /* LocalListStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000242 /* LocalListStoreTests.swift */; };
+		TT0000000000000000000143 /* TripLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000243 /* TripLogTests.swift */; };
+		TT0000000000000000000144 /* ShareTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000244 /* ShareTextTests.swift */; };
+		TT0000000000000000000145 /* AisleNamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000245 /* AisleNamingTests.swift */; };
 		TT0000000000000000000143 /* ShoppingStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000243 /* ShoppingStatusTests.swift */; };
 		TT0000000000000000000005 /* UserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000015 /* UserTests.swift */; };
 		TT0000000000000000000006 /* AuthErrorParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000016 /* AuthErrorParsingTests.swift */; };
@@ -103,6 +111,11 @@
 		BB0000000000000000000902 /* QuickListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickListView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000901 /* QuickListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickListStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000903 /* NetworkStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkStatus.swift; sourceTree = "<group>"; };
+		BB0000000000000000000904 /* Outbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Outbox.swift; sourceTree = "<group>"; };
+		BB0000000000000000000905 /* TripStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripStats.swift; sourceTree = "<group>"; };
+		BB0000000000000000000906 /* ShareText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareText.swift; sourceTree = "<group>"; };
+		BB0000000000000000000907 /* TrackRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRecordView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000908 /* AisleNaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleNaming.swift; sourceTree = "<group>"; };
 		15546147AB154BAB9998BE81 /* UserCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserCache.swift; sourceTree = "<group>"; };
 		1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShoppingCompletionStats.swift; sourceTree = "<group>"; };
 		40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreAisleManagementView.swift; sourceTree = "<group>"; };
@@ -172,6 +185,9 @@
 		TT0000000000000000000240 /* ListPartitioningTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListPartitioningTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000241 /* SortStabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortStabilityTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000242 /* LocalListStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalListStoreTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000243 /* TripLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripLogTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000244 /* ShareTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTextTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000245 /* AisleNamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleNamingTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000243 /* ShoppingStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingStatusTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000015 /* UserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000016 /* AuthErrorParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthErrorParsingTests.swift; sourceTree = "<group>"; };
@@ -271,6 +287,10 @@
 				BB0000000000000000000093 /* LocalListStore.swift */,
 				BB0000000000000000000901 /* QuickListStore.swift */,
 				BB0000000000000000000903 /* NetworkStatus.swift */,
+				BB0000000000000000000904 /* Outbox.swift */,
+				BB0000000000000000000905 /* TripStats.swift */,
+				BB0000000000000000000906 /* ShareText.swift */,
+				BB0000000000000000000908 /* AisleNaming.swift */,
 				BB0000000000000000000090 /* SpeechDictationService.swift */,
 				BB0000000000000000000091 /* ShopperReminderService.swift */,
 				BB0000000000000000000072 /* StoreService.swift */,
@@ -301,6 +321,7 @@
 			children = (
 				BB0000000000000000000050 /* RootView.swift */,
 				BB0000000000000000000902 /* QuickListView.swift */,
+				BB0000000000000000000907 /* TrackRecordView.swift */,
 				BB0000000000000000000002 /* ContentView.swift */,
 				BB0000000000000000000097 /* AppIdentity.swift */,
 				BB0000000000000000000030 /* AtStoreModeView.swift */,
@@ -364,6 +385,9 @@
 				TT0000000000000000000240 /* ListPartitioningTests.swift */,
 				TT0000000000000000000241 /* SortStabilityTests.swift */,
 				TT0000000000000000000242 /* LocalListStoreTests.swift */,
+				TT0000000000000000000243 /* TripLogTests.swift */,
+				TT0000000000000000000244 /* ShareTextTests.swift */,
+				TT0000000000000000000245 /* AisleNamingTests.swift */,
 				TT0000000000000000000243 /* ShoppingStatusTests.swift */,
 				TT0000000000000000000015 /* UserTests.swift */,
 			);
@@ -500,6 +524,11 @@
 				AA0000000000000000000093 /* LocalListStore.swift in Sources */,
 				AA0000000000000000000901 /* QuickListStore.swift in Sources */,
 				AA0000000000000000000903 /* NetworkStatus.swift in Sources */,
+				AA0000000000000000000904 /* Outbox.swift in Sources */,
+				AA0000000000000000000905 /* TripStats.swift in Sources */,
+				AA0000000000000000000906 /* ShareText.swift in Sources */,
+				AA0000000000000000000907 /* TrackRecordView.swift in Sources */,
+				AA0000000000000000000908 /* AisleNaming.swift in Sources */,
 				BCE700C7876941359C07CABF /* UserCache.swift in Sources */,
 				AA0000000000000000000021 /* DesignSystem.swift in Sources */,
 				AA0000000000000000000022 /* ShoppingListViewModel.swift in Sources */,
@@ -556,6 +585,9 @@
 				TT0000000000000000000140 /* ListPartitioningTests.swift in Sources */,
 				TT0000000000000000000141 /* SortStabilityTests.swift in Sources */,
 				TT0000000000000000000142 /* LocalListStoreTests.swift in Sources */,
+				TT0000000000000000000143 /* TripLogTests.swift in Sources */,
+				TT0000000000000000000144 /* ShareTextTests.swift in Sources */,
+				TT0000000000000000000145 /* AisleNamingTests.swift in Sources */,
 				TT0000000000000000000143 /* ShoppingStatusTests.swift in Sources */,
 				TT0000000000000000000005 /* UserTests.swift in Sources */,
 				TT0000000000000000000006 /* AuthErrorParsingTests.swift in Sources */,

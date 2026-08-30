@@ -270,6 +270,7 @@ struct BatchAisleMappingSheet: View {
         BatchMappingResultRow(
             item: item,
             result: result,
+            aisleLayout: store.aisleLayout,
             onLongPress: {
                 selectedItemResult = result
                 selectedItemForDetail = item
@@ -419,6 +420,9 @@ struct BatchAisleMappingSheet: View {
 private struct BatchMappingResultRow: View {
     let item: GroceryItem
     let result: AisleExtractionService.AisleInferenceResult
+    /// Needed to name the aisle. Without it the row printed the raw id, so the
+    /// answer to "where is this?" was "standard-household".
+    let aisleLayout: [StoreAisle]
     let onLongPress: () -> Void
 
     @State private var isPressed = false
@@ -437,8 +441,9 @@ private struct BatchMappingResultRow: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
 
-                Text(result.suggestedAisle)
+                Text(AisleNaming.displayName(for: result.suggestedAisle, in: aisleLayout))
                     .font(.system(size: 16, weight: .bold))
+                    .multilineTextAlignment(.trailing)
                     .foregroundColor(DesignSystem.Colors.dillGreen)
             }
 

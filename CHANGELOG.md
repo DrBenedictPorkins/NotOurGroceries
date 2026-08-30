@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Shopping
+- **Quick Trip** is now a scratch list that lives only on this phone — no store, no aisles, nothing shared. Type it, tick it, tap Done and it's gone
+- Your main list shows underneath it, collapsed. Tap any item to bring it along; the household list is untouched
+- Suggestions sit below that, so a Quick Trip can be filled without typing
+- **Share** button on both lists — plain text that survives Messages, WhatsApp and Mail, with what's already in your cart listed separately so nobody buys a second carton of milk
+- **Restore last trip** puts a finished list back the way it was. Matches what's already there, so restoring twice doesn't duplicate anything
+- The request/approve inbox is gone. Asking someone mid-shop belongs in a text message, not a queue they might never see
+
+### Your track record
+- New screen counting trips, items, time in the store, what you buy most, and where you shop
+- Kept **on this phone only** — nothing is sent anywhere, and each phone keeps its own
+- Starts empty. Nothing is backfilled, so it says so until you finish your first trip
+
+### Aisles
+- Aisle names now read as names. "standard-household" was the storage key, not a place in the shop
+- Standard departments went from 14 to 18: **Personal Care**, **Pharmacy & Health**, **Baby** and **Pet** split out of Household, so sleep aids no longer file next to the bin bags
+- Aisle inference reads the store's own aisle list and can no longer invent sections that don't exist
+- Mappings pointing at deleted aisles are pruned instead of quietly re-used
+- Scan Directory is hidden for stores marked as having no aisles — there's no board to photograph
+
+### No signal
+- Offline is a condition now, not a mode you have to choose. The app notices and carries on
+- Changes made without signal are queued and pushed when it returns, instead of silently reverting on the next refresh
+- A refresh will no longer overwrite work that hasn't been sent yet
+
+### Elsewhere
+- The app is **Got Dill?**
+
 ## [1.5.0] - 2026-08-27
 
 ### Shopping

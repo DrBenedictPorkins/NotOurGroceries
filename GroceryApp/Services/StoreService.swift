@@ -326,16 +326,28 @@ class StoreService: ObservableObject {
         var updatedStore = store
         var reorderedAisles: [StoreAisle] = []
 
-        for (index, aisleId) in newOrder.enumerated() {
-            if let aisle = store.aisleLayout.first(where: { $0.id == aisleId }) {
-                reorderedAisles.append(StoreAisle(
-                    id: aisle.id,
-                    number: aisle.number,
-                    name: aisle.name,
-                    displayOrder: index,
-                    description: aisle.description
-                ))
-            }
+        // Anything not named in `newOrder` keeps its place at the end rather than
+        // vanishing. This used to build the layout from `newOrder` alone, so an
+        // aisle the caller had not listed — one added by a scan that finished
+        // after the caller took its copy, say — was silently dropped from the
+        // store. Reordering must not be able to lose an aisle.
+        var placed = Set<String>()
+
+        for aisleId in newOrder {
+            guard let aisle = store.aisleLayout.first(where: { $0.id == aisleId }),
+                  !placed.contains(aisle.id) else { continue }
+            reorderedAisles.append(StoreAisle(
+                id: aisle.id, number: aisle.number, name: aisle.name,
+                displayOrder: reorderedAisles.count, description: aisle.description
+            ))
+            placed.insert(aisle.id)
+        }
+
+        for aisle in store.aisleLayout where !placed.contains(aisle.id) {
+            reorderedAisles.append(StoreAisle(
+                id: aisle.id, number: aisle.number, name: aisle.name,
+                displayOrder: reorderedAisles.count, description: aisle.description
+            ))
         }
 
         updatedStore.aisleLayout = reorderedAisles

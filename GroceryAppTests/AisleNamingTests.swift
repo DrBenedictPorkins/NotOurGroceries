@@ -131,6 +131,20 @@ final class AisleNamingTests: XCTestCase {
         XCTAssertEqual(AisleNaming.headerName(for: "standard-dairy", in: layout), "DAIRY & EGGS")
     }
 
+    func testAWordUsedAsAnAisleNumberIsNotCalledAnAisle() {
+        // Observed as "Aisle Dairy" in Aisle Management: the local copy of this
+        // logic prefixed "Aisle" onto any number, including one that is a word.
+        let layout = [aisle(id: "d", number: "Dairy", name: "")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "d", in: layout), "Dairy")
+    }
+
+    func testAWordNumberWithANameReadsAsBoth() {
+        let layout = [aisle(id: "d", number: "Back Wall", name: "Dairy")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "d", in: layout), "Back Wall — Dairy")
+    }
+
     // MARK: - The standard set
 
     func testStandardIdsAreUnique() {

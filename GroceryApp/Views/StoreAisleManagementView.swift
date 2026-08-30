@@ -205,6 +205,7 @@ struct StoreAisleManagementView: View {
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
             }
             .onMove(perform: moveAisles)
+            .onDelete(perform: deleteAisles)
         } header: {
             Text("AISLE ORDER")
                 .font(.system(size: 11, weight: .bold))
@@ -213,7 +214,7 @@ struct StoreAisleManagementView: View {
                 .textCase(nil)
                 .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 6, trailing: 20))
         } footer: {
-            Text("Drag to reorder shopping sequence")
+            Text("Drag to reorder shopping sequence · swipe to remove an aisle")
                 .font(.system(size: 12, weight: .regular))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 16, trailing: 20))
@@ -225,16 +226,57 @@ struct StoreAisleManagementView: View {
         var aisleIds = orderableAisles.map { $0.id }
         aisleIds.move(fromOffsets: source, toOffset: destination)
 
-        // Filter out "Unknown" since it's not a real aisle in the store layout
+        // "Unknown" is a bucket for unmapped items, not a row in the layout.
         let realAisleIds = aisleIds.filter { $0 != "Unknown" }
 
         Task {
             do {
-                _ = try await storeService.reorderAisles(in: store, newOrder: realAisleIds)
+                // `currentStore`, not the `store` prop — the prop is whatever was
+                // passed in when this screen opened and can be several scans out
+                // of date.
+                let updated = try await storeService.reorderAisles(in: currentStore, newOrder: realAisleIds)
+                // The result used to be discarded, so the view model kept the old
+                // order, the list re-rendered from it, and the drag snapped back.
+                // It looked as though reordering did not work; it worked and was
+                // then thrown away.
+                applyStoreUpdate(updated)
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             } catch {
                 await MainActor.run {
-                    viewModel.toastMessage = "Failed to reorder aisles: \(error.localizedDescription)"
+                    viewModel.toastMessage = "Couldn't save the new order: \(error.localizedDescription)"
+                    viewModel.toastType = .error
+                    viewModel.showToast = true
+                }
+            }
+        }
+    }
+
+    /// Put a freshly saved store back where every view reads it from.
+    private func applyStoreUpdate(_ updated: HouseholdStore) {
+        if let index = viewModel.householdStores.firstIndex(where: { $0.id == updated.id }) {
+            viewModel.householdStores[index] = updated
+        }
+    }
+
+    private func deleteAisles(at offsets: IndexSet) {
+        let doomed = offsets
+            .map { orderableAisles[$0] }
+            .filter { $0.id != "Unknown" }
+
+        Task {
+            for aisle in doomed {
+                do {
+                    let updated = try await storeService.removeAisle(from: currentStore, aisleId: aisle.id)
+                    applyStoreUpdate(updated)
+                    // Items mapped to it would otherwise point at an aisle that
+                    // no longer exists, which reads as a section header made of
+                    // a raw id and blocks inference from ever re-assigning them.
+                    try? await storeService.pruneOrphanedMappings(storeId: currentStore.id)
+                    viewModel.toastMessage = "Removed \(aisle.displayName)"
+                    viewModel.toastType = .success
+                    viewModel.showToast = true
+                } catch {
+                    viewModel.toastMessage = "Couldn't remove \(aisle.displayName): \(error.localizedDescription)"
                     viewModel.toastType = .error
                     viewModel.showToast = true
                 }
@@ -559,17 +601,10 @@ struct StoreAisleManagementView: View {
         .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 6, trailing: 20))
     }
 
+    /// The fifth copy of this in the codebase, and the one that produced "Aisle
+    /// Dairy" — it prefixed "Aisle" onto any number, including one that is a word.
     private func aisleDisplayName(_ aisle: StoreAisle) -> String {
-        if aisle.number.isEmpty && aisle.name.isEmpty {
-            return "Unknown"
-        }
-        if aisle.number.isEmpty {
-            return aisle.name
-        }
-        if aisle.name.isEmpty || aisle.number.lowercased() == aisle.name.lowercased() {
-            return "Aisle \(aisle.number)"
-        }
-        return "Aisle \(aisle.number) - \(aisle.name)"
+        AisleNaming.displayName(for: aisle.id, in: [aisle])
     }
 
     // MARK: - Actions

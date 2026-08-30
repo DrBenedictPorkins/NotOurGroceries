@@ -58,9 +58,14 @@ struct ShoppingListView: View {
                     .padding(.bottom, 8)
                 }
 
-                // Sort Options - show when list has items, or keep visible while undo is pending
-                if !viewModel.shoppingList.isEmpty || viewModel.undoSuggestionItem != nil {
-                    sortOptionsBar
+                // The undo pill lived in the sort bar, which is now inside the
+                // suggestions section — but undoing a move-to-suggestions is
+                // about the main list, so it stays up here on its own.
+                toastLine
+                    .animation(.easeInOut(duration: 0.25), value: viewModel.showToast)
+
+                if viewModel.undoSuggestionItem != nil {
+                    undoBar
                 }
 
                 // List content
@@ -184,6 +189,18 @@ struct ShoppingListView: View {
                                 .listRowBackground(suggestionsSectionBackground)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+
+                                // Sorting belongs to this list and only appears
+                                // with it — including when the main list above is
+                                // empty, which is exactly when you are most
+                                // likely to be hunting through two hundred
+                                // suggestions.
+                                if isCrossedOffExpanded {
+                                    sortOptionsBar
+                                        .listRowBackground(suggestionsSectionBackground)
+                                        .listRowSeparator(.hidden)
+                                        .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 6, trailing: 20))
+                                }
 
                                 if isCrossedOffExpanded {
                                     ForEach(viewModel.suggestions) { item in
@@ -356,6 +373,7 @@ struct ShoppingListView: View {
         .padding(.horizontal, 12)
         .padding(.top, 60)
         .padding(.bottom, 10)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.showToast)
         .onAppear(perform: runHintIfNeeded)
     }
 
@@ -632,43 +650,53 @@ struct ShoppingListView: View {
     // MARK: - Status Line (notifications / item count)
 
     private var statusLine: some View {
-        ZStack(alignment: .leading) {
-            // Reports only what the eye can't already see. Counting items you
-            // are looking at is noise; progress mid-trip is not.
-            Text(idleStatusText)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
-                .lineLimit(1)
-                .opacity(viewModel.showToast ? 0 : 1)
+        // Reports only what the eye can't already see. Counting items you are
+        // looking at is noise; progress mid-trip is not.
+        //
+        // Toasts used to share this line, inside the title button, squeezed
+        // beside At Store — so "Tomatoes is already on your list" arrived as
+        // "Tomatoes is alre…". They have their own full-width row now.
+        Text(idleStatusText)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(DesignSystem.Colors.textSecondary)
+            .lineLimit(1)
+    }
 
-            // Notification message - shown when toast active
-            if viewModel.showToast, !viewModel.toastMessage.isEmpty {
-                HStack(spacing: 6) {
-                    // Type icon for errors/warnings
-                    if viewModel.toastType != .success {
-                        Image(systemName: viewModel.toastType.icon)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(viewModel.toastType.accentColor)
-                    }
+    // MARK: - Toast
 
-                    if !viewModel.toastUserName.isEmpty {
-                        Text(viewModel.toastUserName)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(viewModel.toastType.accentColor)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                    Text(viewModel.toastMessage)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(toastMessageColor)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+    /// The whole width, and two lines if it needs them.
+    @ViewBuilder
+    private var toastLine: some View {
+        if viewModel.showToast, !viewModel.toastMessage.isEmpty {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if viewModel.toastType != .success {
+                    Image(systemName: viewModel.toastType.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(viewModel.toastType.accentColor)
                 }
-                .transition(.opacity)
+
+                if !viewModel.toastUserName.isEmpty {
+                    Text(viewModel.toastUserName)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(viewModel.toastType.accentColor)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+
+                Text(viewModel.toastMessage)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(toastMessageColor)
+                    // Two lines rather than one, because the messages that get
+                    // cut off are the ones naming an item — exactly the part
+                    // worth reading.
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
             }
-        }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.showToast)
-        .onChange(of: viewModel.showToast) { oldValue, newValue in
-            print("STATUS LINE: showToast changed from \(oldValue) to \(newValue), message: '\(viewModel.toastMessage)'")
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -691,11 +719,14 @@ struct ShoppingListView: View {
         DesignSystem.Colors.neonAmber.opacity(0.03)
     }
 
-    // MARK: - Sort Options Bar
+    // MARK: - Undo pill
 
-    private var sortOptionsBar: some View {
-        HStack(spacing: 8) {
-            if let undoItem = viewModel.undoSuggestionItem {
+    /// Undoing a move-to-suggestions is about the main list, so it sits above it
+    /// rather than travelling with the sort controls into the suggestions section.
+    @ViewBuilder
+    private var undoBar: some View {
+        if let undoItem = viewModel.undoSuggestionItem {
+            HStack(spacing: 8) {
                 Spacer()
                 Button {
                     Task { await viewModel.undoMoveToSuggestion() }
@@ -719,7 +750,18 @@ struct ShoppingListView: View {
                 }
                 .buttonStyle(.plain)
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            } else {
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Sort Options Bar
+
+    private var sortOptionsBar: some View {
+        HStack(spacing: 8) {
+
             // Recent button
             sortButton(for: .recentFirst)
 
@@ -758,11 +800,8 @@ struct ShoppingListView: View {
             .buttonStyle(.plain)
 
             Spacer()
-            } // end else (sort buttons)
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 4)
-        .animation(.easeInOut(duration: 0.2), value: viewModel.undoSuggestionItem?.id)
+        .padding(.bottom, 2)
     }
 
     private var isAlphabeticalSort: Bool {

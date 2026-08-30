@@ -286,6 +286,9 @@ export const handler: Handler = async (event) => {
       Item: marshall({
         id: newId,
         name: householdName,
+        // The field the auth rule reads. Same value as the id — see the comment
+        // on the model for why it cannot just be the id.
+        groupName: newId,
         // Taken from the caller's identity, never from the payload.
         ownerId: callerId,
         inviteCode,

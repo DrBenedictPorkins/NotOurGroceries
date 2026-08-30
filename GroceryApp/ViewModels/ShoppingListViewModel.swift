@@ -77,18 +77,63 @@ class ShoppingListViewModel: ObservableObject {
     // MARK: - Computed Properties for Filtered Views
 
     /// Items on the shopping list (active items to be picked up)
+    /// Alphabetical, always, and not configurable.
+    ///
+    /// The question you ask this list twenty times a day is "is milk already on
+    /// here?", and alphabetical answers it at a glance while recency makes you
+    /// read every row. That beats the argument for keeping insertion order,
+    /// which was that recency tells you what was just added — true, but it is
+    /// answered better by the toast when it happens, and the ordering cost is
+    /// paid on every single lookup.
+    ///
+    /// Fixed rather than a preference because the value is predictability: a
+    /// list whose order you have to think about is one you have to read.
+    /// Suggestions keep their control, where hunting through hundreds of rows is
+    /// the whole job. And while shopping, At Store overrides all of this with
+    /// aisle order anyway.
     var shoppingList: [GroceryItem] {
-        items.filter { $0.status == .active }
+        items.filter { $0.status == .active }.sorted(by: Self.alphabetical)
+    }
+
+    /// Ties broken on id: two items can share a name, and `addedAt` has only
+    /// one-second precision — without a tiebreak they follow the backend's
+    /// unordered scan and reshuffle on every refresh.
+    static func alphabetical(_ a: GroceryItem, _ b: GroceryItem) -> Bool {
+        let c = a.name.localizedCaseInsensitiveCompare(b.name)
+        return c == .orderedSame ? a.id < b.id : c == .orderedAscending
+    }
+
+    static func newestFirst(_ a: GroceryItem, _ b: GroceryItem) -> Bool {
+        if a.addedAt != b.addedAt { return a.addedAt > b.addedAt }
+        return a.id < b.id
     }
 
     /// Items already in the cart during the current shopping trip
+    /// Same order as the list it came from, so an item does not jump position
+    /// when you tick it off.
     var inCart: [GroceryItem] {
-        items.filter { $0.status == .inCart }
+        items.filter { $0.status == .inCart }.sorted(by: Self.alphabetical)
     }
 
     /// Suggested items from previous shopping trips
+    /// Sorted by whatever the user picked, because this is the list with two
+    /// hundred rows in it.
     var suggestions: [GroceryItem] {
-        items.filter { $0.status == .suggestion }
+        let all = items.filter { $0.status == .suggestion }
+        switch currentSort {
+        case .recentFirst:
+            return all.sorted(by: Self.newestFirst)
+        case .aToZ:
+            return all.sorted {
+                let c = $0.name.localizedCaseInsensitiveCompare($1.name)
+                return c == .orderedSame ? $0.id < $1.id : c == .orderedAscending
+            }
+        case .zToA:
+            return all.sorted {
+                let c = $0.name.localizedCaseInsensitiveCompare($1.name)
+                return c == .orderedSame ? $0.id < $1.id : c == .orderedDescending
+            }
+        }
     }
 
     // MARK: - Ad-Hoc Trip
@@ -1504,8 +1549,18 @@ class ShoppingListViewModel: ObservableObject {
         applySorting(animate: true)  // User action - animate the change
     }
 
-    /// Apply current sort order. Only animates if explicitly requested (user changed sort).
+    /// Kept so the many call sites after a fetch still compile and still animate,
+    /// but it no longer reorders `items` — `shoppingList`, `inCart` and
+    /// `suggestions` each impose their own order now, so reordering the backing
+    /// array did nothing except fight them.
     func applySorting(animate: Bool = false) {
+        guard animate else { return }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            objectWillChange.send()
+        }
+    }
+
+    private func legacyApplySorting(animate: Bool = false) {
         // Compute what the sorted order would be
         // addedAt has only 1-second precision (ISO8601DateFormatter default), so items
         // added within the same second tie. Break ties on id so order stays identical

@@ -353,6 +353,9 @@ struct QuickListView: View {
     /// tappable now, so that item is one tap away where you actually saw it.
     @ViewBuilder
     private var suggestionsStrip: some View {
+        // `viewModel.suggestions` already applies the chosen sort, so the strip
+        // and the main list's suggestions agree without a second copy of the
+        // ordering logic.
         let available = viewModel.suggestions.filter { !alreadyTaken($0.name) }
 
         if !available.isEmpty {
@@ -363,9 +366,15 @@ struct QuickListView: View {
                     Text("SUGGESTIONS")
                         .font(.system(size: 11, weight: .bold))
                         .kerning(0.8)
-                    Spacer()
                     Text("\(available.count)")
                         .font(.system(size: 11, weight: .semibold))
+
+                    Spacer()
+
+                    // Same sort as the main list's suggestions, and the same
+                    // reason for existing: a few hundred rows you are scanning,
+                    // not reading.
+                    sortToggle
                 }
                 .foregroundColor(DesignSystem.Colors.neonAmber)
                 .padding(.horizontal, 20)
@@ -413,6 +422,34 @@ struct QuickListView: View {
                     .frame(height: 1)
             }
         }
+    }
+
+    /// Recent / A-Z / Z-A, cycled from one control because a segmented picker
+    /// would not fit beside the header and this is a rarely-touched preference.
+    private var sortToggle: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            switch viewModel.currentSort {
+            case .recentFirst: viewModel.setSort(.aToZ)
+            case .aToZ:        viewModel.setSort(.zToA)
+            case .zToA:        viewModel.setSort(.recentFirst)
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: viewModel.currentSort.icon)
+                    .font(.system(size: 10, weight: .bold))
+                Text(viewModel.currentSort.rawValue)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(DesignSystem.Colors.neonAmber)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(DesignSystem.Colors.neonAmber.opacity(0.12))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// Already on the quick trip. Matched on the name because that is all this

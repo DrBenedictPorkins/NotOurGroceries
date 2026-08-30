@@ -148,6 +148,15 @@ const schema = a.schema({
       /// because households created before this existed have no owner, and a
       /// household without one simply cannot remove anybody.
       ownerId: a.id(),
+      /// The Cognito group that guards this row, which is the household's own id
+      /// repeated into an ordinary field.
+      ///
+      /// `groupDefinedIn('id')` reads correctly but breaks subscriptions —
+      /// observed on device as "Household subscription fatal error" while the
+      /// identical rule on GroceryItem's `householdId` connected fine. AppSync
+      /// cannot build a subscription auth filter from the primary key. So the
+      /// group name lives in a field like everywhere else.
+      groupName: a.string(),
       inviteCode: a.string().required(),
       inviteCodeExpiresAt: a.datetime().required(),
       activeStoreId: a.id(), // Legacy - kept for backwards compatibility
@@ -165,11 +174,9 @@ const schema = a.schema({
       shoppingStartedAt: a.datetime(),  // When the current session began — drives abandoned-session detection on other members' devices
     })
     .authorization((allow) => [
-      // The group is named after the household id, so the row authorises
-      // against itself. Creation cannot go through this rule — nobody is in the
-      // group before the household exists — which is why householdMembership
-      // creates it with IAM instead.
-      allow.groupDefinedIn('id'),
+      // Creation cannot go through this rule — nobody is in the group before the
+      // household exists — which is why householdMembership creates it with IAM.
+      allow.groupDefinedIn('groupName'),
     ])
     .secondaryIndexes((index) => [
       index('inviteCode'),

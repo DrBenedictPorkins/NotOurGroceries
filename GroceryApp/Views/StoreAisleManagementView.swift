@@ -749,11 +749,10 @@ private struct MappingRow: View {
         return "Unknown Product"
     }
 
+    /// A fourth copy of this logic used to live here, and its fallback returned
+    /// the raw id — so an unmatched mapping rendered as "standard-bakery".
     private var aisleName: String {
-        if let aisle = store.aisleLayout.first(where: { $0.id == mapping.effectiveAisle }) {
-            return aisle.number.isEmpty ? aisle.name : "Aisle \(aisle.number)"
-        }
-        return mapping.effectiveAisle
+        AisleNaming.displayName(for: mapping.effectiveAisle, in: store.aisleLayout)
     }
 
     private var confidencePercent: Int {

@@ -628,8 +628,15 @@ struct ItemDetailSheet: View {
     }
 
     /// The current aisle as display text
+    /// What the field shows — and therefore what has to be typeable back in.
+    ///
+    /// It used to show `currentAisleString`, which is the raw storage id, so the
+    /// field read "standard-bakery". Resolving it means the lookup on save has to
+    /// accept the resolved form too, or typing back what you were shown creates a
+    /// second aisle called "Aisle 15".
     private var currentAisleText: String {
-        currentAisleString ?? ""
+        guard let raw = currentAisleString, !raw.isEmpty else { return "" }
+        return AisleNaming.displayName(for: raw, in: currentStore?.aisleLayout ?? [])
     }
 
     private func saveAisle() {
@@ -655,12 +662,18 @@ struct ItemDetailSheet: View {
             return
         }
 
-        // Check if aisle already exists (case-insensitive match on number or name)
+        // Match on anything the user could reasonably have typed: the number,
+        // the name, this screen's own rendering, or the header form they were
+        // just shown. That last one matters — the field is prefilled with the
+        // resolved name now, so "Aisle 15" has to find aisle 15 rather than
+        // create a new aisle called "Aisle 15".
         let lowerName = aisleName.lowercased()
         var targetAisle = store.aisleLayout.first { aisle in
             aisle.number.lowercased() == lowerName ||
             aisle.name.lowercased() == lowerName ||
-            aisleDisplayName(aisle).lowercased() == lowerName
+            aisle.id.lowercased() == lowerName ||
+            aisleDisplayName(aisle).lowercased() == lowerName ||
+            AisleNaming.displayName(for: aisle.id, in: [aisle]).lowercased() == lowerName
         }
 
         // If aisle doesn't exist, create it

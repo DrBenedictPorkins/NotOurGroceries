@@ -22,7 +22,7 @@ class StoreService: ObservableObject {
     ///
     /// Three bands, and the gaps between them are the point:
     ///
-    ///   -100…-1   perimeter, named — produce, bakery, deli, meat, fish, dairy
+    ///   -100…-1   perimeter — produce, bakery, deli, fish, meat, dairy
     ///    0…n      the store's own numbered aisles, from a directory scan
     ///    900+     centre-store named, then frozen last
     ///
@@ -42,12 +42,15 @@ class StoreService: ObservableObject {
     /// All of this is only a default. Aisle Management lets a store's order be
     /// dragged into whatever shape the real building has.
     static let standardSections: [StoreAisle] = [
-        // Band 1 — the perimeter, in the order most shops present it.
+        // Band 1 — the perimeter, in the order he has actually walked it: in past
+        // the produce, bakery, then the deli and fish counters, the butcher, and
+        // round to the chilled wall. Fish before meat because the counters
+        // usually sit that way round.
         StoreAisle(id: "standard-produce",  number: "", name: "Produce",        displayOrder: -100, description: "Fresh fruits, vegetables, leafy greens, and fresh herbs"),
         StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: -95,  description: "Fresh bread, rolls, muffins, cakes, pastries, and baked goods"),
         StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: -90,  description: "Sliced meats, deli cheese, prepared foods, and cold cuts"),
-        StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: -85,  description: "Fresh and packaged beef, chicken, pork, turkey, lamb, and sausages"),
-        StoreAisle(id: "standard-seafood",  number: "", name: "Seafood",        displayOrder: -80,  description: "Fresh and packaged fish, shrimp, shellfish, and seafood"),
+        StoreAisle(id: "standard-seafood",  number: "", name: "Seafood",        displayOrder: -85,  description: "Fresh and packaged fish, shrimp, shellfish, and seafood"),
+        StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: -80,  description: "Fresh and packaged beef, chicken, pork, turkey, lamb, and sausages"),
         StoreAisle(id: "standard-dairy",    number: "", name: "Dairy & Eggs",   displayOrder: -75,  description: "Milk, cream, yogurt, butter, cheese, eggs, and dairy alternatives"),
 
         // Band 3 — centre of the store. Before these existed the only sections

@@ -114,7 +114,18 @@ userTable.grantReadData(regenerateInviteCodeLambda);
 addEnvVars(joinHouseholdLambda, {
   HOUSEHOLD_TABLE_NAME: householdTable.tableName,
   USER_TABLE_NAME: userTable.tableName,
+  USER_POOL_ID: backend.auth.resources.userPool.userPoolId,
 });
+// Joining has to grant the Cognito group claim as well as set householdId —
+// dynamic group auth is what actually lets the joiner read the household.
+joinHouseholdLambda.addToRolePolicy(new PolicyStatement({
+  actions: [
+    'cognito-idp:CreateGroup',
+    'cognito-idp:AdminAddUserToGroup',
+    'cognito-idp:AdminRemoveUserFromGroup',
+  ],
+  resources: [backend.auth.resources.userPool.userPoolArn],
+}));
 householdTable.grantReadData(joinHouseholdLambda);
 userTable.grantReadWriteData(joinHouseholdLambda);
 // Grant permission to query GSI indexes on Household table
@@ -133,7 +144,20 @@ addEnvVars(householdMembershipLambda, {
   GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
   COMMIT_TABLE_NAME: commitTable.tableName,
   HOUSEHOLD_STORE_TABLE_NAME: backend.data.resources.tables['HouseholdStore'].tableName,
+  USER_POOL_ID: backend.auth.resources.userPool.userPoolId,
 });
+// Creating a household creates its group; removing or leaving revokes the claim,
+// and emptying one deletes the group outright. Without the revoke, somebody
+// removed from a household keeps read access until their token expires.
+householdMembershipLambda.addToRolePolicy(new PolicyStatement({
+  actions: [
+    'cognito-idp:CreateGroup',
+    'cognito-idp:DeleteGroup',
+    'cognito-idp:AdminAddUserToGroup',
+    'cognito-idp:AdminRemoveUserFromGroup',
+  ],
+  resources: [backend.auth.resources.userPool.userPoolArn],
+}));
 householdTable.grantReadWriteData(householdMembershipLambda);
 userTable.grantReadWriteData(householdMembershipLambda);
 groceryItemTable.grantReadWriteData(householdMembershipLambda);
@@ -143,6 +167,7 @@ backend.data.resources.tables['HouseholdStore'].grantReadWriteData(householdMemb
 householdMembershipLambda.addToRolePolicy(new PolicyStatement({
   actions: ['dynamodb:Query'],
   resources: [
+    `${householdTable.tableArn}/index/*`,
     `${userTable.tableArn}/index/*`,
     `${groceryItemTable.tableArn}/index/*`,
     `${commitTable.tableArn}/index/*`,

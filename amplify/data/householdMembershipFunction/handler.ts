@@ -5,11 +5,105 @@ import {
   QueryCommand,
   DeleteItemCommand,
   BatchWriteItemCommand,
+  PutItemCommand,
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import {
+  CognitoIdentityProviderClient,
+  AdminAddUserToGroupCommand,
+  AdminRemoveUserFromGroupCommand,
+  CreateGroupCommand,
+  DeleteGroupCommand,
+} from '@aws-sdk/client-cognito-identity-provider';
+import { randomInt, randomUUID } from 'node:crypto';
 import type { Schema } from '../resource';
 
 const client = new DynamoDBClient({});
+const cognito = new CognitoIdentityProviderClient({});
+
+const USER_POOL_ID = process.env.USER_POOL_ID!;
+
+/**
+ * Membership is enforced by AppSync through a Cognito group named after the
+ * household, so detaching somebody means removing that claim as well as
+ * clearing the column. Leave the group behind and they keep read access to
+ * every row until their token expires — the row still says householdId X and
+ * their token still says they are in group X.
+ *
+ * Best effort: a failure here is logged, not thrown. The DynamoDB change is
+ * what the app reads, and a stale group without a matching householdId grants
+ * nothing on its own.
+ */
+async function removeFromHouseholdGroup(userId: string, householdId: string): Promise<void> {
+  try {
+    await cognito.send(new AdminRemoveUserFromGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: userId,
+      GroupName: householdId,
+    }));
+  } catch (error) {
+    console.error(`Could not remove ${userId} from group ${householdId}:`, error);
+  }
+}
+
+/**
+ * Six characters from a 32-letter alphabet with I, O, 0 and 1 left out, because
+ * these get read aloud and typed by hand.
+ *
+ * `randomInt` rather than `Math.random()` — the old regenerate path used
+ * `Math.random()`, which is predictable, for a string whose only job is to keep
+ * strangers out of somebody's household.
+ */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+async function generateUniqueInviteCode(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
+
+    // 32^6 is about a billion, so a collision is unlikely — but nothing checked
+    // before, and a duplicate silently sends joiners to whichever row DynamoDB
+    // returns first.
+    const existing = await client.send(new QueryCommand({
+      TableName: HOUSEHOLD_TABLE_NAME,
+      IndexName: 'householdsByInviteCode',
+      KeyConditionExpression: 'inviteCode = :code',
+      ExpressionAttributeValues: marshall({ ':code': code }),
+      Select: 'COUNT',
+    }));
+    if (!existing.Count) return code;
+    console.warn(`Invite code collision on ${code}, retrying`);
+  }
+  throw new Error('Could not generate a unique invite code');
+}
+
+async function addToHouseholdGroup(userId: string, householdId: string): Promise<void> {
+  try {
+    await cognito.send(new CreateGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      GroupName: householdId,
+      Description: `Members of household ${householdId}`,
+    }));
+  } catch (error) {
+    if ((error as { name?: string }).name !== 'GroupExistsException') throw error;
+  }
+
+  await cognito.send(new AdminAddUserToGroupCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: userId,
+    GroupName: householdId,
+  }));
+}
+
+async function deleteHouseholdGroup(householdId: string): Promise<void> {
+  try {
+    await cognito.send(new DeleteGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      GroupName: householdId,
+    }));
+  } catch (error) {
+    console.error(`Could not delete group ${householdId}:`, error);
+  }
+}
 
 const HOUSEHOLD_TABLE_NAME = process.env.HOUSEHOLD_TABLE_NAME!;
 const USER_TABLE_NAME = process.env.USER_TABLE_NAME!;
@@ -28,9 +122,17 @@ type Handler = Schema['manageHouseholdMembership']['functionHandler'];
  * this. It is also where the owner check has to live: an owner check written in
  * SwiftUI is decoration while `Household` is `allow.authenticated()`.
  *
- * Two actions:
+ * Three actions:
+ *   create — make a household and put the caller in it as owner
  *   remove — the owner removes somebody else
  *   leave  — anybody removes themselves, owner included
+ *
+ * Creation is here rather than a plain `createHousehold` model mutation because
+ * three things about a new household must not be client-supplied: the owner (it
+ * is whoever is calling, not whoever the payload names), the invite code (six
+ * characters that let anyone in — generated with a CSPRNG and checked for
+ * collision), and the Cognito group without which the creator cannot read a
+ * single row of what they just made.
  *
  * Leaving empties a household when the last member goes, and an empty household
  * is deleted along with its items, history and stores. Households are cheap to
@@ -148,7 +250,7 @@ async function deleteHouseholdData(householdId: string): Promise<void> {
 }
 
 export const handler: Handler = async (event) => {
-  const { action, memberId } = event.arguments;
+  const { action, memberId, name } = event.arguments;
 
   const identity = (event as typeof event & {
     identity?: { sub?: string; claims?: Record<string, unknown> };
@@ -157,6 +259,58 @@ export const handler: Handler = async (event) => {
 
   if (!callerId) {
     throw new Error('User identity not found');
+  }
+
+  if (action === 'create') {
+    const householdName = (name ?? '').trim();
+    if (!householdName) {
+      throw new Error('A household needs a name');
+    }
+
+    const existing = await getUserHouseholdId(callerId);
+    if (existing) {
+      throw new Error('You are already in a household. Leave it first.');
+    }
+
+    const newId = randomUUID();
+    const inviteCode = await generateUniqueInviteCode();
+    const now = new Date();
+    const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    // Group first. A household the creator cannot read is worse than no
+    // household — and if this throws, nothing has been written yet.
+    await addToHouseholdGroup(callerId, newId);
+
+    await client.send(new PutItemCommand({
+      TableName: HOUSEHOLD_TABLE_NAME,
+      Item: marshall({
+        id: newId,
+        name: householdName,
+        // Taken from the caller's identity, never from the payload.
+        ownerId: callerId,
+        inviteCode,
+        inviteCodeExpiresAt: expires.toISOString(),
+        sequenceNumber: 0,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        __typename: 'Household',
+      }),
+    }));
+
+    await client.send(new UpdateItemCommand({
+      TableName: USER_TABLE_NAME,
+      Key: marshall({ id: callerId }),
+      UpdateExpression: 'SET householdId = :hid, updatedAt = :now',
+      ExpressionAttributeValues: marshall({ ':hid': newId, ':now': now.toISOString() }),
+    }));
+
+    console.log(`User ${callerId} created household ${newId}`);
+    return {
+      householdId: newId,
+      householdDeleted: false,
+      remainingMembers: 1,
+      inviteCode,
+    };
   }
 
   const householdId = await getUserHouseholdId(callerId);
@@ -186,6 +340,7 @@ export const handler: Handler = async (event) => {
     }
 
     await detachUser(memberId);
+    await removeFromHouseholdGroup(memberId, householdId);
     console.log(`Owner ${callerId} removed ${memberId} from household ${householdId}`);
 
     return { householdId, householdDeleted: false, remainingMembers: await countMembers(householdId) };
@@ -193,10 +348,12 @@ export const handler: Handler = async (event) => {
 
   if (action === 'leave') {
     await detachUser(callerId);
+    await removeFromHouseholdGroup(callerId, householdId);
 
     const remaining = await countMembers(householdId);
     if (remaining === 0) {
       await deleteHouseholdData(householdId);
+      await deleteHouseholdGroup(householdId);
       console.log(`Household ${householdId} emptied and deleted`);
       return { householdId, householdDeleted: true, remainingMembers: 0 };
     }

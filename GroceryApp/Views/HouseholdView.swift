@@ -427,9 +427,11 @@ struct HouseholdView: View {
 
         Task {
             do {
-                let householdId = try await amplifyService.createHousehold(name: householdName)
-                successMessage = "Household created! ID: \(householdId.prefix(8))..."
+                let result = try await amplifyService.createHouseholdRemotely(name: householdName)
+                successMessage = result.inviteCode.map { "Household created — invite code \($0)" }
+                    ?? "Household created"
                 householdName = ""
+                await loadHouseholdDetails()
             } catch {
                 errorMessage = error.localizedDescription
             }

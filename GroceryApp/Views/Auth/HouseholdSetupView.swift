@@ -238,8 +238,10 @@ struct HouseholdSetupView: View {
                     return
                 }
 
-                // Create the household
-                _ = try await amplifyService.createHousehold(name: householdName)
+                // Goes through the Lambda: it owns the invite code, the owner,
+                // and the Cognito group without which the creator cannot read
+                // the household they just made.
+                _ = try await amplifyService.createHouseholdRemotely(name: householdName)
                 // RootView will automatically navigate to ContentView when householdId is set
             } catch {
                 errorMessage = error.localizedDescription

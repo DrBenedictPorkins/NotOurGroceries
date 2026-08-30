@@ -1,8 +1,66 @@
 import { DynamoDBClient, QueryCommand, UpdateItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import {
+  CognitoIdentityProviderClient,
+  CreateGroupCommand,
+  AdminAddUserToGroupCommand,
+  AdminRemoveUserFromGroupCommand,
+} from '@aws-sdk/client-cognito-identity-provider';
 import type { Schema } from '../resource';
 
 const client = new DynamoDBClient({});
+const cognito = new CognitoIdentityProviderClient({});
+
+const USER_POOL_ID = process.env.USER_POOL_ID!;
+
+/**
+ * Put the joiner in the household's Cognito group.
+ *
+ * AppSync authorizes every household-scoped row with
+ * `allow.groupDefinedIn('householdId')`, which compares the row's householdId
+ * against the caller's `cognito:groups` claim. Updating the User row alone would
+ * move somebody into a household they cannot read a single record of.
+ *
+ * This one DOES throw. A join that silently grants no access is worse than a
+ * join that fails and can be retried.
+ *
+ * The claim only appears in a freshly issued token, so the client must refresh
+ * its session afterwards — see AmplifyService.joinHouseholdWithCode.
+ */
+async function addToHouseholdGroup(userId: string, householdId: string): Promise<void> {
+  // Idempotent — the group usually exists already, and re-creating it is fine.
+  try {
+    await cognito.send(new CreateGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      GroupName: householdId,
+      Description: `Members of household ${householdId}`,
+    }));
+  } catch (error) {
+    const name = (error as { name?: string }).name;
+    if (name !== 'GroupExistsException') {
+      console.error(`Could not create group ${householdId}:`, error);
+    }
+  }
+
+  await cognito.send(new AdminAddUserToGroupCommand({
+    UserPoolId: USER_POOL_ID,
+    Username: userId,
+    GroupName: householdId,
+  }));
+}
+
+/** Drop the claim for a household they are leaving behind. */
+async function removeFromHouseholdGroup(userId: string, householdId: string): Promise<void> {
+  try {
+    await cognito.send(new AdminRemoveUserFromGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: userId,
+      GroupName: householdId,
+    }));
+  } catch (error) {
+    console.error(`Could not remove ${userId} from group ${householdId}:`, error);
+  }
+}
 
 const HOUSEHOLD_TABLE_NAME = process.env.HOUSEHOLD_TABLE_NAME!;
 const USER_TABLE_NAME = process.env.USER_TABLE_NAME!;
@@ -110,8 +168,16 @@ export const handler: Handler = async (event) => {
       throw new Error('You are already a member of this household');
     }
 
-    // Update user's household
+    // Grant the claim first. If this fails the join throws and nothing has
+    // changed, which is recoverable; the reverse order would leave somebody
+    // pointed at a household they cannot read.
+    await addToHouseholdGroup(userId, household.id);
+
     await updateUserHousehold(userId, household.id);
+
+    if (previousHouseholdId) {
+      await removeFromHouseholdGroup(userId, previousHouseholdId);
+    }
 
     console.log(`User ${userId} joined household ${household.id}`);
 

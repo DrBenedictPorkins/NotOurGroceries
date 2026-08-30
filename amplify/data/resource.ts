@@ -292,6 +292,11 @@ const schema = a.schema({
   // ========================================
   ProductAisleMapping: a
     .model({
+      /// Denormalised from the store so this row can be authorized on its own.
+      /// Dynamic group auth reads a field on the record itself; it cannot follow
+      /// `storeId` to HouseholdStore to find out whose it is. Optional so rows
+      /// written before this decode, and backfilled for the ones that exist.
+      householdId: a.id(),
       storeId: a.id().required(),
       store: a.belongsTo('HouseholdStore', 'storeId'),
       productId: a.id(),
@@ -381,6 +386,9 @@ const schema = a.schema({
   // ========================================
   AisleExtractionJob: a
     .model({
+      /// Same reason as ProductAisleMapping — authorization needs the owner on
+      /// the row, not one hop away.
+      householdId: a.id(),
       storeId: a.id().required(),
       imageKeys: a.string().array().required(),
 
@@ -459,13 +467,15 @@ const schema = a.schema({
   manageHouseholdMembership: a
     .mutation()
     .arguments({
-      action: a.string().required(),   // "remove" | "leave"
+      action: a.string().required(),   // "create" | "remove" | "leave"
       memberId: a.id(),                // required for "remove"
+      name: a.string(),                // required for "create"
     })
     .returns(a.customType({
       householdId: a.id().required(),
       householdDeleted: a.boolean().required(),
       remainingMembers: a.integer().required(),
+      inviteCode: a.string(),          // returned by "create"
     }))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(householdMembershipFunction)),

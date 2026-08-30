@@ -60,9 +60,39 @@ class AmplifyService: ObservableObject {
 
     // MARK: - Authentication
 
+    /// What the token says this user may reach.
+    ///
+    /// Worth logging because a missing group is indistinguishable from a
+    /// server problem at the call site: every query simply returns denied.
+    private func logGroupClaims(_ session: AuthSession) {
+        guard let provider = session as? AuthCognitoTokensProvider,
+              let tokens = try? provider.getCognitoTokens().get() else { return }
+
+        // Middle segment of the JWT, base64url, padded back to a multiple of 4.
+        let parts = tokens.idToken.split(separator: ".")
+        guard parts.count > 1 else { return }
+        var payload = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        let groups = json["cognito:groups"] as? [String] ?? []
+        print("[AUTH] groups: \(groups.isEmpty ? "none" : groups.joined(separator: ", "))")
+    }
+
     private func checkAuthSession() async {
         do {
-            let session = try await Amplify.Auth.fetchAuthSession()
+            // Force-refreshed on purpose. Household membership is a Cognito group
+            // claim, and a claim only exists in a token minted after it was
+            // granted — a cached token from before someone joined, was removed,
+            // or was added during a migration authorises the wrong thing. The
+            // failure is silent and confusing: sign-in works, every query comes
+            // back denied, and it fixes itself an hour later when the token
+            // happens to expire. One refresh at launch removes that whole class.
+            let session = try await Amplify.Auth.fetchAuthSession(options: .forceRefresh())
 
             if session.isSignedIn {
                 // Verify tokens are still valid by attempting to get credentials
@@ -79,6 +109,7 @@ class AmplifyService: ObservableObject {
 
                 isAuthenticated = true
                 currentUser = try await Amplify.Auth.getCurrentUser()
+                logGroupClaims(session)
                 await fetchOrCreateUserProfile()
             } else {
                 isAuthenticated = false
@@ -459,6 +490,11 @@ class AmplifyService: ObservableObject {
         }
     }
 
+    /// Superseded by `createHouseholdRemotely`, which is the only path the app
+    /// uses now. Kept because the invite-code generator below is still called
+    /// from elsewhere; the mutation itself writes no ownerId and creates no
+    /// Cognito group, so a household made this way is unreadable by its creator.
+    @available(*, deprecated, message: "Use createHouseholdRemotely — this creates no group and no owner")
     func createHousehold(name: String) async throws -> String {
         let inviteCode = generateInviteCode()
         let expiresAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(24 * 60 * 60))
@@ -957,6 +993,9 @@ class AmplifyService: ObservableObject {
             // Try direct object access first (custom type returns directly)
             if case .object(let result) = json,
                let parsed = parseResult(result) {
+                // The Lambda just granted the group claim; the token in memory
+                // was issued before it, so refresh before anything queries.
+                await refreshSessionForNewClaims()
                 self.currentHouseholdId = parsed.householdId
                 NotificationCenter.default.post(name: .householdChanged, object: nil)
                 return parsed
@@ -966,6 +1005,7 @@ class AmplifyService: ObservableObject {
             if case .object(let root) = json,
                case .object(let result) = root["joinHousehold"],
                let parsed = parseResult(result) {
+                await refreshSessionForNewClaims()
                 self.currentHouseholdId = parsed.householdId
                 NotificationCenter.default.post(name: .householdChanged, object: nil)
                 return parsed
@@ -979,8 +1019,22 @@ class AmplifyService: ObservableObject {
 
     /// What came back from a membership change.
     struct MembershipResult {
+        let householdId: String
         let householdDeleted: Bool
         let remainingMembers: Int
+        let inviteCode: String?
+    }
+
+    /// Membership is a Cognito group claim, and a claim only exists in a token
+    /// that was issued after it was granted. The session in memory predates the
+    /// change, so without this the user is in the household and cannot read a
+    /// single row of it until the token happens to expire.
+    private func refreshSessionForNewClaims() async {
+        do {
+            _ = try await Amplify.Auth.fetchAuthSession(options: .forceRefresh())
+        } catch {
+            print("Could not refresh session after membership change: \(error)")
+        }
     }
 
     /// Remove somebody else. Owner only, enforced in the Lambda.
@@ -1000,19 +1054,36 @@ class AmplifyService: ObservableObject {
         return result
     }
 
-    private func manageMembership(action: String, memberId: String?) async throws -> MembershipResult {
+    /// Create a household with the caller as owner.
+    ///
+    /// Server-side because three things must not come from the client: the
+    /// owner, the invite code, and the Cognito group the creator needs in order
+    /// to read what they just made.
+    func createHouseholdRemotely(name: String) async throws -> MembershipResult {
+        let result = try await manageMembership(action: "create", name: name)
+        await refreshSessionForNewClaims()
+        currentHouseholdId = result.householdId
+        NotificationCenter.default.post(name: .householdChanged, object: nil)
+        return result
+    }
+
+    private func manageMembership(action: String,
+                                  memberId: String? = nil,
+                                  name: String? = nil) async throws -> MembershipResult {
         let document = """
-        mutation ManageHouseholdMembership($action: String!, $memberId: ID) {
-            manageHouseholdMembership(action: $action, memberId: $memberId) {
+        mutation ManageHouseholdMembership($action: String!, $memberId: ID, $name: String) {
+            manageHouseholdMembership(action: $action, memberId: $memberId, name: $name) {
                 householdId
                 householdDeleted
                 remainingMembers
+                inviteCode
             }
         }
         """
 
         var variables: [String: Any] = ["action": action]
         variables["memberId"] = memberId ?? NSNull()
+        variables["name"] = name ?? NSNull()
 
         let request = GraphQLRequest<JSONValue>(
             document: document,
@@ -1032,7 +1103,10 @@ class AmplifyService: ObservableObject {
                 if case .number(let n) = payload["remainingMembers"] { return Int(n) }
                 return 0
             }()
-            return MembershipResult(householdDeleted: deleted, remainingMembers: remaining)
+            let id: String = { if case .string(let v) = payload["householdId"] { return v }; return "" }()
+            let code: String? = { if case .string(let v) = payload["inviteCode"] { return v }; return nil }()
+            return MembershipResult(householdId: id, householdDeleted: deleted,
+                                    remainingMembers: remaining, inviteCode: code)
         case .failure(let error):
             throw error
         }

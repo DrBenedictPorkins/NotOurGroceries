@@ -174,6 +174,43 @@ final class AisleNamingTests: XCTestCase {
                        "toiletries belong to Personal Care now")
     }
 
+    // MARK: - Walk order
+
+    /// The default is the walk most shops present: in past the produce, through
+    /// the numbered aisles, out past the freezers. It is only a default — some
+    /// people deliberately take produce last so it is not crushed under tins —
+    /// which is why Aisle Management can drag it into any order. These tests pin
+    /// the bands, not anybody's preference.
+    private func order(_ id: String) -> Int {
+        StoreService.standardSections.first { $0.id == id }?.displayOrder ?? .max
+    }
+
+    func testPerimeterSortsBeforeAStoresNumberedAisles() {
+        // Scanned aisles are written with displayOrder 0…n, so the perimeter has
+        // to be negative to land ahead of them.
+        for id in ["standard-produce", "standard-bakery", "standard-deli",
+                   "standard-meat", "standard-seafood", "standard-dairy"] {
+            XCTAssertLessThan(order(id), 0, "\(id) should come before aisle 1")
+        }
+    }
+
+    func testCentreStoreSortsAfterTheNumberedAisles() {
+        // In a numbered store these are not places — pasta *is* one of the
+        // aisles — so they only hold what inference could not pin down. Putting
+        // them first would send someone looking for shelves that do not exist.
+        for id in ["standard-pantry", "standard-canned", "standard-snacks",
+                   "standard-household", "standard-pharmacy"] {
+            XCTAssertGreaterThan(order(id), 100, "\(id) should come after the numbered aisles")
+        }
+    }
+
+    func testProduceIsFirstAndFrozenIsLast() {
+        let orders = StoreService.standardSections.map(\.displayOrder)
+
+        XCTAssertEqual(order("standard-produce"), orders.min())
+        XCTAssertEqual(order("standard-frozen"), orders.max(), "frozen melts")
+    }
+
     func testStandardSectionsHaveDistinctDisplayOrders() {
         let orders = StoreService.standardSections.map(\.displayOrder)
 

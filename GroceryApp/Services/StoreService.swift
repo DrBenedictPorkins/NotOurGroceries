@@ -18,32 +18,56 @@ class StoreService: ObservableObject {
 
     /// Perimeter sections present in virtually every US grocery store.
     /// These use stable deterministic IDs so we can detect if a store already has them.
+    /// The order these appear in is the order you walk a shop.
+    ///
+    /// Three bands, and the gaps between them are the point:
+    ///
+    ///   -100…-1   perimeter, named — produce, bakery, deli, meat, fish, dairy
+    ///    0…n      the store's own numbered aisles, from a directory scan
+    ///    900+     centre-store named, then frozen last
+    ///
+    /// Numbered aisles land in the middle because that is where they are: you
+    /// come in past the produce, walk the aisles, and finish at the freezers.
+    ///
+    /// The centre-store sections sit at the end on purpose. In a shop with
+    /// numbered aisles they are not places — pasta and tinned tomatoes *are* the
+    /// numbered aisles — so those sections only ever hold items inference could
+    /// not pin down. Putting them first would send a shopper looking for shelves
+    /// that do not exist. In a shop with no numbered aisles they are the whole
+    /// middle of the walk, and with nothing in band 2 they follow the perimeter
+    /// naturally.
+    ///
+    /// Frozen is deliberately last in both cases, because it melts.
+    ///
+    /// All of this is only a default. Aisle Management lets a store's order be
+    /// dragged into whatever shape the real building has.
     static let standardSections: [StoreAisle] = [
-        StoreAisle(id: "standard-produce",  number: "", name: "Produce",        displayOrder: 900, description: "Fresh fruits, vegetables, leafy greens, and fresh herbs"),
-        StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: 901, description: "Fresh and packaged beef, chicken, pork, turkey, lamb, and sausages"),
-        StoreAisle(id: "standard-seafood",  number: "", name: "Seafood",        displayOrder: 902, description: "Fresh and packaged fish, shrimp, shellfish, and seafood"),
-        StoreAisle(id: "standard-dairy",    number: "", name: "Dairy & Eggs",   displayOrder: 903, description: "Milk, cream, yogurt, butter, cheese, eggs, and dairy alternatives"),
-        StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: 904, description: "Sliced meats, deli cheese, prepared foods, and cold cuts"),
-        StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: 905, description: "Fresh bread, rolls, muffins, cakes, pastries, and baked goods"),
-        StoreAisle(id: "standard-frozen",   number: "", name: "Frozen",         displayOrder: 906, description: "Frozen vegetables, meals, pizza, ice cream, and frozen meats"),
-        // Centre of the store. The seven above are all perimeter, so brown sugar,
-        // salsa and soy sauce had nowhere to go — inference invented placeholder
-        // aisles for them and those got saved and rendered as real section
-        // headers. Most of a shop is these.
-        StoreAisle(id: "standard-pantry",     number: "", name: "Pantry & Dry Goods", displayOrder: 907, description: "Flour, sugar, rice, pasta, beans, cereal, oats, and dry staples"),
-        StoreAisle(id: "standard-canned",     number: "", name: "Canned Goods",       displayOrder: 908, description: "Canned vegetables, beans, soup, tuna, tomatoes, and broth"),
-        StoreAisle(id: "standard-condiments", number: "", name: "Condiments & Sauces", displayOrder: 909, description: "Ketchup, mustard, mayo, salsa, soy sauce, oils, vinegar, and dressings"),
-        StoreAisle(id: "standard-baking",     number: "", name: "Baking",             displayOrder: 910, description: "Baking mixes, brown sugar, chocolate chips, spices, and extracts"),
-        StoreAisle(id: "standard-snacks",     number: "", name: "Snacks",             displayOrder: 911, description: "Chips, crackers, nuts, popcorn, cookies, and sweets"),
-        StoreAisle(id: "standard-beverages",  number: "", name: "Beverages",          displayOrder: 912, description: "Water, juice, soda, coffee, tea, and drink mixes"),
-        StoreAisle(id: "standard-household",  number: "", name: "Household",          displayOrder: 913, description: "Cleaning supplies, paper goods, foil, bags, trash bags, and laundry"),
-        // Household used to absorb toiletries and anything medicinal, so Unisom
-        // landed next to the bin bags. They are different parts of the store and
-        // a shopper walking the list would have to double back.
-        StoreAisle(id: "standard-personal",   number: "", name: "Personal Care",       displayOrder: 914, description: "Shampoo, soap, deodorant, toothpaste, razors, and cosmetics"),
-        StoreAisle(id: "standard-pharmacy",   number: "", name: "Pharmacy & Health",   displayOrder: 915, description: "Over-the-counter medicine, sleep aids, vitamins, supplements, and first aid"),
-        StoreAisle(id: "standard-baby",       number: "", name: "Baby",                displayOrder: 916, description: "Nappies, wipes, formula, baby food, and baby care"),
-        StoreAisle(id: "standard-pet",        number: "", name: "Pet",                 displayOrder: 917, description: "Pet food, treats, litter, and pet supplies"),
+        // Band 1 — the perimeter, in the order most shops present it.
+        StoreAisle(id: "standard-produce",  number: "", name: "Produce",        displayOrder: -100, description: "Fresh fruits, vegetables, leafy greens, and fresh herbs"),
+        StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: -95,  description: "Fresh bread, rolls, muffins, cakes, pastries, and baked goods"),
+        StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: -90,  description: "Sliced meats, deli cheese, prepared foods, and cold cuts"),
+        StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: -85,  description: "Fresh and packaged beef, chicken, pork, turkey, lamb, and sausages"),
+        StoreAisle(id: "standard-seafood",  number: "", name: "Seafood",        displayOrder: -80,  description: "Fresh and packaged fish, shrimp, shellfish, and seafood"),
+        StoreAisle(id: "standard-dairy",    number: "", name: "Dairy & Eggs",   displayOrder: -75,  description: "Milk, cream, yogurt, butter, cheese, eggs, and dairy alternatives"),
+
+        // Band 3 — centre of the store. Before these existed the only sections
+        // were the seven perimeter ones, so brown sugar and soy sauce had nowhere
+        // to go: inference invented placeholder aisles, those got saved, and they
+        // rendered as real section headers.
+        StoreAisle(id: "standard-pantry",     number: "", name: "Pantry & Dry Goods", displayOrder: 900, description: "Flour, sugar, rice, pasta, beans, cereal, oats, and dry staples"),
+        StoreAisle(id: "standard-canned",     number: "", name: "Canned Goods",       displayOrder: 901, description: "Canned vegetables, beans, soup, tuna, tomatoes, and broth"),
+        StoreAisle(id: "standard-condiments", number: "", name: "Condiments & Sauces", displayOrder: 902, description: "Ketchup, mustard, mayo, salsa, soy sauce, oils, vinegar, and dressings"),
+        StoreAisle(id: "standard-baking",     number: "", name: "Baking",             displayOrder: 903, description: "Baking mixes, brown sugar, chocolate chips, spices, and extracts"),
+        StoreAisle(id: "standard-snacks",     number: "", name: "Snacks",             displayOrder: 904, description: "Chips, crackers, nuts, popcorn, cookies, and sweets"),
+        StoreAisle(id: "standard-beverages",  number: "", name: "Beverages",          displayOrder: 905, description: "Water, juice, soda, coffee, tea, and drink mixes"),
+        StoreAisle(id: "standard-personal",   number: "", name: "Personal Care",       displayOrder: 910, description: "Shampoo, soap, deodorant, toothpaste, razors, and cosmetics"),
+        StoreAisle(id: "standard-pharmacy",   number: "", name: "Pharmacy & Health",   displayOrder: 911, description: "Over-the-counter medicine, sleep aids, vitamins, supplements, and first aid"),
+        StoreAisle(id: "standard-baby",       number: "", name: "Baby",                displayOrder: 912, description: "Nappies, wipes, formula, baby food, and baby care"),
+        StoreAisle(id: "standard-pet",        number: "", name: "Pet",                 displayOrder: 913, description: "Pet food, treats, litter, and pet supplies"),
+        StoreAisle(id: "standard-household",  number: "", name: "Household",           displayOrder: 914, description: "Cleaning supplies, paper goods, foil, bags, trash bags, and laundry"),
+
+        // Last on purpose.
+        StoreAisle(id: "standard-frozen",   number: "", name: "Frozen",         displayOrder: 950, description: "Frozen vegetables, meals, pizza, ice cream, and frozen meats"),
     ]
 
     /// Adds any missing standard sections to a store and persists to backend.

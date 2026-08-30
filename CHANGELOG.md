@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-08-30
+
 ### Shopping
 - **Quick Trip** is now a scratch list that lives only on this phone — no store, no aisles, nothing shared. Type it, tick it, tap Done and it's gone
 - Your main list shows underneath it, collapsed. Tap any item to bring it along; the household list is untouched
@@ -294,7 +296,8 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.5.0...HEAD
+[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.6.0...HEAD
+[1.6.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.6.0
 [1.5.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.5.0
 [1.4.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.4.0
 [1.3.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.3.0

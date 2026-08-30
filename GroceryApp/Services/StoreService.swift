@@ -357,12 +357,21 @@ class StoreService: ObservableObject {
             (normalizedName != nil && $0.normalizedName == normalizedName)
         })?.id ?? UUID().uuidString
 
+        // The resolver writes straight to the table, so it checks this against
+        // the caller's group claim itself and stores it on the row. Taken from
+        // the session rather than a parameter: you can only ever map a product
+        // in the household you are signed into.
+        guard let householdId = AmplifyService.shared.currentHouseholdId, !householdId.isEmpty else {
+            throw NSError(domain: "StoreService", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "No household selected"])
+        }
+
         let document = """
         mutation UpsertProductAisleMapping(
-            $id: String!, $storeId: ID!, $aisleId: String!, $productId: ID, $normalizedName: String
+            $id: String!, $householdId: ID!, $storeId: ID!, $aisleId: String!, $productId: ID, $normalizedName: String
         ) {
             upsertProductAisleMapping(
-                id: $id, storeId: $storeId, aisleId: $aisleId,
+                id: $id, householdId: $householdId, storeId: $storeId, aisleId: $aisleId,
                 productId: $productId, normalizedName: $normalizedName
             ) {
                 id
@@ -376,6 +385,7 @@ class StoreService: ObservableObject {
 
         var variables: [String: Any] = [
             "id": mappingId,
+            "householdId": householdId,
             "storeId": storeId,
             "aisleId": aisleId
         ]

@@ -1062,14 +1062,21 @@ class AisleExtractionService: ObservableObject {
         let iso8601Formatter = ISO8601DateFormatter()
         iso8601Formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
+        // Checked against the caller's group claim inside the resolver, and
+        // written onto the row so it can be read back under the same rule.
+        guard let householdId = AmplifyService.shared.currentHouseholdId, !householdId.isEmpty else {
+            throw NSError(domain: "AisleExtractionService", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "No household selected"])
+        }
+
         let document = """
         mutation UpsertProductAisleMapping(
-            $id: String!, $storeId: ID!, $aisleId: String!,
+            $id: String!, $householdId: ID!, $storeId: ID!, $aisleId: String!,
             $normalizedName: String, $productId: ID,
             $confidence: Float, $source: String, $reasoning: String, $mappedAt: AWSDateTime
         ) {
             upsertProductAisleMapping(
-                id: $id, storeId: $storeId, aisleId: $aisleId,
+                id: $id, householdId: $householdId, storeId: $storeId, aisleId: $aisleId,
                 normalizedName: $normalizedName, productId: $productId,
                 confidence: $confidence, source: $source, reasoning: $reasoning, mappedAt: $mappedAt
             ) {
@@ -1081,6 +1088,7 @@ class AisleExtractionService: ObservableObject {
 
         var variables: [String: Any] = [
             "id": mappingId,
+            "householdId": householdId,
             "storeId": storeId,
             "normalizedName": normalizedName,
             "aisleId": inference.suggestedAisle,

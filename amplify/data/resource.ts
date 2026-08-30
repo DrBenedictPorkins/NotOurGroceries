@@ -120,8 +120,13 @@ const schema = a.schema({
       lastActive: a.datetime(),
     })
     .authorization((allow) => [
+      // Your own row, which has to be readable before you know your household —
+      // it is where the householdId comes from.
       allow.owner(),
-      allow.authenticated().to(['read']),
+      // Everyone else in your household, so a shopper's name resolves. This
+      // replaced `authenticated().to(['read'])`, under which every account in
+      // the system could read every user's row.
+      allow.groupDefinedIn('householdId').to(['read']),
     ])
     .secondaryIndexes((index) => [
       index('householdId'),
@@ -155,7 +160,11 @@ const schema = a.schema({
       shoppingStartedAt: a.datetime(),  // When the current session began — drives abandoned-session detection on other members' devices
     })
     .authorization((allow) => [
-      allow.authenticated(),
+      // The group is named after the household id, so the row authorises
+      // against itself. Creation cannot go through this rule — nobody is in the
+      // group before the household exists — which is why householdMembership
+      // creates it with IAM instead.
+      allow.groupDefinedIn('id'),
     ])
     .secondaryIndexes((index) => [
       index('inviteCode'),
@@ -197,7 +206,7 @@ const schema = a.schema({
       version: a.integer().required().default(0),
     })
     .authorization((allow) => [
-      allow.authenticated(),
+      allow.groupDefinedIn('householdId'),
     ])
     .secondaryIndexes((index) => [
       index('householdId').sortKeys(['status']).queryField('listItemsByHouseholdAndStatus'),
@@ -282,7 +291,7 @@ const schema = a.schema({
       layoutType: a.ref('LayoutType'), // null == AISLES (back-compat)
       productMappings: a.hasMany('ProductAisleMapping', 'storeId'),
     })
-    .authorization((allow) => [allow.authenticated()])
+    .authorization((allow) => [allow.groupDefinedIn('householdId')])
     .secondaryIndexes((index) => [
       index('householdId').queryField('storesByHousehold'),
     ]),
@@ -312,7 +321,7 @@ const schema = a.schema({
       sourceImageKeys: a.string().array(),       // Which S3 images contributed
       mappedAt: a.datetime(),                    // When LLM made this assignment
     })
-    .authorization((allow) => [allow.authenticated()])
+    .authorization((allow) => [allow.groupDefinedIn('householdId')])
     .secondaryIndexes((index) => [
       index('storeId').queryField('mappingsByStore'),
       index('productId').queryField('mappingsByProduct'),
@@ -332,7 +341,7 @@ const schema = a.schema({
       payload: a.json().required(),
     })
     .authorization((allow) => [
-      allow.authenticated(),
+      allow.groupDefinedIn('householdId'),
     ])
     .secondaryIndexes((index) => [
       index('householdId').sortKeys(['sequenceNumber']).queryField('commitsByHouseholdSequence'),
@@ -374,7 +383,7 @@ const schema = a.schema({
       resolvedAt: a.datetime(),
     })
     .authorization((allow) => [
-      allow.authenticated(),
+      allow.groupDefinedIn('householdId'),
     ])
     .secondaryIndexes((index) => [
       index('householdId').sortKeys(['requestedAt']).queryField('requestsByHousehold'),
@@ -412,7 +421,7 @@ const schema = a.schema({
       // Timestamps
       completedAt: a.datetime(),
     })
-    .authorization((allow) => [allow.authenticated()])
+    .authorization((allow) => [allow.groupDefinedIn('householdId')])
     .secondaryIndexes((index) => [
       index('storeId').queryField('jobsByStore'),
     ]),
@@ -552,6 +561,9 @@ const schema = a.schema({
     .mutation()
     .arguments({
       id: a.string().required(),
+      // Required: the resolver both checks it against the caller's groups and
+      // writes it, since it bypasses the model's own authorization.
+      householdId: a.id().required(),
       storeId: a.id().required(),
       aisleId: a.string().required(),
       normalizedName: a.string(),

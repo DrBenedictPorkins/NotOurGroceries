@@ -1,12 +1,23 @@
 import { util } from '@aws-appsync/utils';
 
 export function request(ctx) {
-  const { id, storeId, normalizedName, productId, aisleId, confidence, source, reasoning, mappedAt } = ctx.args;
+  const { id, householdId, storeId, normalizedName, productId, aisleId, confidence, source, reasoning, mappedAt } = ctx.args;
+
+  // This resolver writes to the mapping table directly, so the model's
+  // `groupDefinedIn('householdId')` rule never runs for it — the check has to
+  // happen here or the mutation is a way around the whole scheme. It also has
+  // to WRITE householdId, or every row it creates comes back denied on read
+  // because the field the rule inspects is missing.
+  const groups = ctx.identity && ctx.identity.groups ? ctx.identity.groups : [];
+  if (groups.indexOf(householdId) === -1) {
+    util.unauthorized();
+  }
 
   const now = util.time.nowISO8601();
 
   const expNames = {
     '#typename': '__typename',
+    '#householdId': 'householdId',
     '#storeId': 'storeId',
     '#aisleId': 'aisleId',
     '#createdAt': 'createdAt',
@@ -15,6 +26,7 @@ export function request(ctx) {
 
   const expValues = {
     ':typename': util.dynamodb.toDynamoDB('ProductAisleMapping'),
+    ':householdId': util.dynamodb.toDynamoDB(householdId),
     ':storeId': util.dynamodb.toDynamoDB(storeId),
     ':aisleId': util.dynamodb.toDynamoDB(aisleId),
     ':now': util.dynamodb.toDynamoDB(now),
@@ -22,6 +34,7 @@ export function request(ctx) {
 
   const sets = [
     '#typename = :typename',
+    '#householdId = :householdId',
     '#storeId = :storeId',
     '#aisleId = :aisleId',
     '#createdAt = if_not_exists(#createdAt, :now)',

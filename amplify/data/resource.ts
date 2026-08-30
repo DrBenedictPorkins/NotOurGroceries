@@ -38,6 +38,11 @@ export const regenerateInviteCodeFunction = defineFunction({
 export const householdMembershipFunction = defineFunction({
   name: 'householdMembershipFunction',
   entry: './householdMembershipFunction/handler.ts',
+  // Same stack as the data it reads. Every other function here does this, and
+  // omitting it is what broke two deploys: the function ends up in its own
+  // stack, the data stack depends on it as a mutation handler, it depends on
+  // the data stack for table names, and CloudFormation refuses the cycle.
+  resourceGroupName: 'data',
   timeoutSeconds: 60,
 });
 

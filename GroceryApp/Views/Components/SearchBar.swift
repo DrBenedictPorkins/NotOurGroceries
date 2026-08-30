@@ -19,6 +19,10 @@ struct SearchBar: View {
     /// bulk — mid-shop, holding a cart, after a "don't forget the toothpaste" text.
     var onVoice: (() -> Void)? = nil
     var isListening: Bool = false
+    /// "Search or add item…" is a lie while somebody else is out shopping — the
+    /// list is locked, and offering to add is how you find that out by being told
+    /// no. Searching still works, so the field stays usable and stops promising.
+    var canAdd: Bool = true
 
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @State private var showAutocomplete = false
@@ -33,7 +37,7 @@ struct SearchBar: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFocused)
 
                 // Text field
-                TextField("Search or add item...", text: $text)
+                TextField(canAdd ? "Search or add item..." : "Search the list", text: $text)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)
                     .tint(Color(hex: "00D4FF"))

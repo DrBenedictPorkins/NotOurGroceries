@@ -78,7 +78,8 @@ struct ShoppingListView: View {
                                 isFocused: $searchFieldFocused,
                                 onSubmit: addItemFromSearch,
                                 onProductSelected: addProductFromSearch,
-                                onImport: { showBulkImport = true }
+                                onImport: { showBulkImport = true },
+                                canAdd: !viewModel.isListLockedByOtherSession
                             )
                         }
                         .listRowBackground(Color.clear)

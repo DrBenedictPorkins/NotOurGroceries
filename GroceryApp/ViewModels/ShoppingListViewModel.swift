@@ -151,7 +151,10 @@ class ShoppingListViewModel: ObservableObject {
     /// there used to be two answers (a toast for most actions, a request/approve
     /// inbox for adds) and the inbox was never once used.
     func warnListReadOnly() {
-        showToast(message: "List is read-only while shopping", type: .warning)
+        // Names the person, because "while shopping" reads as a rule rather than
+        // a situation with an end and someone you could text.
+        let who = activeShopperDisplayName.map { "\($0) is" } ?? "Someone's"
+        showToast(message: "\(who) shopping — the list is locked until they finish", type: .warning)
         UINotificationFeedbackGenerator().notificationOccurred(.warning)
     }
 

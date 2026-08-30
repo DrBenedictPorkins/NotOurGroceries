@@ -99,12 +99,16 @@ struct ShoppingActiveInfoModal: View {
         }
     }
 
+    /// Both of these described the request/approve inbox, which was removed —
+    /// so the person not shopping was being told they could ask for items when
+    /// in fact the list is simply locked, and the shopper was promised requests
+    /// that would never arrive.
     private var description: String {
         if isCurrentUserShopping {
-            return "You can cross off items, add new items, and approve requests from other members."
+            return "Cross things off as you go, and add anything you spot. The list is locked for everyone else until you finish."
         } else {
             let name = shopperName ?? "Someone"
-            return "\(name) is currently shopping. You can request item additions or removals for their approval."
+            return "\(name) is shopping, so the list is locked until they're done. If you need something, text them — they'll see that."
         }
     }
 

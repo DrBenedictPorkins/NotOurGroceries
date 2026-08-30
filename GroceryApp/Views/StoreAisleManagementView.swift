@@ -38,7 +38,9 @@ struct StoreAisleManagementView: View {
         // Add "Unknown" aisle if there are unmapped items
         let hasUnmappedItems = allDisplayItems.contains { $0.isUnmapped }
         if hasUnmappedItems {
-            aisles.append(OrderableAisle(id: "Unknown", displayName: "Unknown Aisle", displayOrder: 0))
+            // Named for what it is — a bucket of items with no aisle yet — not
+            // for an aisle whose name we cannot recall.
+            aisles.append(OrderableAisle(id: "Unknown", displayName: "Not sorted yet", displayOrder: 0))
         }
 
         // Add all aisles from currentStore.aisleLayout sorted by displayOrder
@@ -564,7 +566,7 @@ struct StoreAisleManagementView: View {
         let headerColor: Color
 
         if aisleId == "Unknown" {
-            displayName = "Unknown Aisle"
+            displayName = "Not sorted yet"
             headerColor = DesignSystem.Colors.neonPink
         } else if let aisle = currentStore.aisleLayout.first(where: { $0.id == aisleId }) {
             // Use store's custom aisle name if defined

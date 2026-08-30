@@ -26,7 +26,7 @@ struct AtStoreModeView: View {
     // Uses direct productId lookup - LLM handles normalization when adding items
     private var aisleGroups: [AisleGroup] {
         guard let store = selectedHouseholdStore else {
-            // Fallback: put all items in "Unknown Aisle"
+            // Fallback: nothing to sort against, so everything is unsorted
             return [AisleGroup(
                 id: "unmapped",
                 displayName: "ALL ITEMS",
@@ -454,7 +454,10 @@ struct AtStoreModeView: View {
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
 
-                Text(storeHasNoAisles ? "TO GET" : "UNKNOWN AISLE")
+                // Not "UNKNOWN AISLE" — that claims there is an aisle whose name
+                // we have lost. These items simply have not been placed yet, and
+                // the header should say so rather than invent a mystery.
+                Text(storeHasNoAisles ? "TO GET" : "NOT SORTED YET")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
                     .tracking(1.2)
@@ -467,7 +470,7 @@ struct AtStoreModeView: View {
             }
 
             if !storeHasNoAisles {
-                Text("Long-press items to assign aisle")
+                Text("Long-press an item to say which aisle it's in")
                     .font(.system(size: 11, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }

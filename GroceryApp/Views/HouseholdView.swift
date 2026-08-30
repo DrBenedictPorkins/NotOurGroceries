@@ -451,7 +451,12 @@ struct HouseholdView: View {
 
         Task {
             do {
-                try await amplifyService.joinHousehold(inviteCode: inviteCode.uppercased())
+                // The Lambda, not the client path. Household rows are scoped to their
+                // Cognito group now, so somebody who is not yet a member cannot read
+                // the household they are trying to join — the direct query returns
+                // nothing and the join silently fails. The Lambda runs with IAM, and
+                // it is also the only path that checks the code has not expired.
+                _ = try await amplifyService.joinHouseholdWithCode(inviteCode.uppercased())
                 successMessage = "Successfully joined household!"
                 inviteCode = ""
                 await loadHouseholdDetails()

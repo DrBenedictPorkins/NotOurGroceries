@@ -545,6 +545,11 @@ class AmplifyService: ObservableObject {
         }
     }
 
+    /// Superseded by `joinHouseholdWithCode`, which is the only path that can
+    /// still work: this one queries the Household row directly, and those are
+    /// scoped to their Cognito group, so a person who is not yet a member reads
+    /// nothing. It also never checked `inviteCodeExpiresAt`.
+    @available(*, deprecated, message: "Use joinHouseholdWithCode — this cannot read a household you are not in")
     func joinHousehold(inviteCode: String) async throws {
         let document = """
         query ListHouseholdByInviteCode($inviteCode: String!) {

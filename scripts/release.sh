@@ -99,7 +99,10 @@ EOF
 fi
 
 # ── Commit release ───────────────────────────────────────────────────────────
-git -C "$PROJECT_ROOT" add -A
+# Only the two files a release actually changes. This used to be `add -A`, which
+# swept whatever happened to be sitting untracked in the tree into the tagged
+# commit — a release is the one commit that should contain no surprises.
+git -C "$PROJECT_ROOT" add "$CHANGELOG" "$PBXPROJ"
 git -C "$PROJECT_ROOT" commit -m "Release $TAG"
 git -C "$PROJECT_ROOT" tag -a "$TAG" -m "Release $TAG"
 echo "Created tag $TAG"
@@ -114,7 +117,7 @@ if [[ -n "$NEXT" ]]; then
     sed -i "s/CURRENT_PROJECT_VERSION = [0-9]*/CURRENT_PROJECT_VERSION = 0/g" "$PBXPROJ"
   fi
 
-  git -C "$PROJECT_ROOT" add -A
+  git -C "$PROJECT_ROOT" add "$PBXPROJ"
   git -C "$PROJECT_ROOT" commit -m "Begin $NEXT development"
   echo "Main bumped to $NEXT"
 fi

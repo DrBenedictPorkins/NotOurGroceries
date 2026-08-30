@@ -24,3 +24,6 @@ DerivedData/
 *.xcworkspace/xcshareddata/swiftpm/Package.resolved
 .venv
 scripts/amplify-monitor.py
+
+# Working notes for the current session — deliberately not part of the repo.
+SESSION-NOTES.qmd

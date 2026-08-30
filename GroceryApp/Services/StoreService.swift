@@ -62,7 +62,7 @@ class StoreService: ObservableObject {
     // MARK: - Store CRUD
 
     /// Create a new store for a household
-    func createStore(name: String, chain: String?, householdId: String, layoutType: StoreLayoutType = .aisles) async throws -> HouseholdStore {
+    func createStore(name: String, chain: String?, householdId: String) async throws -> HouseholdStore {
         let storeId = UUID().uuidString
 
         let document = """
@@ -107,7 +107,7 @@ class StoreService: ObservableObject {
             "householdId": householdId,
             "name": name,
             "chain": chain ?? "",
-            "layoutType": layoutType.rawValue,
+            "layoutType": "AISLES",   // Schema field, kept satisfied; the app ignores it.
             "aisleLayout": aisleLayoutJSON
         ]
 
@@ -172,8 +172,7 @@ class StoreService: ObservableObject {
         var input: [String: Any] = [
             "id": store.id,
             "name": store.name,
-            "aisleLayout": aisleLayoutJSON,
-            "layoutType": store.layoutType.rawValue
+            "aisleLayout": aisleLayoutJSON
         ]
 
         // Add optional fields
@@ -756,21 +755,14 @@ class StoreService: ObservableObject {
             aisleLayout = aisleArray.compactMap { parseStoreAisle($0) }
         }
 
-        // Nullable on the backend — a missing/unknown value means AISLES (back-compat).
-        var layoutType: StoreLayoutType = .aisles
-        if case .string(let layoutValue) = obj["layoutType"],
-           let parsed = StoreLayoutType(rawValue: layoutValue) {
-            layoutType = parsed
-        }
-
+        // `layoutType` still arrives from the backend and is deliberately not read.
         return HouseholdStore(
             id: id,
             householdId: householdId,
             name: name,
             chain: chain,
             address: address,
-            aisleLayout: aisleLayout,
-            layoutType: layoutType
+            aisleLayout: aisleLayout
         )
     }
 

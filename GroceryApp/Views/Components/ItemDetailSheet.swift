@@ -72,7 +72,7 @@ struct ItemDetailSheet: View {
     /// Whether the relevant store organizes by aisle at all.
     /// Stores flagged NO_AISLES get no aisle UI and no AI aisle inference.
     private var storeSupportsAisles: Bool {
-        !(currentStore?.hasNoAisles ?? false)
+        currentStore?.supportsAisleNavigation ?? false
     }
 
     /// Aisle UI only makes sense in proposed mode, or while shopping at an aisle-based store.

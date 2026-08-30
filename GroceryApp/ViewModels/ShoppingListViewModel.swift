@@ -1096,6 +1096,91 @@ class ShoppingListViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Clear all suggestions
+
+    /// Delete every suggestion the household has accumulated.
+    ///
+    /// Suggestions grow forever by design — everything bought becomes one, and
+    /// scrolling past them is how you remember what you need. The cost is that a
+    /// few hundred bad ones, from a mis-parsed import or an early experiment, can
+    /// only be removed one swipe at a time. This is the way out.
+    ///
+    /// Household-wide and permanent. Suggestions live on the server, so this is
+    /// not "clear my copy" — it empties the list for everyone, and there is no
+    /// undo. The caller is responsible for making sure the user knows both.
+    ///
+    /// Deletes are issued one at a time and failures are counted rather than
+    /// thrown: a partial result is normal on a bad connection, and stopping at
+    /// the first failure would leave the user with most of their rubbish still
+    /// there and no idea how far it got.
+    ///
+    /// Returns how many were actually removed.
+    @discardableResult
+    func deleteAllSuggestions(progress: @escaping (Int, Int) -> Void = { _, _ in }) async -> Int {
+        if isListLockedByOtherSession {
+            warnListReadOnly()
+            return 0
+        }
+
+        let doomed = suggestions
+        guard !doomed.isEmpty else { return 0 }
+
+        var deleted = 0
+        for (index, item) in doomed.enumerated() {
+            progress(index, doomed.count)
+            if await deleteSuggestionRow(item) {
+                deleted += 1
+                items.removeAll { $0.id == item.id }
+            }
+        }
+        progress(doomed.count, doomed.count)
+
+        if deleted == doomed.count {
+            showToast(message: deleted == 1
+                      ? "Cleared 1 suggestion"
+                      : "Cleared \(deleted) suggestions", type: .success)
+        } else {
+            // Saying "done" after removing 180 of 235 would be a lie the user
+            // discovers by scrolling.
+            showToast(message: "Cleared \(deleted) of \(doomed.count) — try again for the rest",
+                      type: .warning)
+        }
+
+        return deleted
+    }
+
+    /// One delete, reported rather than thrown, and deliberately not queued to
+    /// the outbox — a bulk wipe attempted offline should fail visibly now, not
+    /// replay hundreds of deletes at some later moment the user has forgotten about.
+    private func deleteSuggestionRow(_ item: GroceryItem) async -> Bool {
+        let document = """
+        mutation DeleteGroceryItem($input: DeleteGroceryItemInput!) {
+            deleteGroceryItem(input: $input) {
+                id
+            }
+        }
+        """
+
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: ["input": ["id": item.id]],
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+
+        do {
+            switch try await apiMutate(request) {
+            case .success:  return true
+            case .failure(let error):
+                logger.error("Failed to delete suggestion \(item.name): \(error)")
+                return false
+            }
+        } catch {
+            logger.error("Failed to delete suggestion \(item.name): \(error)")
+            return false
+        }
+    }
+
     // MARK: - Update Notes
     func updateNotes(for item: GroceryItem, notes: String?, ephemeral: Bool = false) async {
         // Normalize empty string to nil
@@ -2091,7 +2176,7 @@ class ShoppingListViewModel: ObservableObject {
 
     /// Create a new store and add it to the household
     @discardableResult
-    func createStore(name: String, chain: String?, aisles: [StoreAisle], layoutType: StoreLayoutType = .aisles) async -> HouseholdStore? {
+    func createStore(name: String, chain: String?, aisles: [StoreAisle]) async -> HouseholdStore? {
         guard let householdId = householdId else {
             showToast(message: "No household selected", type: .error)
             return nil
@@ -2099,7 +2184,7 @@ class ShoppingListViewModel: ObservableObject {
 
         do {
             // Create the store
-            var store = try await StoreService.shared.createStore(name: name, chain: chain, householdId: householdId, layoutType: layoutType)
+            var store = try await StoreService.shared.createStore(name: name, chain: chain, householdId: householdId)
 
             // Add aisles to the store
             for aisle in aisles {
@@ -2197,8 +2282,7 @@ class ShoppingListViewModel: ObservableObject {
         _ = await createStore(
             name: Self.defaultStoreName,
             chain: nil,
-            aisles: [],
-            layoutType: .noAisles
+            aisles: []
         )
     }
 

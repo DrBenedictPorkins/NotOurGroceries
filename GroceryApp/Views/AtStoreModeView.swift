@@ -451,10 +451,11 @@ struct AtStoreModeView: View {
         .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 8, trailing: 20))
     }
 
-    /// A store with no aisles has nothing to map, so unmapped items aren't an error state —
-    /// they're just the list. Show a neutral header instead of the pink "unknown" warning.
+    /// A store with nothing to sort against has nothing to map, so unmapped items
+    /// aren't an error state — they're just the list. Show a neutral header
+    /// instead of the pink "unknown" warning.
     private var storeHasNoAisles: Bool {
-        selectedHouseholdStore?.hasNoAisles ?? false
+        !(selectedHouseholdStore?.supportsAisleNavigation ?? false)
     }
 
     private var unmappedHeader: some View {

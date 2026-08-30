@@ -161,9 +161,9 @@ private struct StoreSwitcherRow: View {
 
                         // Aisle count
                         HStack(spacing: 4) {
-                            Image(systemName: store.hasNoAisles ? "basket" : "list.bullet")
+                            Image(systemName: "list.bullet")
                                 .font(.system(size: 10, weight: .medium))
-                            Text(store.hasNoAisles ? "\(store.aisleLayout.count) departments" : "\(store.aisleLayout.count) aisles")
+                            Text("\(store.aisleLayout.count) sections")
                                 .font(.system(size: 12, weight: .medium))
                         }
                         .foregroundColor(DesignSystem.Colors.textTertiary)

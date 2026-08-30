@@ -20,6 +20,8 @@ struct ParsedIngredient: Identifiable {
     var needsInput: Bool = false
     /// Candidate names, best first, when the words support more than one product.
     var alternatives: [String] = []
+    /// Something a kitchen probably already has. Arrives unticked.
+    var isStaple: Bool = false
     /// Set once the user picks or confirms, so it leaves the "needs input" section.
     var resolved: Bool = false
 
@@ -31,20 +33,25 @@ struct ParsedIngredient: Identifiable {
         quantity: String? = nil,
         notes: String? = nil,
         productId: String? = nil,
-        isSelected: Bool = true,
+        isSelected: Bool? = nil,
         heardAs: String? = nil,
         needsInput: Bool = false,
-        alternatives: [String] = []
+        alternatives: [String] = [],
+        isStaple: Bool = false
     ) {
         self.originalName = name
         self.name = name
         self.quantity = quantity
         self.notes = notes
         self.productId = productId
-        self.isSelected = isSelected
+        // A recipe lists everything it uses; you only shop for what you are out
+        // of. Staples arrive unticked so the default is "I have this", which is
+        // true far more often than not — and the row is still right there.
+        self.isSelected = isSelected ?? !isStaple
         self.heardAs = heardAs
         self.needsInput = needsInput
         self.alternatives = alternatives
+        self.isStaple = isStaple
     }
 }
 
@@ -343,7 +350,7 @@ struct BulkImportSheet: View {
     private var textInputSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Anything goes — a recipe, notes, a list")
+                Text("Paste a recipe, notes, or a list")
                     .font(.system(size: 13))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                 Spacer()
@@ -845,7 +852,7 @@ struct BulkImportSheet: View {
                 }
                 await MainActor.run {
                     if items.isEmpty {
-                        errorMessage = "No grocery items found. Try a different image or rephrase the text."
+                        errorMessage = "Nothing to add — this reads what you paste, it doesn't write recipes."
                         phase = .input
                     } else {
                         ingredients = items
@@ -994,8 +1001,10 @@ struct BulkImportSheet: View {
                     guard case .array(let a) = obj["alternatives"] else { return [] }
                     return a.compactMap { if case .string(let v) = $0 { return v }; return nil }
                 }()
+                let staple: Bool = { if case .boolean(let b) = obj["staple"] { return b }; return false }()
                 return ParsedIngredient(name: name, quantity: qty, notes: notes,
-                                        heardAs: heard, needsInput: needs, alternatives: alts)
+                                        heardAs: heard, needsInput: needs, alternatives: alts,
+                                        isStaple: staple)
             }
         case .string(let s):
             guard let data = s.data(using: .utf8),
@@ -1003,7 +1012,8 @@ struct BulkImportSheet: View {
             return items.map {
                 ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier,
                                  heardAs: $0.heardAs, needsInput: $0.needsInput ?? false,
-                                 alternatives: $0.alternatives ?? [])
+                                 alternatives: $0.alternatives ?? [],
+                                 isStaple: $0.staple ?? false)
             }
         default:
             return []
@@ -1021,7 +1031,8 @@ struct BulkImportSheet: View {
             return items.map {
                 ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier,
                                  heardAs: $0.heardAs, needsInput: $0.needsInput ?? false,
-                                 alternatives: $0.alternatives ?? [])
+                                 alternatives: $0.alternatives ?? [],
+                                 isStaple: $0.staple ?? false)
             }
         } else if let arr = dataObj["parseIngredients"] as? [[String: Any]] {
             return arr.compactMap { obj -> ParsedIngredient? in
@@ -1029,7 +1040,8 @@ struct BulkImportSheet: View {
                 return ParsedIngredient(name: name, quantity: obj["quantity"] as? String, notes: obj["qualifier"] as? String,
                                         heardAs: obj["heardAs"] as? String,
                                         needsInput: obj["needsInput"] as? Bool ?? false,
-                                        alternatives: obj["alternatives"] as? [String] ?? [])
+                                        alternatives: obj["alternatives"] as? [String] ?? [],
+                                        isStaple: obj["staple"] as? Bool ?? false)
             }
         }
         return []
@@ -1043,6 +1055,7 @@ private struct _RawItem: Decodable {
     let heardAs: String?
     let needsInput: Bool?
     let alternatives: [String]?
+    let staple: Bool?
 }
 
 // MARK: - Ingredient Review Row
@@ -1096,6 +1109,17 @@ private struct IngredientReviewRow: View {
                 .opacity(item.isSelected ? 1 : 0.45)
 
             Spacer(minLength: 8)
+
+            // Says why it arrived unticked. Without it an unchecked row looks
+            // like the parser failed rather than made a guess about your cupboard.
+            if item.isStaple && !item.isSelected {
+                Text("probably have")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.white.opacity(0.06)))
+            }
 
             if let qty = item.quantity, !qty.isEmpty {
                 Text(qty)

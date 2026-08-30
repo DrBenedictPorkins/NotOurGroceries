@@ -36,7 +36,9 @@ struct ListMenuSheet: View {
                             icon: "cart.fill",
                             tint: DesignSystem.Colors.dillGreen,
                             title: "At Store",
-                            detail: "Full trip, sorted by aisle. Everyone sees you're shopping.",
+                            detail: viewModel.shoppingList.isEmpty
+                                ? "Add something to the list first."
+                                : "Full trip, sorted by aisle. Everyone sees you're shopping.",
                             disabled: !canStartShopping
                         ) {
                             isPresented = false
@@ -82,7 +84,7 @@ struct ListMenuSheet: View {
     /// rows to a list they are actively working.
     @ViewBuilder
     private var restoreSection: some View {
-        if canStartShopping, let trip = TripStats.shared.restorableTrip {
+        if isIdle, let trip = TripStats.shared.restorableTrip {
             section("Start over") {
                 row(
                     icon: "arrow.uturn.backward",
@@ -343,9 +345,14 @@ struct ListMenuSheet: View {
         }
     }
 
-    /// Modes are only offered when nobody is mid-session.
-    private var canStartShopping: Bool {
+    /// Nobody is out shopping. The condition for touching the list at all.
+    private var isIdle: Bool {
         viewModel.shoppingStatus == .idle
+    }
+
+    /// At Store also needs a list, since the whole mode is walking one.
+    private var canStartShopping: Bool {
+        isIdle && !viewModel.shoppingList.isEmpty
     }
 
     // MARK: - Building blocks

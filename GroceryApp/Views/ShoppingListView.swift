@@ -359,8 +359,11 @@ struct ShoppingListView: View {
         .onAppear(perform: runHintIfNeeded)
     }
 
+    /// Nobody mid-session, and something to actually go and buy. Starting a trip
+    /// with an empty list puts you in aisle-sorted shopping mode with no aisles
+    /// and nothing to cross off.
     private var canStartShopping: Bool {
-        viewModel.shoppingStatus == .idle
+        viewModel.shoppingStatus == .idle && !viewModel.shoppingList.isEmpty
     }
 
     /// Hand the list to someone who is not in the household.
@@ -488,7 +491,8 @@ struct ShoppingListView: View {
             return total > 0 ? "\(where_) · \(done) of \(total) in cart" : where_
         }
         if viewModel.shoppingList.isEmpty {
-            return "Add something below to get started"
+            // Short enough to survive the At Store button sharing this row.
+            return "Add your first item"
         }
         // Nothing useful to report — say nothing rather than count what's visible.
         return ""

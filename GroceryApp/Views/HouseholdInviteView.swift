@@ -317,7 +317,8 @@ struct HouseholdInviteView: View {
                     inviteCode: result.inviteCode,
                     inviteCodeExpiresAt: result.expiresAt,
                     memberCount: householdDetails?.memberCount ?? 0,
-                    members: householdDetails?.members ?? []
+                    members: householdDetails?.members ?? [],
+                    ownerId: householdDetails?.ownerId
                 )
                 successMessage = "New code generated!"
 

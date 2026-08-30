@@ -209,9 +209,9 @@ private struct StoreRowView: View {
 
                 // Aisle count
                 HStack(spacing: 4) {
-                    Image(systemName: store.hasNoAisles ? "basket" : "list.bullet")
+                    Image(systemName: "list.bullet")
                         .font(.system(size: 11, weight: .medium))
-                    Text(store.hasNoAisles ? "\(store.aisleLayout.count) departments" : "\(store.aisleLayout.count) aisle\(store.aisleLayout.count == 1 ? "" : "s")")
+                    Text("\(store.aisleLayout.count) section\(store.aisleLayout.count == 1 ? "" : "s")")
                         .font(.system(size: 12, weight: .medium))
                 }
                 .foregroundColor(DesignSystem.Colors.textSecondary)

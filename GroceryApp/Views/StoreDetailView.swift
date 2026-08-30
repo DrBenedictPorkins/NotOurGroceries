@@ -64,16 +64,14 @@ struct StoreDetailView: View {
                     // Store Info Section
                     storeInfoSection
 
-                    // Aisle machinery is meaningless for stores with no aisles
-                    if !currentStore.hasNoAisles {
-                        // Aisle Management Section
-                        aisleManagementSection
+                    // Every store gets the same screen. There used to be a
+                    // branch here for "no aisle" stores that hid all of this —
+                    // but both kinds carry the identical seeded sections, so the
+                    // branch only decided which buttons appeared, and the other
+                    // route to this feature never had it.
+                    aisleManagementSection
 
-                        // Actions Section
-                        actionsSection
-                    } else {
-                        noAislesSection
-                    }
+                    actionsSection
 
                     // Delete Section
                     deleteSection
@@ -363,45 +361,6 @@ struct StoreDetailView: View {
     // MARK: - Helper Views
 
     // MARK: - No Aisles Section
-
-    private var noAislesSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            sectionHeader(title: "STORE LAYOUT", icon: "list.bullet.indent")
-
-            HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(DesignSystem.Colors.neonPurple.opacity(0.15))
-                        .frame(width: 48, height: 48)
-
-                    Image(systemName: "basket")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.neonPurple)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("No Aisles")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Text("Your list stays in one section while shopping here")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                }
-
-                Spacer()
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(DesignSystem.Colors.glassBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                    )
-            )
-        }
-    }
 
     private func sectionHeader(title: String, icon: String) -> some View {
         HStack(spacing: 8) {

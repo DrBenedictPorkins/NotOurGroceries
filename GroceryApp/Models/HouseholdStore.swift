@@ -1,12 +1,5 @@
 import Foundation
 
-/// Whether a store is organized into aisles at all.
-/// Backend field is nullable — a missing value maps to `.aisles` for back-compat.
-enum StoreLayoutType: String, Codable, Hashable, CaseIterable {
-    case aisles = "AISLES"
-    case noAisles = "NO_AISLES"
-}
-
 struct HouseholdStore: Identifiable, Codable, Hashable {
     let id: String
     let householdId: String
@@ -14,17 +7,16 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
     var chain: String?
     var address: String?
     var aisleLayout: [StoreAisle]
-    var layoutType: StoreLayoutType
-
-    /// True when this store has no *numbered* aisles. It still has departments —
-    /// every shop that sells groceries has a cooler, a produce rack and a bread
-    /// shelf. What this flag means is "don't ask me for aisle numbers", not
-    /// "don't organise anything"; the unsorted case is what Quick List is for.
-    var hasNoAisles: Bool { layoutType == .noAisles }
 
     /// True when aisle-based navigation/inference should be attempted.
-    /// Keyed on whether there is a layout to sort against, not on the type — a
-    /// no-aisle store seeded with standard departments sorts perfectly well.
+    ///
+    /// Keyed on whether there is a layout to sort against, and nothing else.
+    /// There used to be a `layoutType` beside it declaring a store "aisled" or
+    /// "no aisles", but by the time every store was seeded with the standard
+    /// departments the two kinds held identical data — the flag only decided
+    /// which buttons appeared, and one of those branches was missed, which is
+    /// how a no-aisle store ended up offering a directory scan. The backend
+    /// field is still there and simply ignored.
     var supportsAisleNavigation: Bool { !aisleLayout.isEmpty }
 
     init(
@@ -33,8 +25,7 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
         name: String,
         chain: String? = nil,
         address: String? = nil,
-        aisleLayout: [StoreAisle] = [],
-        layoutType: StoreLayoutType = .aisles
+        aisleLayout: [StoreAisle] = []
     ) {
         self.id = id
         self.householdId = householdId
@@ -42,10 +33,10 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
         self.chain = chain
         self.address = address
         self.aisleLayout = aisleLayout
-        self.layoutType = layoutType
     }
 
-    // Tolerant decoding: older payloads have no `layoutType` key at all.
+    // Tolerant decoding: `layoutType` may or may not be present, and is ignored
+    // either way.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -54,7 +45,6 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
         chain = try container.decodeIfPresent(String.self, forKey: .chain)
         address = try container.decodeIfPresent(String.self, forKey: .address)
         aisleLayout = try container.decodeIfPresent([StoreAisle].self, forKey: .aisleLayout) ?? []
-        layoutType = try container.decodeIfPresent(StoreLayoutType.self, forKey: .layoutType) ?? .aisles
     }
 }
 

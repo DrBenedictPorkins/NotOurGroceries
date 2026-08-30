@@ -4,104 +4,21 @@
 
 Always use `AWS_PROFILE=mine` before any AWS CLI calls.
 
-## Clear Backend Database (Fresh Start)
+## Clearing data
 
-> ⚠️ **These scripts target the dead sandbox tables (`nktezw3d…`) and therefore do
-> nothing.** Do NOT "fix" them by swapping in the prod suffix
-> (`vdsfrt2plzgwfdae2ucpxtwzh4`) — with no sandbox, that deletes the only real
-> household data there is. If a genuine wipe is wanted, the user must ask for it
-> explicitly, naming production.
+There is no script here on purpose. The two that used to live in this section
+targeted the sandbox tables, which no longer exist — they were harmless while
+they silently did nothing, and became a trap the moment somebody "fixed" them by
+swapping in the prod suffix.
 
+There is one environment and it holds one live household. Anything destructive is
+a deliberate, case-by-case job against named tables, with the live household id
+on a protect list. Ask before running one.
 
-When schema changes require a fresh start, run this to clear all DynamoDB tables:
-
-```bash
-AWS_PROFILE=mine bash << 'EOF'
-TABLES=(
-  "Aisle-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "Commit-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "GroceryItem-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "Household-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "HouseholdStore-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "ProductAisleMapping-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "ShoppingRequest-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "Store-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "User-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-)
-
-# Note: Skipping Product table - contains community catalog data (239 products)
-
-for TABLE in "${TABLES[@]}"; do
-  echo "Clearing table: $TABLE"
-
-  KEY_SCHEMA=$(aws dynamodb describe-table --table-name "$TABLE" --query "Table.KeySchema" --output json)
-  HASH_KEY=$(echo "$KEY_SCHEMA" | jq -r '.[] | select(.KeyType=="HASH") | .AttributeName')
-  RANGE_KEY=$(echo "$KEY_SCHEMA" | jq -r '.[] | select(.KeyType=="RANGE") | .AttributeName // empty')
-
-  if [ -z "$RANGE_KEY" ]; then
-    ITEMS=$(aws dynamodb scan --table-name "$TABLE" --projection-expression "$HASH_KEY" --output json)
-  else
-    ITEMS=$(aws dynamodb scan --table-name "$TABLE" --projection-expression "$HASH_KEY, $RANGE_KEY" --output json)
-  fi
-
-  COUNT=$(echo "$ITEMS" | jq '.Items | length')
-  echo "  Found $COUNT items"
-
-  echo "$ITEMS" | jq -c '.Items[]' | while read -r item; do
-    aws dynamodb delete-item --table-name "$TABLE" --key "$item" 2>/dev/null
-  done
-
-  echo "  Done"
-done
-
-echo "All tables cleared!"
-EOF
-```
-
-## Clear Shopping Data Only (Keep Users & Households)
-
-> ⚠️ Same warning as above — dead sandbox table names, and pointing them at prod
-> destroys live data.
-
-
-Clears shopping lists, history, and requests while preserving user accounts and household setup:
-
-```bash
-AWS_PROFILE=mine bash << 'EOF'
-TABLES=(
-  "GroceryItem-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "Commit-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-  "ShoppingRequest-nktezw3d6vcl5jbk7n44jku4e4-NONE"
-)
-
-# Preserves: User, Household, HouseholdStore, ProductAisleMapping, Product, Store, Aisle
-
-for TABLE in "${TABLES[@]}"; do
-  echo "Clearing table: $TABLE"
-
-  KEY_SCHEMA=$(aws dynamodb describe-table --table-name "$TABLE" --query "Table.KeySchema" --output json)
-  HASH_KEY=$(echo "$KEY_SCHEMA" | jq -r '.[] | select(.KeyType=="HASH") | .AttributeName')
-  RANGE_KEY=$(echo "$KEY_SCHEMA" | jq -r '.[] | select(.KeyType=="RANGE") | .AttributeName // empty')
-
-  if [ -z "$RANGE_KEY" ]; then
-    ITEMS=$(aws dynamodb scan --table-name "$TABLE" --projection-expression "$HASH_KEY" --output json)
-  else
-    ITEMS=$(aws dynamodb scan --table-name "$TABLE" --projection-expression "$HASH_KEY, $RANGE_KEY" --output json)
-  fi
-
-  COUNT=$(echo "$ITEMS" | jq '.Items | length')
-  echo "  Found $COUNT items"
-
-  echo "$ITEMS" | jq -c '.Items[]' | while read -r item; do
-    aws dynamodb delete-item --table-name "$TABLE" --key "$item" 2>/dev/null
-  done
-
-  echo "  Done"
-done
-
-echo "Shopping data cleared!"
-EOF
-```
+The `nog-admin` MCP server has read tools plus `clear_shopping_data`, and points
+at the **prod** admin Lambda (`amplify-d2rsreno8nimo5-ma-adminMcpFunctionlambdaB0-…`).
+It was pointed at the sandbox Lambda until 2026-08-30, which meant it reported a
+completely different set of households and users than the app was using.
 
 ## DynamoDB Backups (Prod Only)
 
@@ -188,8 +105,10 @@ Schema changes go straight to prod by pushing `main`.
 Debug builds write to real household data. That is intentional — there is no
 "safe" environment, so think before running anything destructive.
 
-Dead artifacts that still exist and should be ignored: `amplify_outputs_dev.json`,
-the `nktezw3d6vcl5jbk7n44jku4e4` API, and its DynamoDB tables.
+The old `nktezw3d6vcl5jbk7n44jku4e4` sandbox was deleted on 2026-08-30 — tables,
+AppSync API and CloudFormation stack. It had drifted into a second, plausible set
+of households and users that tooling could read and mistake for production.
+`amplify_outputs_dev.json` may still be lying around; it points at nothing.
 
 ### Amplify Console
 
@@ -239,12 +158,15 @@ Where to set:
 
 When the user says to release/deploy, do it in this exact order:
 
-1. Bump build number + update CHANGELOG.md
-2. Commit + tag (`v1.0-N`) + `git push origin main --tags`
-3. Tell user to **Archive in Xcode → Distribute to TestFlight**
-4. Done — Amplify backend deploys automatically on push, no need to monitor it
+1. Write the release notes into `CHANGELOG.md` under `[Unreleased]`
+2. Commit everything — the script refuses to run on a dirty tree
+3. `./scripts/release.sh` — moves `[Unreleased]` to the version, commits, tags
+   `vX.Y.Z`, then bumps `main` to the next minor
+4. `git push origin main --tags`
+5. Done. The tag push runs `.github/workflows/testflight.yml`, which stamps a
+   datetime build number and ships to TestFlight on its own.
 
-**Never** monitor the Amplify deployment or wait for it — it's automatic and not the priority. The iOS archive is what ships to users.
+**Never** monitor the Amplify deployment or wait for it — it's automatic and not the priority. The tag push is what ships to users.
 
 ## Release Workflow
 
@@ -254,35 +176,38 @@ When the user says to release/deploy, do it in this exact order:
 - **Build Number** (`CURRENT_PROJECT_VERSION`): Increments with each TestFlight upload
 - **Git Tags**: Format is `v{VERSION}-{BUILD}` (e.g., `v1.0.0-1`)
 
-### Release Checklist
+### How the script actually works
 
-1. Ensure all changes are committed
-2. Update `CHANGELOG.md` with changes under `[Unreleased]`
-3. Run release script: `./scripts/release.sh --bump-build` (or `--bump-minor`, `--bump-patch`, `--bump-major`)
-4. Push to remote: `git push origin main --tags`
-5. In Xcode: Product → Archive
-6. Distribute: TestFlight Internal Only (or App Store Connect)
-7. In App Store Connect: Add build to "Family" testing group
-
-### Version Bump Guide
-
-| Change Type | Command | Example |
-|-------------|---------|---------|
-| Bug fix, no new features | `--bump-build` | 1.0.0 (1) → 1.0.0 (2) |
-| Bug fix release | `--bump-patch` | 1.0.0 → 1.0.1 (1) |
-| New features | `--bump-minor` | 1.0.0 → 1.1.0 (1) |
-| Breaking changes | `--bump-major` | 1.0.0 → 2.0.0 (1) |
-
-### Quick Release Commands
+`main` always carries the **next** version under development. Tags mark what
+shipped. So releasing 1.6.0 tags `v1.6.0` and leaves `main` on 1.7.0.
 
 ```bash
-# Standard release (just bump build)
-./scripts/release.sh --bump-build && git push origin main --tags
+./scripts/release.sh              # release current version, bump main to next minor
+./scripts/release.sh --next major # ...bump to next major instead
+./scripts/release.sh --next patch # ...next patch
+./scripts/release.sh --next none  # release only, no bump commit (hotfix branch)
+./scripts/release.sh --dry-run    # print what it would do
+```
 
-# Then in Xcode: Product → Archive → Distribute
+There is no `--bump-build`, `--bump-minor`, `--bump-patch` or `--bump-major`;
+this section documented those flags for months and none of them ever existed.
+
+**Build numbers are never set by hand or by the script.** `CURRENT_PROJECT_VERSION`
+sits at `0` in the repo and CI stamps a datetime into it
+(`.github/workflows/testflight.yml`). A build made locally therefore reports
+build 0, which is correct rather than broken.
+
+### Release
+
+```bash
+# 1. CHANGELOG.md — fill in [Unreleased]
+# 2. commit everything; the script refuses a dirty tree
+./scripts/release.sh
+git push origin main --tags
+# The tag push builds and uploads to TestFlight. Nothing to do in Xcode.
 ```
 
 ### Current Release
 
-- **Latest**: v1.0.0-1 (January 18, 2026)
+- **Latest**: v1.6.0 (August 30, 2026)
 - See `CHANGELOG.md` for full history

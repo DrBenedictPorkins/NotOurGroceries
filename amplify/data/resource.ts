@@ -35,6 +35,12 @@ export const regenerateInviteCodeFunction = defineFunction({
 });
 
 // Join a household with invite code
+export const householdMembershipFunction = defineFunction({
+  name: 'householdMembershipFunction',
+  entry: './householdMembershipFunction/handler.ts',
+  timeoutSeconds: 60,
+});
+
 export const joinHouseholdFunction = defineFunction({
   name: 'joinHouseholdFunction',
   entry: './joinHouseholdFunction/handler.ts',
@@ -127,6 +133,11 @@ const schema = a.schema({
   Household: a
     .model({
       name: a.string().required(),
+      /// Whoever created it. The only power it carries is removing other
+      /// members; there is no role system and nothing else checks it. Optional
+      /// because households created before this existed have no owner, and a
+      /// household without one simply cannot remove anybody.
+      ownerId: a.id(),
       inviteCode: a.string().required(),
       inviteCodeExpiresAt: a.datetime().required(),
       activeStoreId: a.id(), // Legacy - kept for backwards compatibility
@@ -439,6 +450,25 @@ const schema = a.schema({
     }))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(joinHouseholdFunction)),
+
+  // Remove a member, or leave a household.
+  //
+  // Has to be a function: User is allow.owner(), so no client can clear another
+  // member's householdId, and the owner check has to run somewhere the caller
+  // cannot skip.
+  manageHouseholdMembership: a
+    .mutation()
+    .arguments({
+      action: a.string().required(),   // "remove" | "leave"
+      memberId: a.id(),                // required for "remove"
+    })
+    .returns(a.customType({
+      householdId: a.id().required(),
+      householdDeleted: a.boolean().required(),
+      remainingMembers: a.integer().required(),
+    }))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(householdMembershipFunction)),
 
   // Send invite email via SES
   sendInviteEmail: a

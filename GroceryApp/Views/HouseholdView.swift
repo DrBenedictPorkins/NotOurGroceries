@@ -12,6 +12,8 @@ struct HouseholdView: View {
     @State private var showInviteSheet = false
     @State private var showLeaveAlert = false
     @State private var showJoinSheet = false
+    /// Who the owner is about to remove. Nil when no removal is pending.
+    @State private var memberToRemove: AmplifyService.HouseholdMember?
     @State private var householdDetails: AmplifyService.HouseholdDetails?
 
     var body: some View {
@@ -54,7 +56,21 @@ struct HouseholdView: View {
                 leaveHousehold()
             }
         } message: {
-            Text("You will lose access to the shared shopping list. You can rejoin later with an invite code.")
+            Text(leaveWarning)
+        }
+        .alert(
+            "Remove \(memberToRemove?.displayName ?? "member")?",
+            isPresented: Binding(
+                get: { memberToRemove != nil },
+                set: { if !$0 { memberToRemove = nil } }
+            )
+        ) {
+            Button("Cancel", role: .cancel) { memberToRemove = nil }
+            Button("Remove", role: .destructive) {
+                if let member = memberToRemove { removeMember(member) }
+            }
+        } message: {
+            Text("They lose access to the list immediately. Anything they added stays — it belongs to the household. You can invite them back with a new code.")
         }
         .task {
             await loadHouseholdDetails()
@@ -155,16 +171,6 @@ struct HouseholdView: View {
                 )
             }
 
-            // Switch household option
-            Button(action: { showJoinSheet = true }) {
-                HStack {
-                    Image(systemName: "arrow.left.arrow.right")
-                    Text("Switch Household")
-                }
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.dillGreen)
-            }
-
             // Leave household option
             Button(action: { showLeaveAlert = true }) {
                 HStack {
@@ -258,6 +264,24 @@ struct HouseholdView: View {
                 Text(joinedAt, style: .date)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
+            }
+
+            // Only the creator sees this, and never on their own row. Behind a
+            // long press rather than a visible button: it is rare, it is not
+            // undoable, and a tappable X beside somebody's name invites a
+            // mis-tap in a household of two.
+            if canRemove(member) {
+                Menu {
+                    Button("Remove \(member.displayName)", role: .destructive) {
+                        memberToRemove = member
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -436,6 +460,35 @@ struct HouseholdView: View {
         }
     }
 
+    /// The last member out takes the household with them, and that is worth
+    /// saying before they tap rather than after.
+    private var leaveWarning: String {
+        if (householdDetails?.memberCount ?? 0) <= 1 {
+            return "You are the only member, so the household will be deleted along with its list, suggestions, history and store layouts. This cannot be undone."
+        }
+        return "You will lose access to the shared shopping list. Anything you added stays with the household. You can rejoin later with an invite code."
+    }
+
+    /// Only the creator, and never on their own row.
+    private func canRemove(_ member: AmplifyService.HouseholdMember) -> Bool {
+        guard let ownerId = householdDetails?.ownerId,
+              let me = amplifyService.currentUser?.userId else { return false }
+        return ownerId == me && member.id != me
+    }
+
+    private func removeMember(_ member: AmplifyService.HouseholdMember) {
+        memberToRemove = nil
+        Task {
+            do {
+                _ = try await amplifyService.removeMember(member.id)
+                successMessage = "\(member.displayName) was removed"
+                await loadHouseholdDetails()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func loadHouseholdDetails() async {
         do {
             householdDetails = try await amplifyService.fetchHouseholdDetails()
@@ -446,7 +499,15 @@ struct HouseholdView: View {
 
     private func leaveHousehold() {
         Task {
-            await amplifyService.leaveHousehold()
+            do {
+                // Goes through the Lambda now: the old path wrote an empty
+                // string into a GSI key and left the household standing with
+                // nobody in it.
+                _ = try await amplifyService.leaveHouseholdRemotely()
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
             householdDetails = nil
         }
     }

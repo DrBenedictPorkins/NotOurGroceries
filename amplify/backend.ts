@@ -6,6 +6,7 @@ import {
   searchProductsFunction,
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
+  householdMembershipFunction,
   sendInviteEmailFunction,
   aisleExtractionJobHandler,
   inferProductAisleFunction,
@@ -29,6 +30,7 @@ const backend = defineBackend({
   searchProductsFunction,
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
+  householdMembershipFunction,
   sendInviteEmailFunction,
   aisleExtractionJobHandler,
   inferProductAisleFunction,
@@ -119,6 +121,33 @@ userTable.grantReadWriteData(joinHouseholdLambda);
 joinHouseholdLambda.addToRolePolicy(new PolicyStatement({
   actions: ['dynamodb:Query'],
   resources: [`${householdTable.tableArn}/index/*`],
+}));
+
+// Membership changes: remove a member, or leave (and delete the household when
+// the last member goes). Needs write on User because `allow.owner()` prevents
+// any client doing it, and write on the household-scoped tables for the cascade.
+const householdMembershipLambda = backend.householdMembershipFunction.resources.lambda as Function;
+addEnvVars(householdMembershipLambda, {
+  HOUSEHOLD_TABLE_NAME: householdTable.tableName,
+  USER_TABLE_NAME: userTable.tableName,
+  GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
+  COMMIT_TABLE_NAME: commitTable.tableName,
+  HOUSEHOLD_STORE_TABLE_NAME: backend.data.resources.tables['HouseholdStore'].tableName,
+});
+householdTable.grantReadWriteData(householdMembershipLambda);
+userTable.grantReadWriteData(householdMembershipLambda);
+groceryItemTable.grantReadWriteData(householdMembershipLambda);
+commitTable.grantReadWriteData(householdMembershipLambda);
+backend.data.resources.tables['HouseholdStore'].grantReadWriteData(householdMembershipLambda);
+// The cascade and the member count both go through GSIs.
+householdMembershipLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['dynamodb:Query'],
+  resources: [
+    `${userTable.tableArn}/index/*`,
+    `${groceryItemTable.tableArn}/index/*`,
+    `${commitTable.tableArn}/index/*`,
+    `${backend.data.resources.tables['HouseholdStore'].tableArn}/index/*`,
+  ],
 }));
 
 // Add environment variables and permissions for sendInviteEmailFunction

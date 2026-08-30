@@ -302,8 +302,7 @@ struct StoreAisleManagementView: View {
         .task {
             // Ensure standard perimeter sections exist (Produce, Meat, Dairy, etc.)
             // Skipped for stores that have no aisles at all.
-            if !currentStore.hasNoAisles,
-               let updated = try? await storeService.addMissingStandardSections(to: currentStore) {
+            if let updated = try? await storeService.addMissingStandardSections(to: currentStore) {
                 if let index = viewModel.householdStores.firstIndex(where: { $0.id == updated.id }) {
                     viewModel.householdStores[index] = updated
                 }
@@ -339,13 +338,9 @@ struct StoreAisleManagementView: View {
 
     private var actionButtonsView: some View {
         HStack(spacing: 12) {
-            // Scan Directory Button.
-            //
-            // Hidden for a store with no aisles: there is no directory board to
-            // photograph, so the scan has nothing to read. StoreDetailView has
-            // always gated this; the cog in At Store mode reaches the same
-            // screen by a different route and did not.
-            if !currentStore.hasNoAisles {
+            // Scan Directory. Offered for every store now — a corner shop with no
+            // board simply never taps it, which is cheaper than asking everyone
+            // to declare up front which kind of shop they are standing in.
             Button(action: {
                 showAisleScanSheet = true
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -367,7 +362,6 @@ struct StoreAisleManagementView: View {
                                 .stroke(DesignSystem.Colors.dillGreen, lineWidth: 1)
                         )
                 )
-            }
             }
 
             // Cleanup Invalid Button (only show if there are invalid mappings)

@@ -247,6 +247,12 @@ final class TripStats: ObservableObject {
         log.recordQuickRun(itemNames: itemNames, picked: picked)
     }
 
+    /// Wipe the tally. Called on sign-out — this is one person's shopping
+    /// history and it does not belong to whoever signs in next.
+    func clear() {
+        log = TripLog()
+    }
+
     // MARK: Reading — passthrough, so views never reach past the log
 
     var hasAnything: Bool { log.hasAnything }

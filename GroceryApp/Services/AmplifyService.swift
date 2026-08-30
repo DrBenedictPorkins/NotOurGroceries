@@ -148,6 +148,27 @@ class AmplifyService: ObservableObject {
         currentUser = nil
         currentHouseholdId = nil
         UserCache.shared.clear()
+        Self.clearLocalUserData()
+    }
+
+    /// Everything this account left on the device.
+    ///
+    /// These four stores are files in the app container, not per-account, so
+    /// without this the next person to sign in inherits the last one's cached
+    /// shopping list, scratch list and shopping history. On a shared or resold
+    /// phone that is somebody else's data on screen.
+    ///
+    /// The outbox is the one that does more than embarrass: queued writes carry
+    /// item ids from the previous household, and the next session would push
+    /// them under its own credentials.
+    ///
+    /// Deliberately unconditional. A partial wipe here is worse than none —
+    /// leftovers are exactly the state nobody tests.
+    static func clearLocalUserData() {
+        LocalListStore.clear()
+        QuickListStore.shared.clear()
+        Outbox.shared.clear()
+        TripStats.shared.clear()
     }
 
     func resetPassword(for email: String) async throws {
@@ -207,6 +228,16 @@ class AmplifyService: ObservableObject {
                             profilePattern: profilePattern
                         )
                     }
+                    // Repair the rows written by the old bug, on sign-in.
+                    // Every account created before this stored its sub in the
+                    // email column, so the household screen showed a UUID where
+                    // a person's address belongs. Nobody is going to file that as
+                    // a bug; it just looks broken.
+                    if case .string(let storedEmail) = userData["email"],
+                       !storedEmail.contains("@") {
+                        await repairStoredEmail(for: user.userId)
+                    }
+
                     // Set householdId if present
                     if case .string(let householdId) = userData["householdId"] {
                         self.currentHouseholdId = householdId
@@ -235,17 +266,62 @@ class AmplifyService: ObservableObject {
         }
     }
 
+    /// The signed-in user's address, from Cognito rather than from `username`.
+    ///
+    /// With an email-based pool `AuthUser.username` is the sub — a UUID — so
+    /// reading the email out of it stored the UUID in the email column, and every
+    /// screen that showed "their email" showed a UUID instead. All six existing
+    /// users are like this. Nil when the attribute is somehow absent, so callers
+    /// can decide rather than persisting a placeholder.
+    private func cognitoEmail(from attributes: [AuthUserAttribute]) -> String? {
+        attributes.first(where: { $0.key == .email })?.value
+    }
+
+    /// Put the real address back on a row that has a UUID in it.
+    ///
+    /// Only ever touches the signed-in user's own row, and only when what is
+    /// stored is plainly not an email.
+    private func repairStoredEmail(for userId: String) async {
+        let attributes = (try? await Amplify.Auth.fetchUserAttributes()) ?? []
+        guard let email = cognitoEmail(from: attributes), email.contains("@") else { return }
+
+        let document = """
+        mutation UpdateUser($input: UpdateUserInput!) {
+            updateUser(input: $input) {
+                id
+                email
+            }
+        }
+        """
+
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: ["input": ["id": userId, "email": email]],
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+
+        do {
+            if case .failure(let error) = try await Amplify.API.mutate(request: request) {
+                print("Could not repair stored email: \(error)")
+            }
+        } catch {
+            // Best effort. A failure here leaves the row as it was, and the next
+            // sign-in tries again.
+            print("Could not repair stored email: \(error)")
+        }
+    }
+
     private func createUserProfile() async {
         guard let user = currentUser else { return }
 
         do {
-            let email = user.username
-
             // Fetch user attributes from Cognito to get the display name
             let attributes = try await Amplify.Auth.fetchUserAttributes()
             guard let displayName = attributes.first(where: { $0.key == .name })?.value else {
                 fatalError("User has no 'name' attribute in Cognito. Display name must be set during signup.")
             }
+            let email = cognitoEmail(from: attributes) ?? user.username
 
             let document = """
             mutation CreateUser($input: CreateUserInput!) {
@@ -403,6 +479,9 @@ class AmplifyService: ObservableObject {
             variables: [
                 "input": [
                     "name": name,
+                    // Whoever creates it owns it, and ownership never moves. The
+                    // only thing it permits is removing other members.
+                    "ownerId": currentUser?.userId ?? "",
                     "inviteCode": inviteCode,
                     "inviteCodeExpiresAt": expiresAt,
                     "sequenceNumber": 0
@@ -513,9 +592,14 @@ class AmplifyService: ObservableObject {
     private func createUserWithHousehold(_ householdId: String) async {
         guard let user = currentUser else { return }
 
-        let email = user.username
+        // Same trap as createUserProfile: `username` is the sub on an email pool,
+        // and deriving a display name from it produced a UUID for a name.
+        let attributes = (try? await Amplify.Auth.fetchUserAttributes()) ?? []
+        let email = cognitoEmail(from: attributes) ?? user.username
         let displayName: String
-        if let atIndex = email.firstIndex(of: "@") {
+        if let named = attributes.first(where: { $0.key == .name })?.value, !named.isEmpty {
+            displayName = named
+        } else if let atIndex = email.firstIndex(of: "@") {
             displayName = String(email[..<atIndex]).capitalized
         } else {
             displayName = email
@@ -583,6 +667,9 @@ class AmplifyService: ObservableObject {
         let inviteCodeExpiresAt: Date?
         let memberCount: Int
         let members: [HouseholdMember]
+        /// Nil for households created before ownership existed. Those simply
+        /// have nobody who can remove anybody.
+        let ownerId: String?
     }
 
     func fetchHouseholdDetails() async throws -> HouseholdDetails? {
@@ -593,6 +680,7 @@ class AmplifyService: ObservableObject {
             getHousehold(id: $id) {
                 id
                 name
+                ownerId
                 inviteCode
                 inviteCodeExpiresAt
                 members {
@@ -683,13 +771,19 @@ class AmplifyService: ObservableObject {
                     }
                 }
 
+                let ownerId: String? = {
+                    if case .string(let value) = household["ownerId"], !value.isEmpty { return value }
+                    return nil
+                }()
+
                 return HouseholdDetails(
                     id: id,
                     name: name,
                     inviteCode: inviteCode,
                     inviteCodeExpiresAt: expiresAt,
                     memberCount: members.count,
-                    members: members
+                    members: members,
+                    ownerId: ownerId
                 )
             }
             return nil
@@ -878,6 +972,67 @@ class AmplifyService: ObservableObject {
             }
 
             throw AmplifyError.unknown("Failed to join household")
+        case .failure(let error):
+            throw error
+        }
+    }
+
+    /// What came back from a membership change.
+    struct MembershipResult {
+        let householdDeleted: Bool
+        let remainingMembers: Int
+    }
+
+    /// Remove somebody else. Owner only, enforced in the Lambda.
+    @discardableResult
+    func removeMember(_ memberId: String) async throws -> MembershipResult {
+        try await manageMembership(action: "remove", memberId: memberId)
+    }
+
+    /// Leave the household. Anyone, owner included. If nobody is left, the
+    /// household and its data are deleted.
+    @discardableResult
+    func leaveHouseholdRemotely() async throws -> MembershipResult {
+        let result = try await manageMembership(action: "leave", memberId: nil)
+        currentHouseholdId = nil
+        UserDefaults.standard.removeObject(forKey: "cachedHouseholdId")
+        NotificationCenter.default.post(name: .householdChanged, object: nil)
+        return result
+    }
+
+    private func manageMembership(action: String, memberId: String?) async throws -> MembershipResult {
+        let document = """
+        mutation ManageHouseholdMembership($action: String!, $memberId: ID) {
+            manageHouseholdMembership(action: $action, memberId: $memberId) {
+                householdId
+                householdDeleted
+                remainingMembers
+            }
+        }
+        """
+
+        var variables: [String: Any] = ["action": action]
+        variables["memberId"] = memberId ?? NSNull()
+
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: variables,
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+
+        switch try await Amplify.API.mutate(request: request) {
+        case .success(let json):
+            guard case .object(let root) = json,
+                  case .object(let payload) = root["manageHouseholdMembership"] else {
+                throw AmplifyError.unknown("Unexpected response")
+            }
+            let deleted: Bool = { if case .boolean(let b) = payload["householdDeleted"] { return b }; return false }()
+            let remaining: Int = {
+                if case .number(let n) = payload["remainingMembers"] { return Int(n) }
+                return 0
+            }()
+            return MembershipResult(householdDeleted: deleted, remainingMembers: remaining)
         case .failure(let error):
             throw error
         }

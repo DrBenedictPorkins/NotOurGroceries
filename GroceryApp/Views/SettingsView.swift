@@ -2,11 +2,22 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var amplifyService: AmplifyService
+    @EnvironmentObject var viewModel: ShoppingListViewModel
     @ObservedObject var userCache = UserCache.shared
 
-    @State private var showColorPicker = false
+    // Colour and pattern are still stored per user and still drive the badge that
+    // tells two members apart on a shared list. Choosing them is what went: it
+    // opened a personalisation flow on the way to Settings and implied the app
+    // was tailoring something, when the colour has no bearing on shopping at all.
+    // The values assigned at sign-up stand.
     @State private var currentColor: String = "cyan"
     @State private var currentPattern: String = "solid"
+
+    @State private var showClearWarning = false
+    @State private var showTypeToConfirm = false
+    @State private var confirmationText = ""
+    @State private var isClearing = false
+    @State private var clearProgress: (done: Int, total: Int) = (0, 0)
 
     private var displayName: String {
         guard let userId = amplifyService.currentUser?.userId else { return "User" }
@@ -37,6 +48,9 @@ struct SettingsView: View {
                     // App info section
                     appInfoSection
 
+                    // Destructive, and kept away from everything else
+                    dangerZone
+
                     // Sign out button
                     signOutButton
                 }
@@ -48,13 +62,6 @@ struct SettingsView: View {
         .task {
             await loadCurrentUserProfile()
         }
-        .sheet(isPresented: $showColorPicker) {
-            ProfileColorPickerSheet(
-                selectedColor: $currentColor,
-                selectedPattern: $currentPattern,
-                onSave: saveProfile
-            )
-        }
     }
 
     // MARK: - Load Profile
@@ -63,16 +70,6 @@ struct SettingsView: View {
         guard let userId = amplifyService.currentUser?.userId else { return }
         currentColor = userCache.profileColor(for: userId)
         currentPattern = userCache.profilePattern(for: userId)
-    }
-
-    private func saveProfile() {
-        Task {
-            do {
-                try await amplifyService.updateProfileAppearance(color: currentColor, pattern: currentPattern)
-            } catch {
-                print("Failed to save profile: \(error)")
-            }
-        }
     }
 
     // MARK: - Header
@@ -94,52 +91,27 @@ struct SettingsView: View {
     // MARK: - User Info Card
 
     private var userInfoCard: some View {
-        Button {
-            showColorPicker = true
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } label: {
-            HStack(spacing: 16) {
-                // User color badge
-                UserColorBadge(
-                    colorKey: currentColor,
-                    patternKey: currentPattern,
-                    initial: userInitial,
-                    size: 60
-                )
+        HStack(spacing: 16) {
+            // User color badge
+            UserColorBadge(
+                colorKey: currentColor,
+                patternKey: currentPattern,
+                initial: userInitial,
+                size: 60
+            )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(displayName)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
 
-                    Text("Tap to customize your color")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-
-                    if amplifyService.currentUser != nil {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(DesignSystem.Colors.success)
-                                .frame(width: 6, height: 6)
-                            Text("Signed in")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.success)
-                        }
-                        .padding(.top, 2)
-                    }
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
             }
-            .padding(20)
-            .frame(maxWidth: .infinity)
-            .background(glassCard)
-        }
-        .buttonStyle(.plain)
+
+        Spacer()
+    }
+        .padding(20)
+        .frame(maxWidth: .infinity)
+        .background(glassCard)
     }
 
     // MARK: - App Info
@@ -196,6 +168,167 @@ struct SettingsView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
         }
+    }
+
+    // MARK: - Danger Zone
+
+    /// Empty the suggestions, all of them, for the whole household.
+    ///
+    /// Suggestions accumulate by design and there is no other way to remove more
+    /// than one at a time — a few hundred bad ones from an early experiment can
+    /// otherwise only be swiped away individually.
+    ///
+    /// Guarded in three steps because it cannot be undone and it is not only the
+    /// tapper's data: a warning naming the count, then typing the word, then the
+    /// work itself. Each step says the same two facts — everyone loses them, and
+    /// there is no undo — because a person who skims the first will read the
+    /// second.
+    private var dangerZone: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("DANGER ZONE")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(0.8)
+                .foregroundColor(DesignSystem.Colors.error.opacity(0.8))
+
+            Button {
+                showClearWarning = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.error)
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Clear all suggestions")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                        Text(suggestionSubtitle)
+                            .font(.system(size: 12))
+                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if isClearing {
+                        Text("\(clearProgress.done)/\(clearProgress.total)")
+                            .font(.system(size: 12, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(DesignSystem.Colors.error.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(DesignSystem.Colors.error.opacity(0.35), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isClearing || viewModel.suggestions.isEmpty)
+            .opacity(viewModel.suggestions.isEmpty ? 0.45 : 1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .confirmationDialog(
+            "Delete all \(viewModel.suggestions.count) suggestions?",
+            isPresented: $showClearWarning,
+            titleVisibility: .visible
+        ) {
+            Button("Continue", role: .destructive) {
+                confirmationText = ""
+                showTypeToConfirm = true
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This empties the suggestion list for everyone in the household, not just on this phone. It cannot be undone, and your shopping history is how the app knows what you buy.")
+        }
+        .sheet(isPresented: $showTypeToConfirm) {
+            typeToConfirmSheet
+        }
+    }
+
+    private var suggestionSubtitle: String {
+        let count = viewModel.suggestions.count
+        if count == 0 { return "Nothing to clear" }
+        return count == 1
+            ? "1 suggestion · everyone in the household"
+            : "\(count) suggestions · everyone in the household"
+    }
+
+    /// The last gate. Typing the word is the point — it is the one action a thumb
+    /// cannot perform by accident on the way to something else.
+    private var typeToConfirmSheet: some View {
+        ZStack {
+            DesignSystem.Colors.background.ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Last chance")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Text("You are about to delete **\(viewModel.suggestions.count) suggestions** from your household. Everyone loses them. There is no undo, and nothing on your current shopping list is touched.")
+                    .font(.system(size: 14))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Text("Type DELETE to confirm")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+
+                TextField("", text: $confirmationText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.characters)
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(DesignSystem.Colors.cardBackground)
+                    )
+
+                Button {
+                    showTypeToConfirm = false
+                    Task { await clearSuggestions() }
+                } label: {
+                    Text("Delete them all")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 15)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(DesignSystem.Colors.error)
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(confirmationText != "DELETE")
+                .opacity(confirmationText == "DELETE" ? 1 : 0.4)
+
+                Button("Cancel") { showTypeToConfirm = false }
+                    .font(.system(size: 15))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .frame(maxWidth: .infinity)
+
+                Spacer()
+            }
+            .padding(24)
+        }
+        .presentationDetents([.medium])
+    }
+
+    private func clearSuggestions() async {
+        isClearing = true
+        clearProgress = (0, viewModel.suggestions.count)
+        await viewModel.deleteAllSuggestions { done, total in
+            clearProgress = (done, total)
+        }
+        isClearing = false
+        confirmationText = ""
     }
 
     // MARK: - Sign Out Button

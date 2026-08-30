@@ -227,7 +227,8 @@ final class TripLogTests: XCTestCase {
         log.trips = [trip(endedAt: now)]
 
         let weeks = log.tripsByWeek(weeks: 4, now: now, calendar: calendar)
-        XCTAssertEqual(weeks, weeks.sorted { $0.weekStart < $1.weekStart },
+        let starts = weeks.map(\.weekStart)
+        XCTAssertEqual(starts, starts.sorted(),
                        "a chart drawn right-to-left reads as a decline")
     }
 
@@ -351,6 +352,40 @@ final class TripLogTests: XCTestCase {
         XCTAssertEqual(log.averageMinutes, 40)
         XCTAssertNil(log.totalLeftBehind)
         XCTAssertTrue(log.topItems().isEmpty, "no names were kept, so none can be shown")
+    }
+
+    // MARK: - Signing out
+
+    @MainActor
+    func testClearingLeavesNothingBehindForTheNextAccount() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TripStatsTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        TripStats.directoryOverride = dir
+        defer {
+            TripStats.directoryOverride = nil
+            try? FileManager.default.removeItem(at: dir)
+        }
+
+        let stats = TripStats()
+        stats.recordTrip(storeName: "Wegmans",
+                         itemNames: ["Milk"],
+                         leftBehindNames: [],
+                         customLearned: 0,
+                         startedAt: Date().addingTimeInterval(-600),
+                         endedAt: Date())
+        XCTAssertTrue(stats.hasAnything)
+
+        stats.clear()
+
+        XCTAssertFalse(stats.hasAnything)
+        XCTAssertEqual(stats.tripCount, 0)
+        XCTAssertNil(stats.restorableTrip,
+                     "a restore offer would rebuild the previous account's list")
+
+        // Cleared in memory is not enough — the next launch reads the file.
+        let reloaded = TripStats()
+        XCTAssertFalse(reloaded.hasAnything)
     }
 
     func testRoundTripsThroughJSON() throws {

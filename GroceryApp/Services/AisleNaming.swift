@@ -52,18 +52,49 @@ enum AisleNaming {
         }
     }
 
-    /// "Aisle 7 — Baking" when a store numbers its aisles, just the name when it
-    /// does not, and the number alone when that is all it has.
+    /// A header, not a description of the shelf.
+    ///
+    /// "Aisle 7 — Baking" when a store numbers its aisles and the name is short,
+    /// just the name when there is no number, and the number alone when the name
+    /// is really the aisle's contents.
+    ///
+    /// That last case is the common one. A directory scan fills `name` with a
+    /// sample of what the sign listed — "sanitary products, sports braces, sports
+    /// nutrition…" — which produced section headers three lines deep in At Store
+    /// mode. The contents live in `description`, which is what the aisle
+    /// inference prompt reads; a header only has to say which aisle it is.
+    private static let maxNameInHeader = 20
+
     private static func label(for aisle: StoreAisle) -> String {
         let number = aisle.number.trimmingCharacters(in: .whitespaces)
         let name = aisle.name.trimmingCharacters(in: .whitespaces)
+        let numbered = Int(number) != nil
 
         switch (number.isEmpty, name.isEmpty) {
-        case (true, true):   return "Unsorted"
-        case (true, false):  return name
-        case (false, true):  return Int(number) != nil ? "Aisle \(number)" : number
-        case (false, false): return Int(number) != nil ? "Aisle \(number) — \(name)" : "\(number) — \(name)"
+        case (true, true):
+            return "Unsorted"
+        case (true, false):
+            // No number to fall back on, so the name has to serve — but a
+            // contents blob still gets cut at its first item rather than run on.
+            return shortened(name)
+        case (false, true):
+            return numbered ? "Aisle \(number)" : number
+        case (false, false):
+            let prefix = numbered ? "Aisle \(number)" : number
+            // A short name is a real name — "Baking". A long one is contents.
+            guard name.count <= maxNameInHeader else { return prefix }
+            return "\(prefix) — \(name)"
         }
+    }
+
+    /// First listed thing, and no more than a header's worth of it.
+    private static func shortened(_ name: String) -> String {
+        let firstPart = name.split(separator: ",").first.map(String.init) ?? name
+        let trimmed = firstPart.trimmingCharacters(in: .whitespaces)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+
+        guard trimmed.count > maxNameInHeader else { return trimmed }
+        return String(trimmed.prefix(maxNameInHeader)).trimmingCharacters(in: .whitespaces) + "…"
     }
 
     /// `standard-frozen` → `Frozen`, by looking it up rather than guessing, so

@@ -463,13 +463,15 @@ async function updateStoreAisleLayout(
   // Create StoreAisle objects for OCR-derived aisles
   const ocrAisles: StoreAisle[] = aisleKeys.map((aisleKey, index) => {
     const products = aisleGroups.get(aisleKey) || [];
-    const sampleProducts = products.slice(0, 3).join(', ');
-    const suffix = products.length > 3 ? '...' : '';
-
     return {
       id: `aisle-${storeId}-${aisleKey.replace(/\s+/g, '-').toLowerCase()}`,
       number: aisleKey,
-      name: sampleProducts + suffix,
+      // Deliberately empty. `name` is what section headers render, and putting a
+      // sample of the sign's contents here produced three-line headers in At
+      // Store mode — "12 - SYRUP, TEA BAGS, CHOCOLATE SYRUP…". The contents
+      // belong in `description`, which is what the aisle inference prompt reads
+      // and what makes the mapping good; the header only says which aisle it is.
+      name: '',
       displayOrder: index,
       description: products.slice(0, 10).join(', '),
     };

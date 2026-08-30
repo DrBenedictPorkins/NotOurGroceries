@@ -81,18 +81,7 @@ struct AtStoreModeView: View {
 
     /// Format aisle display name from aisle ID
     private func formatAisleDisplayName(_ aisleId: String, store: HouseholdStore) -> String {
-        // First check if we have a name in store layout
-        if let aisle = store.aisleLayout.first(where: { $0.id == aisleId || $0.name == aisleId || $0.number == aisleId }) {
-            return aisleHeaderName(aisle)
-        }
-
-        // Otherwise format based on the ID itself
-        if let aisleNum = Int(aisleId) {
-            return "AISLE \(aisleNum)"
-        }
-
-        // Named sections like "Dairy", "Produce", "Deli"
-        return aisleId.uppercased()
+        AisleNaming.headerName(for: aisleId, in: store.aisleLayout)
     }
 
     // Store unmapped items separately for the custom items section
@@ -610,31 +599,13 @@ struct AtStoreModeView: View {
 
     // MARK: - Helper Methods
 
-    /// Format aisle header name flexibly - handles numbers, alphanumeric, or words
+    /// One rule for aisle headers, shared with every other screen.
+    ///
+    /// This used to have its own copy, which joined the number to the whole name
+    /// — and a scanned aisle's name is a sample of the sign's contents, so the
+    /// headers ran to three lines: "12 - SYRUP, TEA BAGS, CHOCOLATE SYRUP…".
     private func aisleHeaderName(_ aisle: StoreAisle) -> String {
-        let number = aisle.number.trimmingCharacters(in: .whitespaces)
-        let name = aisle.name.trimmingCharacters(in: .whitespaces).uppercased()
-
-        // If both are empty, return placeholder
-        if number.isEmpty && name.isEmpty {
-            return "UNKNOWN AISLE"
-        }
-
-        // If only one is provided, return it
-        if number.isEmpty {
-            return name
-        }
-        if name.isEmpty {
-            return number.uppercased()
-        }
-
-        // If number and name are the same (case-insensitive), return just one
-        if number.lowercased() == aisle.name.lowercased() {
-            return name
-        }
-
-        // Otherwise combine them
-        return "\(number.uppercased()) - \(name)"
+        AisleNaming.headerName(for: aisle.id, in: [aisle])
     }
 
     /// Assign an item to a specific aisle in the store

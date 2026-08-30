@@ -84,6 +84,45 @@ final class AisleNamingTests: XCTestCase {
         XCTAssertEqual(AisleNaming.displayName(for: "a1", in: layout), "Unsorted")
     }
 
+    // MARK: - Headers stay short
+
+    func testAContentsBlobIsNotAHeader() {
+        // A directory scan fills `name` with a sample of what the sign listed.
+        // Joining that to the number gave three-line section headers in At Store.
+        let layout = [aisle(id: "a15", number: "15",
+                            name: "sanitary products, sports braces, sports nutrition")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "a15", in: layout), "Aisle 15")
+    }
+
+    func testAShortNameIsStillKept() {
+        let layout = [aisle(id: "a7", number: "7", name: "Baking")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "a7", in: layout), "Aisle 7 — Baking")
+    }
+
+    func testAnUnnumberedContentsBlobIsCutAtTheFirstItem() {
+        // Nothing to fall back on, so the name has to serve — but it still must
+        // not run on for three lines.
+        let layout = [aisle(id: "x", name: "syrup, tea bags, chocolate syrup, jam")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "x", in: layout), "syrup")
+    }
+
+    func testAVeryLongSingleWordIsTruncated() {
+        let layout = [aisle(id: "x", name: String(repeating: "a", count: 40))]
+
+        let name = AisleNaming.displayName(for: "x", in: layout)
+        XCTAssertTrue(name.hasSuffix("…"))
+        XCTAssertLessThanOrEqual(name.count, 21)
+    }
+
+    func testANumberedAisleWithNoNameIsJustTheAisle() {
+        let layout = [aisle(id: "a3", number: "3", name: "")]
+
+        XCTAssertEqual(AisleNaming.displayName(for: "a3", in: layout), "Aisle 3")
+    }
+
     // MARK: - Header form
 
     func testHeaderNameIsTheSameNameUpperCased() {

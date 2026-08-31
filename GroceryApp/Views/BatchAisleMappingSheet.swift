@@ -461,7 +461,7 @@ private struct BatchMappingResultRow: View {
 
                 Spacer()
 
-                Text("Long press to edit")
+                Text("Tap to edit")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }
@@ -483,6 +483,14 @@ private struct BatchMappingResultRow: View {
                 .onChanged { _ in isPressed = true }
                 .onEnded { _ in isPressed = false }
         )
+        // A tap opens it. The hint said "long press to edit" and sat in 10pt
+        // grey in the corner, which is a fair description of a gesture nobody
+        // goes looking for — the natural thing to do with a row is tap it.
+        .onTapGesture {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onLongPress()
+        }
+        // Long press still works, for anyone who learned it the hard way.
         .onLongPressGesture(minimumDuration: 0.5) {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             onLongPress()

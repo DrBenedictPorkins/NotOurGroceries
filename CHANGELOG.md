@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Your list
+- **Quantities are gone.** A shopping list says what to buy, not how much — "2 cups flour" is now just Flour, and "Eggs x12" is Eggs. What kind still survives, because it changes which packet you pick up: unsalted butter, waxy potatoes, plain flour
+- The name under each item is tinted in that person's own colour, so who added what is readable at a glance instead of being the same grey for everyone
+- Everyone is given a colour automatically. Tap your badge in Settings to pick a different one from twelve — a colour someone else already has is faded and wears their initial, so it's clear why you can't take it
+- The main list is always alphabetical now, which answers "is milk already on here?" without reading every row. Sorting moved to suggestions, where hundreds of rows make it worth having
+- Messages like "Tomatoes is already on your list" get their own full-width line instead of being cut off inside the header
+- While someone is out shopping, the list now says it's locked, who has it, and that it ends when they finish — rather than offering to send them requests that go nowhere
+
+### Aisles
+- Aisles default to the order you walk the shop: produce, bakery, deli, then the fish and meat counters, then dairy, then the store's numbered aisles, with frozen last
+- Dragging aisles into your own order now sticks, reordering can no longer lose an aisle, and aisles can be deleted with a swipe
+- Section headers say which aisle, not what's on the shelf — no more "12 - SYRUP, TEA BAGS, CHOCOLATE SYRUP…" three lines deep. Stores already scanned are fixed without re-scanning
+- Aisle names read as names everywhere, and whatever the field shows can be typed straight back in
+- Fix: saving an item to a named department like Bakery said "Aisle saved" and quietly did nothing. The two items this had broken are repaired
+- Fix: an aisle save that fails now says so and keeps what you typed, instead of disappearing without a word
+- "Unknown Aisle" is now "Not sorted yet" — those items aren't in a lost aisle, they just haven't been placed yet
+- Creating a store is one screen now: name, chain, done
+
+### Shopping
+- Fix: "Nothing crossed off in a while" no longer arrives mid-trip on a weak signal. It counts what you ticked off, not what reached the server
+- Fix: the "someone is shopping" banner clears on a pull-to-refresh instead of needing the app restarted
+- Fix: dictated lists no longer end with "Thank you for watching"
+
+### Your household
+- The household screen was showing nothing at all — no name, no member count, no members. Members and their joined dates are back
+- An invite code now admits one person and expires after thirty minutes, instead of working over and over for a day for anyone the text was forwarded to
+- **Generate New Code** was failing silently every time it was pressed. It works, and the code's expiry is shown
+- The email invitation form is gone. Copy and Share hand the code to whatever you actually use
+- **Delete Account** in Settings, which removes your sign-in and your profile. Items you added stay on the household list
+
+### Privacy
+- Each household's list, stores, aisles and history are now walled off at the server, rather than simply having no button that reaches them
+- Photos can no longer be listed by anyone outside the household
+- Signing out clears the previous account's list, queued changes and trip stats off the phone
+
 ## [1.6.0] - 2026-08-30
 
 ### Shopping

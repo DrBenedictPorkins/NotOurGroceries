@@ -565,17 +565,17 @@ struct StoreAisleManagementView: View {
         if aisleId == "Unknown" {
             displayName = "Not sorted yet"
             headerColor = DesignSystem.Colors.neonPink
-        } else if let aisle = currentStore.aisleLayout.first(where: { $0.id == aisleId }) {
-            // Use store's custom aisle name if defined
-            displayName = aisleDisplayName(aisle)
-            headerColor = DesignSystem.Colors.dillGreen
-        } else if let aisleNum = Int(aisleId) {
-            // Numeric aisle - format as "Aisle X"
-            displayName = "Aisle \(aisleNum)"
-            headerColor = DesignSystem.Colors.dillGreen
         } else {
-            // Named aisle (Dairy, Meat, Deli, etc.) - use as-is
-            displayName = aisleId
+            // Through AisleNaming, which already knows the order to try: the
+            // store's own layout, then a bare number, then the built-in
+            // `standard-` ids, then the id itself.
+            //
+            // This used to be a fallback chain of its own ending in
+            // `displayName = aisleId`, and that last branch is reached whenever a
+            // mapping points at a standard department the store's layout does not
+            // list — which is every store with no scanned aisles. The header then
+            // read STANDARD-BAKERY.
+            displayName = AisleNaming.displayName(for: aisleId, in: currentStore.aisleLayout)
             headerColor = DesignSystem.Colors.dillGreen
         }
         let count = itemsGroupedByAisle[aisleId]?.count ?? 0
@@ -978,6 +978,7 @@ private struct MappingEditSheet: View {
                             ForEach(availableAisles, id: \.self) { aisleId in
                                 AisleSelectionRowSimple(
                                     aisleId: aisleId,
+                                    layout: store.aisleLayout,
                                     isSelected: aisleId == selectedAisleId
                                 ) {
                                     selectedAisleId = aisleId
@@ -1141,14 +1142,15 @@ private struct MappingEditSheet: View {
 
 private struct AisleSelectionRowSimple: View {
     let aisleId: String
+    /// The store's own layout, so a numbered aisle can show its name. Without it
+    /// this row fell back to printing the id, and picking an aisle in a store
+    /// with no scanned aisles offered a list of "standard-bakery".
+    var layout: [StoreAisle] = []
     let isSelected: Bool
     let action: () -> Void
 
     private var displayName: String {
-        if let num = Int(aisleId) {
-            return "Aisle \(num)"
-        }
-        return aisleId
+        AisleNaming.displayName(for: aisleId, in: layout)
     }
 
     var body: some View {

@@ -69,6 +69,42 @@ Not Apple's rules — ours. See `world-release-blockers` in session memory.
 
 ---
 
+## To do: household lifecycle testing
+
+A whole class of behaviour has never been exercised, because doing it properly
+needs more than one throwaway account and a household that is safe to destroy.
+
+**Set up a separate test household with two or three accounts.** Gmail
+plus-addressing gives as many as needed — `mike.akram+t1@gmail.com`,
+`+t2`, `+t3` — and codes land in the normal inbox. One creates a household, the
+others join it with invite codes. Put a few items, a store and an aisle layout in
+it so there is something to observe being kept or destroyed.
+
+**Never point any of this at `TooFat&TooCurious`.** Everything below is
+destructive, and there is one environment.
+
+### Paths that have never been run
+
+| Path | What it exercises | Verify |
+|---|---|---|
+| Member deletes their account, others remain | `detachUser`, group revoke, remaining count | Their items stay on the list; their Cognito group membership is gone; the household is intact; the other members can still read everything |
+| **Last** member deletes their account | `deleteHouseholdData` cascade | Household, items, commits, stores, mappings and the Cognito group are all gone. Nothing orphaned |
+| Owner removes a member | `remove`, which is owner-only | The removed person loses access immediately, not when their token expires |
+| Owner leaves, others remain | The household with no owner | Remaining members can still use it; nobody can be removed any more, by design |
+| Member leaves and rejoins | Colour reassignment, group re-grant | They do not collide with a colour someone took while they were away |
+| Two people join on one code, racing | `consumeInviteCode` conditional write | Exactly one gets in; the other is told the code was used |
+
+### Why it matters more than it looks
+
+`deleteHouseholdData` is the most destructive code in the app and it is reached
+by two different actions. It has only ever been observed through `leave`. The
+reasoning "the account-deletion path reuses code that already works" is precisely
+the reasoning that broke joining on 2026-08-31 — the code was fine, the IAM grant
+around it was not.
+
+The account-deletion path was verified on 2026-08-31 only for a user with **no**
+household. That is the least interesting of the three branches.
+
 ## Store listing
 
 Only needed if we go past TestFlight.

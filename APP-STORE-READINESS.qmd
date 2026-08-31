@@ -126,6 +126,58 @@ windows), and whether a lawyer reviews before public release.
 
 ---
 
+## Moving the AI inside AWS
+
+Worth exploring before public release. The motive is the privacy story and the
+API keys, not cost.
+
+**Where the calls are today:** seven Lambdas use Anthropic's SDK directly
+(`parseIngredients`, `inferProductAisle`, `aisleExtractionJobHandler`,
+`matchProductsToAisles`, `extractAislesFromImages`, `extractAisleMappings`,
+`generateFullMappings`). Exactly one uses OpenAI, and it does nothing but
+transcription.
+
+### Claude → Bedrock: straightforward
+
+| | |
+|---|---|
+| Effort | ~half a day. `@anthropic-ai/bedrock-sdk` keeps the same message shape, so the seven sites are largely an import and a model id |
+| Wins | `ANTHROPIC_API_KEY` disappears entirely — Bedrock authenticates with IAM, so there is no long-lived secret in SSM to leak or rotate. One vendor, one bill, same region |
+| Check first | That `claude-haiku-4-5` and `claude-sonnet-4-6` are both available on Bedrock. New models land there later than the direct API |
+| Watch | Bedrock per-token pricing differs. Prompt caching exists with different mechanics — currently moot at our volume, but do not assume it carries over unexamined |
+
+### Whisper → somewhere in AWS: the harder half
+
+Bedrock does not host Whisper. The options are Amazon Transcribe, or running a
+speech model ourselves on SageMaker or ECS.
+
+Neither is a swap. The current setup is tuned to Whisper's specific failure
+modes: `gpt-4o-mini-transcribe` was chosen over `whisper-1` because the latter
+completes trailing silence with YouTube caption boilerplate, and
+`stripHallucinatedTail` exists to catch what still gets through. A different
+engine has different failure modes and needs its own evaluation against real
+dictation, not fixtures.
+
+**How much is at stake, measured from CloudWatch on 2026-08-31:**
+
+| | |
+|---|---|
+| Successful transcriptions, all time | 16 |
+| Median transcript | 206 characters |
+| Median latency | 3.2 s |
+| Cost | Pennies. Not a reason to move |
+
+So this is a disclosure decision, not an economic one. Moving Claude alone takes
+the privacy policy from two external processors to one; the "AWS only" story
+needs both, and transcription is the half with quality risk attached.
+
+### Suggested order
+
+1. Move Claude to Bedrock. Real security win, low risk, independent of everything else.
+2. Evaluate Amazon Transcribe against real dictation separately, with the
+   hallucination behaviour as the thing to measure. Only then decide whether the
+   single-processor story is worth the change.
+
 ## What is deliberately not being built
 
 - **Monetization.** Direction agreed — no feature gating, volume metered on

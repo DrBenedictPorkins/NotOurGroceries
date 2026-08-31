@@ -9,6 +9,7 @@ import {
   type ParsedIngredient,
 } from './prompt';
 import type { Schema } from '../resource';
+import { requireHousehold } from '../requireHousehold';
 
 
 type Handler = Schema['parseIngredients']['functionHandler'];
@@ -32,6 +33,7 @@ async function resolveAmplifySecrets(): Promise<void> {
 }
 
 export const handler: Handler = async (event) => {
+  requireHousehold(event);
   await resolveAmplifySecrets();
   const { rawText, knownTerms, imageData } = event.arguments;
 

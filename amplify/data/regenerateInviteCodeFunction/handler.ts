@@ -1,6 +1,7 @@
 import { DynamoDBClient, UpdateItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import type { Schema } from '../resource';
+import { requireHousehold } from '../requireHousehold';
 
 /**
  * An invite code lives 30 minutes and admits one person.
@@ -51,6 +52,7 @@ async function isUserMember(userId: string, householdId: string): Promise<boolea
 }
 
 export const handler: Handler = async (event) => {
+  requireHousehold(event);
   console.log('regenerateInviteCode Lambda invoked');
   console.log('Event:', JSON.stringify(event, null, 2));
 

@@ -1,6 +1,7 @@
 import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import type { Schema } from '../resource';
+import { requireHousehold } from '../requireHousehold';
 
 const client = new DynamoDBClient({});
 
@@ -111,6 +112,7 @@ function normalizeQuery(name: string): string {
 }
 
 export const handler: Handler = async (event) => {
+  requireHousehold(event);
   const { query, limit: inputLimit } = event.arguments;
   const limit = inputLimit ?? 10;
 

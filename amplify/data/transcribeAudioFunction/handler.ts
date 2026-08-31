@@ -1,5 +1,6 @@
 import { SSMClient, GetParametersCommand } from '@aws-sdk/client-ssm';
 import type { Schema } from '../resource';
+import { requireHousehold } from '../requireHousehold';
 
 type Handler = Schema['transcribeAudio']['functionHandler'];
 
@@ -73,6 +74,7 @@ async function resolveAmplifySecrets(): Promise<void> {
 }
 
 export const handler: Handler = async (event) => {
+  requireHousehold(event);
   await resolveAmplifySecrets();
   const { audioData } = event.arguments;
 

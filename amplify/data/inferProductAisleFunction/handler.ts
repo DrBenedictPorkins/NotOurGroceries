@@ -2,6 +2,7 @@ import type { AppSyncResolverHandler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
+import { requireHousehold } from '../requireHousehold';
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -335,6 +336,7 @@ Confidence guidelines:
  * Main handler
  */
 export const handler: AppSyncResolverHandler<Arguments, Response> = async (event) => {
+  requireHousehold(event);
   console.log('[INFER] Received request:', JSON.stringify(event.arguments));
 
   const { storeId, productName, products } = event.arguments;

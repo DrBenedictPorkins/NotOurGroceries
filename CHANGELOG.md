@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-08-31
+
 ### Your list
 - **Quantities are gone.** A shopping list says what to buy, not how much — "2 cups flour" is now just Flour, and "Eggs x12" is Eggs. What kind still survives, because it changes which packet you pick up: unsalted butter, waxy potatoes, plain flour
 - The name under each item is tinted in that person's own colour, so who added what is readable at a glance instead of being the same grey for everyone
@@ -334,7 +336,8 @@ Build 1
 - Debug/Production environment separation with automatic backend selection
 - TestFlight distribution for beta testing
 
-[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.6.0...HEAD
+[Unreleased]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/compare/v1.7.0...HEAD
+[1.7.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.7.0
 [1.6.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.6.0
 [1.5.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.5.0
 [1.4.0]: git@github.com-benedict:DrBenedictPorkins/NotOurGroceries/releases/tag/v1.4.0

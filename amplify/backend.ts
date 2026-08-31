@@ -123,12 +123,18 @@ joinHouseholdLambda.addToRolePolicy(new PolicyStatement({
   ],
   resources: [backend.auth.resources.userPool.userPoolArn],
 }));
-householdTable.grantReadData(joinHouseholdLambda);
+// Write, not just read: joining now spends the invite code, rotating and
+// expiring it on the Household row so it admits exactly one person.
+householdTable.grantReadWriteData(joinHouseholdLambda);
 userTable.grantReadWriteData(joinHouseholdLambda);
-// Grant permission to query GSI indexes on Household table
+// Grant permission to query GSI indexes on both tables. Explicit because these
+// tables are imported by ARN, so the grant helpers above do not reach the
+// indexes. Household: finding a household by invite code, and checking a
+// replacement code is unused. User: reading the colours a household has already
+// handed out, so a new member is given a different one.
 joinHouseholdLambda.addToRolePolicy(new PolicyStatement({
   actions: ['dynamodb:Query'],
-  resources: [`${householdTable.tableArn}/index/*`],
+  resources: [`${householdTable.tableArn}/index/*`, `${userTable.tableArn}/index/*`],
 }));
 
 // Membership changes: remove a member, or leave (and delete the household when

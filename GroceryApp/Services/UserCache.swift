@@ -8,7 +8,6 @@ struct CachedUser {
     let displayName: String
     let avatarUrl: String?
     let profileColor: String?
-    let profilePattern: String?
 }
 
 /// Service that caches user display names for dynamic lookup
@@ -42,11 +41,6 @@ class UserCache: ObservableObject {
         users[userId]?.profileColor ?? "cyan"
     }
 
-    /// Get profile pattern for a user ID - defaults to "solid"
-    func profilePattern(for userId: String) -> String {
-        users[userId]?.profilePattern ?? "solid"
-    }
-
     /// Check if user is cached
     func hasUser(_ userId: String) -> Bool {
         users[userId] != nil
@@ -67,7 +61,6 @@ class UserCache: ObservableObject {
                         displayName
                         avatarUrl
                         profileColor
-                        profilePattern
                     }
                 }
             }
@@ -113,7 +106,6 @@ class UserCache: ObservableObject {
                     displayName
                     avatarUrl
                     profileColor
-                    profilePattern
                 }
             }
             """
@@ -144,8 +136,8 @@ class UserCache: ObservableObject {
     }
 
     /// Add or update a user in the cache
-    func cacheUser(id: String, displayName: String, avatarUrl: String? = nil, profileColor: String? = nil, profilePattern: String? = nil) {
-        users[id] = CachedUser(id: id, displayName: displayName, avatarUrl: avatarUrl, profileColor: profileColor, profilePattern: profilePattern)
+    func cacheUser(id: String, displayName: String, avatarUrl: String? = nil, profileColor: String? = nil) {
+        users[id] = CachedUser(id: id, displayName: displayName, avatarUrl: avatarUrl, profileColor: profileColor)
     }
 
     /// Clear the cache
@@ -172,11 +164,6 @@ class UserCache: ObservableObject {
             profileColor = color
         }
 
-        var profilePattern: String? = nil
-        if case .string(let pattern) = obj["profilePattern"] {
-            profilePattern = pattern
-        }
-
-        return CachedUser(id: id, displayName: displayName, avatarUrl: avatarUrl, profileColor: profileColor, profilePattern: profilePattern)
+        return CachedUser(id: id, displayName: displayName, avatarUrl: avatarUrl, profileColor: profileColor)
     }
 }

@@ -112,7 +112,43 @@ async function getUserHouseholdId(userId: string): Promise<string | null> {
 /**
  * Update user's household ID
  */
-async function updateUserHousehold(userId: string, householdId: string): Promise<void> {
+/**
+ * The six profile colours, in the order they are handed out.
+ *
+ * Mirrors `ProfileColor` in UserIdentityGradient.swift. The colour is the only
+ * thing distinguishing one member's name from another's on a list row, so two
+ * people in the same household must never be given the same one — which is why
+ * this is assigned server-side, against the members who already exist, rather
+ * than hashed from the user id (a 2-person household would collide 1 time in 6).
+ */
+const PROFILE_COLOURS = ['cyan', 'purple', 'pink', 'blue', 'yellow', 'green'];
+
+async function colourForNewMember(householdId: string): Promise<string> {
+  const taken = new Set<string>();
+  let cursor: Record<string, unknown> | undefined;
+
+  do {
+    const page = await client.send(new QueryCommand({
+      TableName: USER_TABLE_NAME,
+      IndexName: 'usersByHouseholdId',
+      KeyConditionExpression: 'householdId = :hid',
+      ExpressionAttributeValues: marshall({ ':hid': householdId }),
+      ProjectionExpression: 'profileColor',
+      ExclusiveStartKey: cursor as never,
+    }));
+    for (const item of page.Items ?? []) {
+      const colour = unmarshall(item).profileColor;
+      if (colour) taken.add(colour);
+    }
+    cursor = page.LastEvaluatedKey as never;
+  } while (cursor);
+
+  // Past six members the palette repeats; there is nothing better to do, and a
+  // household that large has bigger problems telling people apart.
+  return PROFILE_COLOURS.find((c) => !taken.has(c)) ?? PROFILE_COLOURS[taken.size % PROFILE_COLOURS.length];
+}
+
+async function updateUserHousehold(userId: string, householdId: string, colour: string): Promise<void> {
   const now = new Date().toISOString();
 
   await client.send(new UpdateItemCommand({
@@ -120,9 +156,10 @@ async function updateUserHousehold(userId: string, householdId: string): Promise
     Key: marshall({ id: userId }),
     // householdGroup mirrors householdId — see the User model for why the auth
     // rule cannot read the key column directly.
-    UpdateExpression: 'SET householdId = :householdId, householdGroup = :householdId, updatedAt = :now',
+    UpdateExpression: 'SET householdId = :householdId, householdGroup = :householdId, profileColor = if_not_exists(profileColor, :colour), updatedAt = :now',
     ExpressionAttributeValues: marshall({
       ':householdId': householdId,
+      ':colour': colour,
       ':now': now,
     }),
   }));
@@ -175,7 +212,7 @@ export const handler: Handler = async (event) => {
     // pointed at a household they cannot read.
     await addToHouseholdGroup(userId, household.id);
 
-    await updateUserHousehold(userId, household.id);
+    await updateUserHousehold(userId, household.id, await colourForNewMember(household.id));
 
     if (previousHouseholdId) {
       await removeFromHouseholdGroup(userId, previousHouseholdId);

@@ -37,6 +37,15 @@ struct GroceryItemRow: View {
         item.addedBy == currentUserId ? "-you-" : userCache.displayName(for: item.addedBy)
     }
 
+    /// The adder's chosen colour, resolved at render time.
+    ///
+    /// Nothing is denormalised onto the item — it stores only `addedBy`, and the
+    /// colour is looked up here. So changing your colour updates one row and
+    /// every attribution on every device follows on its next refresh.
+    private var addedByColor: Color {
+        ProfileColor.named(userCache.profileColor(for: item.addedBy)).color
+    }
+
     /// Locked by name looked up from cache, shows "-you-" for current user
     private var lockedByDisplayName: String? {
         guard let lockedBy = item.lockedBy else { return nil }
@@ -263,7 +272,10 @@ struct GroceryItemRow: View {
             if item.status == .active {
                 Text("[\(addedByDisplayName)]")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    // Muted, because this sits under the item name and must not
+                    // compete with it. Enough colour to tell two people apart at
+                    // a glance, not enough to shout.
+                    .foregroundColor(addedByColor.opacity(0.75))
             }
         }
     }

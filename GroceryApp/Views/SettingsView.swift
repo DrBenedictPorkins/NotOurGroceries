@@ -11,7 +11,6 @@ struct SettingsView: View {
     // was tailoring something, when the colour has no bearing on shopping at all.
     // The values assigned at sign-up stand.
     @State private var currentColor: String = "cyan"
-    @State private var currentPattern: String = "solid"
 
     @State private var showClearWarning = false
     @State private var showTypeToConfirm = false
@@ -69,7 +68,6 @@ struct SettingsView: View {
     private func loadCurrentUserProfile() async {
         guard let userId = amplifyService.currentUser?.userId else { return }
         currentColor = userCache.profileColor(for: userId)
-        currentPattern = userCache.profilePattern(for: userId)
     }
 
     // MARK: - Header
@@ -95,7 +93,6 @@ struct SettingsView: View {
             // User color badge
             UserColorBadge(
                 colorKey: currentColor,
-                patternKey: currentPattern,
                 initial: userInitial,
                 size: 60
             )

@@ -306,8 +306,10 @@ export const handler: Handler = async (event) => {
       Key: marshall({ id: callerId }),
       // householdGroup mirrors householdId; the read rule matches on it because
       // householdId is a GSI key and cannot carry an auth filter.
-      UpdateExpression: 'SET householdId = :hid, householdGroup = :hid, updatedAt = :now',
-      ExpressionAttributeValues: marshall({ ':hid': newId, ':now': now.toISOString() }),
+      // The creator is the household's first member, so they get the first
+      // colour. Everyone after them is assigned one the household is not using.
+      UpdateExpression: 'SET householdId = :hid, householdGroup = :hid, profileColor = if_not_exists(profileColor, :colour), updatedAt = :now',
+      ExpressionAttributeValues: marshall({ ':hid': newId, ':colour': 'cyan', ':now': now.toISOString() }),
     }));
 
     console.log(`User ${callerId} created household ${newId}`);

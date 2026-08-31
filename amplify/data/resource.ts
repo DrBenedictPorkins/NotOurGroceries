@@ -111,8 +111,10 @@ const schema = a.schema({
       email: a.string().required(),
       displayName: a.string().required(),
       avatarUrl: a.string(),
-      profileColor: a.string(),   // User's chosen color: cyan, purple, pink, blue, yellow, green
-      profilePattern: a.string(), // User's chosen pattern: solid, stripes, dots, gradient
+      /// Assigned on join, picked from the six-colour palette so that no two
+      /// members of a household share one. It tints the `[name]` attribution on
+      /// list rows, which is the only thing distinguishing who added what.
+      profileColor: a.string(),
       householdId: a.id(),
       household: a.belongsTo('Household', 'householdId'),
       /// The Cognito group that guards this row — the household's id repeated

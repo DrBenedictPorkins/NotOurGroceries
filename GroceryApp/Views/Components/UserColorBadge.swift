@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// A badge showing user's profile color/pattern with their initial
+/// A badge showing a user's profile colour with their initial
 /// Used in Settings and anywhere a user avatar is needed
 struct UserColorBadge: View {
     let colorKey: String
-    let patternKey: String
     let initial: Character?
     var size: CGFloat = 50
 
@@ -14,11 +13,11 @@ struct UserColorBadge: View {
 
     var body: some View {
         ZStack {
-            // Background with pattern
+            // Colour wash behind the initial
             RoundedRectangle(cornerRadius: size * 0.24)
                 .fill(DesignSystem.Colors.cardBackground)
                 .overlay {
-                    UserIdentityGradient(colorKey: colorKey, patternKey: patternKey)
+                    UserIdentityGradient(colorKey: colorKey)
                         .clipShape(RoundedRectangle(cornerRadius: size * 0.24))
                 }
                 .overlay {
@@ -42,7 +41,6 @@ struct UserColorBadge: View {
 /// A smaller, circular version for inline use
 struct UserColorDot: View {
     let colorKey: String
-    let patternKey: String
     var size: CGFloat = 24
 
     private var profileColor: Color {
@@ -53,7 +51,7 @@ struct UserColorDot: View {
         Circle()
             .fill(DesignSystem.Colors.cardBackground)
             .overlay {
-                UserIdentityGradient(colorKey: colorKey, patternKey: patternKey)
+                UserIdentityGradient(colorKey: colorKey)
                     .clipShape(Circle())
             }
             .overlay {
@@ -73,10 +71,10 @@ struct UserColorDot: View {
             .foregroundColor(.white)
 
         HStack(spacing: 16) {
-            UserColorBadge(colorKey: "cyan", patternKey: "solid", initial: "S", size: 60)
-            UserColorBadge(colorKey: "purple", patternKey: "stripes", initial: "M", size: 60)
-            UserColorBadge(colorKey: "pink", patternKey: "dots", initial: "A", size: 60)
-            UserColorBadge(colorKey: "green", patternKey: "gradient", initial: "J", size: 60)
+            UserColorBadge(colorKey: "cyan", initial: "S", size: 60)
+            UserColorBadge(colorKey: "purple", initial: "M", size: 60)
+            UserColorBadge(colorKey: "pink", initial: "A", size: 60)
+            UserColorBadge(colorKey: "green", initial: "J", size: 60)
         }
 
         Text("Small Badges")
@@ -84,9 +82,9 @@ struct UserColorDot: View {
             .foregroundColor(.white)
 
         HStack(spacing: 12) {
-            UserColorBadge(colorKey: "cyan", patternKey: "solid", initial: "S", size: 40)
-            UserColorBadge(colorKey: "yellow", patternKey: "gradient", initial: "K", size: 40)
-            UserColorBadge(colorKey: "blue", patternKey: "stripes", initial: "L", size: 40)
+            UserColorBadge(colorKey: "cyan", initial: "S", size: 40)
+            UserColorBadge(colorKey: "yellow", initial: "K", size: 40)
+            UserColorBadge(colorKey: "blue", initial: "L", size: 40)
         }
 
         Text("Color Dots")
@@ -95,7 +93,7 @@ struct UserColorDot: View {
 
         HStack(spacing: 8) {
             ForEach(ProfileColor.allCases, id: \.self) { color in
-                UserColorDot(colorKey: color.rawValue, patternKey: "solid", size: 20)
+                UserColorDot(colorKey: color.rawValue, size: 20)
             }
         }
     }

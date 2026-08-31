@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ProfileColorPickerSheet: View {
     @Binding var selectedColor: String
-    @Binding var selectedPattern: String
     let onSave: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -16,9 +15,6 @@ struct ProfileColorPickerSheet: View {
 
                     // Color selection
                     colorSection
-
-                    // Pattern selection
-                    patternSection
                 }
                 .padding(24)
             }
@@ -57,7 +53,6 @@ struct ProfileColorPickerSheet: View {
 
             UserColorBadge(
                 colorKey: selectedColor,
-                patternKey: selectedPattern,
                 initial: "Y",
                 size: 100
             )
@@ -100,28 +95,6 @@ struct ProfileColorPickerSheet: View {
         }
     }
 
-    // MARK: - Pattern Section
-
-    private var patternSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Pattern")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(DesignSystem.Colors.textTertiary)
-
-            HStack(spacing: 12) {
-                ForEach(ProfilePattern.allCases, id: \.self) { pattern in
-                    PatternOption(
-                        pattern: pattern,
-                        colorKey: selectedColor,
-                        isSelected: selectedPattern == pattern.rawValue
-                    ) {
-                        selectedPattern = pattern.rawValue
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Color Option
@@ -157,55 +130,11 @@ private struct ColorOption: View {
     }
 }
 
-// MARK: - Pattern Option
-
-private struct PatternOption: View {
-    let pattern: ProfilePattern
-    let colorKey: String
-    let isSelected: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(DesignSystem.Colors.cardBackground)
-                    .frame(width: 70, height: 70)
-                    .overlay {
-                        UserIdentityGradient(colorKey: colorKey, patternKey: pattern.rawValue)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(
-                                isSelected ? DesignSystem.Colors.dillGreen : Color.white.opacity(0.1),
-                                lineWidth: isSelected ? 2 : 1
-                            )
-                    }
-                    .shadow(
-                        color: isSelected ? DesignSystem.Colors.dillGreen.opacity(0.3) : .clear,
-                        radius: 8,
-                        x: 0,
-                        y: 4
-                    )
-
-                Text(pattern.displayName)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
-                    .foregroundColor(isSelected ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textSecondary)
-            }
-        }
-        .buttonStyle(.plain)
-        .scaleEffect(isSelected ? 1.05 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-    }
-}
-
 // MARK: - Preview
 
 #Preview {
     ProfileColorPickerSheet(
         selectedColor: .constant("cyan"),
-        selectedPattern: .constant("solid"),
         onSave: {}
     )
 }

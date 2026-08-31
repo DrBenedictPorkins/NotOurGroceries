@@ -256,7 +256,6 @@ class AmplifyService: ObservableObject {
                     displayName
                     householdId
                     profileColor
-                    profilePattern
                 }
             }
             """
@@ -277,18 +276,13 @@ class AmplifyService: ObservableObject {
                     // User exists - cache them regardless of householdId
                     if case .string(let displayName) = userData["displayName"] {
                         var profileColor: String? = nil
-                        var profilePattern: String? = nil
                         if case .string(let color) = userData["profileColor"] {
                             profileColor = color
-                        }
-                        if case .string(let pattern) = userData["profilePattern"] {
-                            profilePattern = pattern
                         }
                         UserCache.shared.cacheUser(
                             id: user.userId,
                             displayName: displayName,
-                            profileColor: profileColor,
-                            profilePattern: profilePattern
+                            profileColor: profileColor
                         )
                     }
                     // Repair the rows written by the old bug, on sign-in.
@@ -734,7 +728,6 @@ class AmplifyService: ObservableObject {
         let displayName: String
         let avatarUrl: String?
         let profileColor: String?
-        let profilePattern: String?
         let joinedAt: Date?
     }
 
@@ -768,8 +761,7 @@ class AmplifyService: ObservableObject {
                         displayName
                         avatarUrl
                         profileColor
-                        profilePattern
-                        createdAt
+                            createdAt
                     }
                 }
             }
@@ -817,23 +809,17 @@ class AmplifyService: ObservableObject {
                                 profileColor = color
                             }
 
-                            var profilePattern: String? = nil
-                            if case .string(let pattern) = memberData["profilePattern"] {
-                                profilePattern = pattern
-                            }
-
                             var joinedAt: Date? = nil
                             if case .string(let createdAtString) = memberData["createdAt"] {
                                 joinedAt = Self.parseAWSDateTime(createdAtString)
                             }
 
-                            // Cache each household member with their profile color/pattern
+                            // Cache each household member with their profile colour
                             UserCache.shared.cacheUser(
                                 id: memberId,
                                 displayName: displayName,
                                 avatarUrl: avatarUrl,
-                                profileColor: profileColor,
-                                profilePattern: profilePattern
+                                profileColor: profileColor
                             )
 
                             members.append(HouseholdMember(
@@ -842,7 +828,6 @@ class AmplifyService: ObservableObject {
                                 displayName: displayName,
                                 avatarUrl: avatarUrl,
                                 profileColor: profileColor,
-                                profilePattern: profilePattern,
                                 joinedAt: joinedAt
                             ))
                         }
@@ -1102,7 +1087,7 @@ class AmplifyService: ObservableObject {
 
     // MARK: - Profile Appearance
 
-    func updateProfileAppearance(color: String, pattern: String) async throws {
+    func updateProfileAppearance(color: String) async throws {
         guard let user = currentUser else {
             throw AmplifyError.unknown("No user logged in")
         }
@@ -1112,7 +1097,6 @@ class AmplifyService: ObservableObject {
             updateUser(input: $input) {
                 id
                 profileColor
-                profilePattern
             }
         }
         """
@@ -1122,8 +1106,7 @@ class AmplifyService: ObservableObject {
             variables: [
                 "input": [
                     "id": user.userId,
-                    "profileColor": color,
-                    "profilePattern": pattern
+                    "profileColor": color
                 ]
             ],
             responseType: JSONValue.self,
@@ -1134,23 +1117,22 @@ class AmplifyService: ObservableObject {
 
         switch response {
         case .success:
-            // Update the user cache with new color/pattern
+            // Update the user cache with the new colour
             let displayName = UserCache.shared.displayName(for: user.userId)
             let avatarUrl = UserCache.shared.avatarUrl(for: user.userId)
             UserCache.shared.cacheUser(
                 id: user.userId,
                 displayName: displayName,
                 avatarUrl: avatarUrl,
-                profileColor: color,
-                profilePattern: pattern
+                profileColor: color
             )
-            print("Updated profile appearance: \(color)/\(pattern)")
+            print("Updated profile colour: \(color)")
         case .failure(let error):
             throw error
         }
     }
 
-    func fetchCurrentUserProfile() async throws -> (color: String, pattern: String) {
+    func fetchCurrentUserProfile() async throws -> String {
         guard let user = currentUser else {
             throw AmplifyError.unknown("No user logged in")
         }
@@ -1160,7 +1142,6 @@ class AmplifyService: ObservableObject {
             getUser(id: $id) {
                 id
                 profileColor
-                profilePattern
             }
         }
         """
@@ -1178,19 +1159,12 @@ class AmplifyService: ObservableObject {
         case .success(let json):
             if case .object(let root) = json,
                case .object(let userData) = root["getUser"] {
-                var color = "cyan"
-                var pattern = "solid"
-
                 if case .string(let profileColor) = userData["profileColor"] {
-                    color = profileColor
+                    return profileColor
                 }
-                if case .string(let profilePattern) = userData["profilePattern"] {
-                    pattern = profilePattern
-                }
-
-                return (color, pattern)
+                return "cyan"
             }
-            return ("cyan", "solid")
+            return "cyan"
         case .failure(let error):
             throw error
         }

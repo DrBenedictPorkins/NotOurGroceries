@@ -40,7 +40,7 @@ These are rejections, not preferences.
 
 | Item | Status | Notes |
 |---|---|---|
-| In-app account deletion (5.1.1(v)) | 🟡 | Built 2026-08-31. Settings → Danger Zone. **Not yet exercised against the deployed stack.** |
+| In-app account deletion (5.1.1(v)) | ✅ | Built and verified 2026-08-31 against production: Cognito user gone, `User` row gone, household and its 245 items untouched, no orphaned group. The shared-household branch — detach, group removal, remaining count — is still untested |
 | Account deletion documented publicly | 🟡 | `website/account-deletion.md` drafted, not hosted |
 | Privacy policy URL | 🟡 | `website/privacy-policy.md` drafted, not hosted, has placeholders |
 | Privacy nutrition labels | ⬜ | Must declare email, audio, photos, and the Anthropic/OpenAI processing. Wrong answers here are a rejection |

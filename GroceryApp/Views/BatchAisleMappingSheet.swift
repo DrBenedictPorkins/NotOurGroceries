@@ -425,9 +425,29 @@ private struct BatchMappingResultRow: View {
     let aisleLayout: [StoreAisle]
     let onLongPress: () -> Void
 
-    @State private var isPressed = false
-
     var body: some View {
+        // A Button, not a pile of gestures.
+        //
+        // This row carried a DragGesture(minimumDistance: 0) to drive the press
+        // animation, and that recognises on touch-down — so an added
+        // .onTapGesture never saw the tap and the first attempt at making rows
+        // tappable did nothing at all. A Button handles the tap properly and the
+        // style below keeps the same squeeze.
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onLongPress()
+        }) {
+            rowContent
+        }
+        .buttonStyle(PressableRowStyle())
+        // Long press still works, for anyone who learned it when it was the only way.
+        .onLongPressGesture(minimumDuration: 0.5) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            onLongPress()
+        }
+    }
+
+    private var rowContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Item name -> Aisle
             HStack {
@@ -476,24 +496,15 @@ private struct BatchMappingResultRow: View {
                 )
         )
         .contentShape(RoundedRectangle(cornerRadius: 12))
-        .scaleEffect(isPressed ? 0.98 : 1.0)
-        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isPressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in isPressed = true }
-                .onEnded { _ in isPressed = false }
-        )
-        // A tap opens it. The hint said "long press to edit" and sat in 10pt
-        // grey in the corner, which is a fair description of a gesture nobody
-        // goes looking for — the natural thing to do with a row is tap it.
-        .onTapGesture {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            onLongPress()
-        }
-        // Long press still works, for anyone who learned it the hard way.
-        .onLongPressGesture(minimumDuration: 0.5) {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            onLongPress()
-        }
+    }
+}
+
+/// The squeeze the row used to get from a DragGesture, without the gesture that
+/// was eating taps.
+private struct PressableRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }

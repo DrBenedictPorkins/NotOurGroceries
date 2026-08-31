@@ -161,9 +161,16 @@ struct ItemDetailSheet: View {
             .onAppear {
                 notesText = item.notes ?? ""
                 notesEphemeral = item.notesEphemeral
-                // In proposed mode, use the proposed aisle; otherwise use current mapping
+                // Both branches resolve through AisleNaming. The proposed one
+                // used to show `suggestedAisle` raw, which is a storage id — so
+                // an AI suggestion offered "standard-produce" as the answer to
+                // "which aisle is this in", while the non-proposed branch beside
+                // it had been showing a real name for weeks.
                 if let proposed = proposedAisleResult {
-                    aisleText = proposed.suggestedAisle
+                    aisleText = AisleNaming.displayName(
+                        for: proposed.suggestedAisle,
+                        in: currentStore?.aisleLayout ?? []
+                    )
                 } else {
                     aisleText = currentAisleText
                 }

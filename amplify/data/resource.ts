@@ -52,13 +52,6 @@ export const joinHouseholdFunction = defineFunction({
   resourceGroupName: 'data',
 });
 
-// Send invite email via SES
-export const sendInviteEmailFunction = defineFunction({
-  name: 'sendInviteEmailFunction',
-  entry: './sendInviteEmailFunction/handler.ts',
-  resourceGroupName: 'data',
-});
-
 // Admin MCP function for database management
 export const adminMcpFunction = defineFunction({
   name: 'adminMcpFunction',
@@ -513,21 +506,6 @@ const schema = a.schema({
     }))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(householdMembershipFunction)),
-
-  // Send invite email via SES
-  sendInviteEmail: a
-    .mutation()
-    .arguments({
-      householdId: a.id().required(),
-      recipientEmail: a.string().required(),
-      senderName: a.string().required(),
-    })
-    .returns(a.customType({
-      success: a.boolean().required(),
-      message: a.string(),
-    }))
-    .authorization((allow) => [allow.authenticated()])
-    .handler(a.handler.function(sendInviteEmailFunction)),
 
   // Infer aisle for a single product using AI and existing store mappings
   inferProductAisle: a

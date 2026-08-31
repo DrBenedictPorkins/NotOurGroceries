@@ -7,7 +7,6 @@ import {
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
   householdMembershipFunction,
-  sendInviteEmailFunction,
   aisleExtractionJobHandler,
   inferProductAisleFunction,
   parseIngredientsFunction,
@@ -31,7 +30,6 @@ const backend = defineBackend({
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
   householdMembershipFunction,
-  sendInviteEmailFunction,
   aisleExtractionJobHandler,
   inferProductAisleFunction,
   parseIngredientsFunction,
@@ -100,7 +98,6 @@ productTable.grantReadData(searchProductsLambda);
 // Get the underlying Lambda Function constructs for new functions
 const regenerateInviteCodeLambda = backend.regenerateInviteCodeFunction.resources.lambda as Function;
 const joinHouseholdLambda = backend.joinHouseholdFunction.resources.lambda as Function;
-const sendInviteEmailLambda = backend.sendInviteEmailFunction.resources.lambda as Function;
 
 // Add environment variables and permissions for regenerateInviteCodeFunction
 addEnvVars(regenerateInviteCodeLambda, {
@@ -173,20 +170,6 @@ householdMembershipLambda.addToRolePolicy(new PolicyStatement({
     `${commitTable.tableArn}/index/*`,
     `${backend.data.resources.tables['HouseholdStore'].tableArn}/index/*`,
   ],
-}));
-
-// Add environment variables and permissions for sendInviteEmailFunction
-addEnvVars(sendInviteEmailLambda, {
-  HOUSEHOLD_TABLE_NAME: householdTable.tableName,
-  USER_TABLE_NAME: userTable.tableName,
-  SES_SOURCE_EMAIL: 'noreply@yourdomain.com',  // TODO: Configure this
-});
-householdTable.grantReadData(sendInviteEmailLambda);
-userTable.grantReadData(sendInviteEmailLambda);
-// Grant SES permissions
-sendInviteEmailLambda.addToRolePolicy(new PolicyStatement({
-  actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-  resources: ['*'],
 }));
 
 // ========================================

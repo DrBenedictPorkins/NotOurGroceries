@@ -7,9 +7,6 @@ struct HouseholdInviteView: View {
     @State private var householdDetails: AmplifyService.HouseholdDetails?
     @State private var isLoading = false
     @State private var isRegenerating = false
-    @State private var isSendingEmail = false
-    @State private var recipientEmail = ""
-    @State private var senderName = ""
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var showShareSheet = false
@@ -31,7 +28,6 @@ struct HouseholdInviteView: View {
                         } else if let details = householdDetails {
                             inviteCodeSection(details: details)
                             shareSection(details: details)
-                            emailSection
                         } else {
                             errorView
                         }
@@ -144,6 +140,17 @@ struct HouseholdInviteView: View {
                 )
             }
             .disabled(isRegenerating)
+
+            // Regenerating is the only thing on this screen that can fail, so
+            // the error belongs beside its button. It used to render inside the
+            // email section, which meant deleting that section would have made
+            // a failed regenerate silent again.
+            if let error = errorMessage {
+                Text(error)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.neonPink)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding(24)
         .frame(maxWidth: .infinity)
@@ -222,65 +229,6 @@ struct HouseholdInviteView: View {
         }
     }
 
-    // MARK: - Email Section
-
-    private var emailSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Image(systemName: "envelope.fill")
-                    .foregroundColor(DesignSystem.Colors.neonPink)
-                Text("Send Email Invitation")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-            }
-
-            CustomTextField(
-                placeholder: "Your Name",
-                text: $senderName,
-                icon: "person.fill"
-            )
-
-            CustomTextField(
-                placeholder: "Recipient Email",
-                text: $recipientEmail,
-                icon: "envelope",
-                keyboardType: .emailAddress,
-                autocapitalization: .never
-            )
-
-            if let error = errorMessage {
-                Text(error)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.neonPink)
-                    .multilineTextAlignment(.center)
-            }
-
-            Button(action: sendEmail) {
-                HStack {
-                    if isSendingEmail {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: "paperplane.fill")
-                        Text("Send Invitation")
-                    }
-                }
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.accentGradient2)
-                )
-            }
-            .disabled(isSendingEmail || recipientEmail.isEmpty || senderName.isEmpty)
-        }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .background(glassCard)
-    }
-
     // MARK: - Glass Card
 
     private var glassCard: some View {
@@ -353,30 +301,6 @@ struct HouseholdInviteView: View {
         """
     }
 
-    private func sendEmail() {
-        isSendingEmail = true
-        errorMessage = nil
-
-        Task {
-            do {
-                let result = try await amplifyService.sendInviteEmail(to: recipientEmail, senderName: senderName)
-                if result.success {
-                    successMessage = result.message ?? "Invitation sent!"
-                    recipientEmail = ""
-                } else {
-                    errorMessage = result.message ?? "Failed to send email"
-                }
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            isSendingEmail = false
-
-            Task {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                successMessage = nil
-            }
-        }
-    }
 }
 
 // MARK: - Share Sheet

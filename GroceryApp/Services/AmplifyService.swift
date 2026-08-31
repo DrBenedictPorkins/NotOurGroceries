@@ -925,66 +925,6 @@ class AmplifyService: ObservableObject {
         }
     }
 
-    struct SendInviteResult {
-        let success: Bool
-        let message: String?
-    }
-
-    func sendInviteEmail(to email: String, senderName: String) async throws -> SendInviteResult {
-        guard let householdId = currentHouseholdId else {
-            throw AmplifyError.unknown("No household selected")
-        }
-
-        let document = """
-        mutation SendInviteEmail($householdId: ID!, $recipientEmail: String!, $senderName: String!) {
-            sendInviteEmail(householdId: $householdId, recipientEmail: $recipientEmail, senderName: $senderName) {
-                success
-                message
-            }
-        }
-        """
-
-        let request = GraphQLRequest<JSONValue>(
-            document: document,
-            variables: [
-                "householdId": householdId,
-                "recipientEmail": email,
-                "senderName": senderName
-            ],
-            responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-        )
-
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success(let json):
-            // Try direct object access first (custom type returns directly)
-            if case .object(let result) = json,
-               case .boolean(let success) = result["success"] {
-                var message: String? = nil
-                if case .string(let msg) = result["message"] {
-                    message = msg
-                }
-                return SendInviteResult(success: success, message: message)
-            }
-
-            // Fallback: try nested under mutation name
-            if case .object(let root) = json,
-               case .object(let result) = root["sendInviteEmail"],
-               case .boolean(let success) = result["success"] {
-                var message: String? = nil
-                if case .string(let msg) = result["message"] {
-                    message = msg
-                }
-                return SendInviteResult(success: success, message: message)
-            }
-            throw AmplifyError.unknown("Failed to parse send invite response")
-        case .failure(let error):
-            throw error
-        }
-    }
-
     struct JoinHouseholdResult {
         let householdId: String
         let householdName: String

@@ -380,8 +380,18 @@ class StoreService: ObservableObject {
 
     // MARK: - Product Mapping
 
-    /// Assign a product to an aisle in a specific store
-    func assignProductToAisle(productId: String?, normalizedName: String?, storeId: String, aisleId: String) async throws {
+    /// Assign a product to an aisle in a specific store.
+    ///
+    /// `sightedByUser` is for aisle capture: somebody stood in the shop and read
+    /// the sign. That writes `userAisleOverride` as well, which is the field that
+    /// wins at read time and — unlike `aisleId` — no later inference run touches.
+    func assignProductToAisle(
+        productId: String?,
+        normalizedName: String?,
+        storeId: String,
+        aisleId: String,
+        sightedByUser: Bool = false
+    ) async throws {
         guard productId != nil || normalizedName != nil else {
             throw StoreServiceError.invalidMapping("Either productId or normalizedName must be provided")
         }
@@ -403,17 +413,20 @@ class StoreService: ObservableObject {
 
         let document = """
         mutation UpsertProductAisleMapping(
-            $id: String!, $householdId: ID!, $storeId: ID!, $aisleId: String!, $productId: ID, $normalizedName: String
+            $id: String!, $householdId: ID!, $storeId: ID!, $aisleId: String!, $productId: ID, $normalizedName: String,
+            $userAisleOverride: String, $source: String
         ) {
             upsertProductAisleMapping(
                 id: $id, householdId: $householdId, storeId: $storeId, aisleId: $aisleId,
-                productId: $productId, normalizedName: $normalizedName
+                productId: $productId, normalizedName: $normalizedName,
+                userAisleOverride: $userAisleOverride, source: $source
             ) {
                 id
                 storeId
                 productId
                 normalizedName
                 aisleId
+                userAisleOverride
             }
         }
         """
@@ -430,6 +443,10 @@ class StoreService: ObservableObject {
         }
         if let normalizedName = normalizedName {
             variables["normalizedName"] = normalizedName
+        }
+        if sightedByUser {
+            variables["userAisleOverride"] = aisleId
+            variables["source"] = MappingSource.userSighted.rawValue
         }
 
         let request = GraphQLRequest<JSONValue>(

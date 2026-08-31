@@ -1,7 +1,7 @@
 import { util } from '@aws-appsync/utils';
 
 export function request(ctx) {
-  const { id, householdId, storeId, normalizedName, productId, aisleId, confidence, source, reasoning, mappedAt } = ctx.args;
+  const { id, householdId, storeId, normalizedName, productId, aisleId, confidence, source, reasoning, mappedAt, userAisleOverride } = ctx.args;
 
   // This resolver writes to the mapping table directly, so the model's
   // `groupDefinedIn('householdId')` rule never runs for it — the check has to
@@ -70,6 +70,15 @@ export function request(ctx) {
     expNames['#mappedAt'] = 'mappedAt';
     expValues[':mappedAt'] = util.dynamodb.toDynamoDB(mappedAt);
     sets.push('#mappedAt = :mappedAt');
+  }
+  // A person's own sighting. Written on its own attribute rather than into
+  // `aisleId` so the model's guess stays visible next to it and, more to the
+  // point, so the next inference run overwriting `aisleId` cannot quietly undo
+  // what somebody saw with their own eyes.
+  if (userAisleOverride != null) {
+    expNames['#userAisleOverride'] = 'userAisleOverride';
+    expValues[':userAisleOverride'] = util.dynamodb.toDynamoDB(userAisleOverride);
+    sets.push('#userAisleOverride = :userAisleOverride');
   }
 
   return {

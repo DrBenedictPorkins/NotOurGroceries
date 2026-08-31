@@ -5,6 +5,9 @@ import Foundation
 enum MappingSource: String, Codable {
     case image = "IMAGE"
     case llmGuess = "LLM_GUESS"
+    /// Somebody stood in the aisle and read the sign. Outranks both of the
+    /// others, and inference must never overwrite one.
+    case userSighted = "USER_SIGHTED"
 }
 
 // MARK: - ProductAisleMapping Model

@@ -87,10 +87,9 @@ const schema = a.schema({
   RequestStatus: a.enum(['PENDING', 'APPROVED', 'REJECTED']),
 
   // Mapping source (how the product-aisle mapping was determined)
-  MappingSource: a.enum(['IMAGE', 'LLM_GUESS']),
-
-  // Store layout type (whether the store has numbered/named aisles at all)
-  // Nullable on HouseholdStore — null is treated as AISLES for back-compat.
+  // USER_SIGHTED beats both of the others: somebody stood in the aisle and read
+  // the sign. Inference must never overwrite one.
+  MappingSource: a.enum(['IMAGE', 'LLM_GUESS', 'USER_SIGHTED']),
 
   // Job status enum for async aisle extraction
   AisleExtractionJobStatus: a.enum([
@@ -575,6 +574,9 @@ const schema = a.schema({
       source: a.string(),
       reasoning: a.string(),
       mappedAt: a.datetime(),
+      /// Set when a person told us where something is. `aisleId` stays whatever
+      /// the model last guessed; this is what actually wins at read time.
+      userAisleOverride: a.string(),
     })
     .returns(a.ref('ProductAisleMapping'))
     .authorization((allow) => [allow.authenticated()])

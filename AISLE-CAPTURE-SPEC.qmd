@@ -1,0 +1,257 @@
+---
+title: "Aisle capture: learning a store one item at a time"
+subtitle: "Replacing the directory scan with in-aisle voice capture"
+date: 2026-08-31
+format: html
+---
+
+## Why
+
+Scanning a store's directory board was meant to teach the app the store's layout in
+one shot. Measured against the five live stores, it does the opposite.
+
+| Store | Aisles | From scan | Standard | Manual |
+|-------|--------|-----------|----------|--------|
+| Walmart | 18 | 0 | 18 | 0 |
+| WorstFoods | 18 | 0 | 18 | 0 |
+| Whole Foods | 20 | 0 | 18 | 2 |
+| ShopRite | **38** | **20** | 18 | 0 |
+| Stop&Shop | **39** | **21** | 18 | 0 |
+
+The three stores never scanned have a clean set of eighteen departments. The two
+that were scanned carry roughly double that, because **a scan does not replace the
+departments — it adds a second, overlapping set on top of them.**
+
+ShopRite ends up with aisle 16 (*Milk, Natural Dairy, Orange Juice*) *and* a Dairy
+& Eggs department. Stop&Shop has aisles 20 and 21 holding frozen goods *and* a
+Frozen department. Milk has two legitimate homes, so it lands in whichever one the
+matcher saw last. The duplicate-section bug fixed earlier this month was this,
+treated at the display layer.
+
+About one in seven extracted aisles is unusable and permanent:
+
+- Stop&Shop — `Three` → picante sauce (the printed word "three" read as an aisle
+  id), `Florist-19` → logs
+- ShopRite — `6,9` → Scalafani, `6,11` → Salsa, `9,16` → Stuffing,
+  `Beer Garden` → Water 5 Gallon
+
+A harness run against the shipping prompt (`scratchpad/ocr_check.py`) also showed
+the model inventing an aisle number that was not on the sign, deterministically at
+temperature 0, by copying the prompt's own worked example.
+
+The deeper problem is that **the plaque is not a reliable input.** One ShopRite has
+printed boards; another has a touchscreen kiosk. Whole Foods labels departments by
+name with no numbers at all. A photograph cannot capture what the store did not
+print, and the layout changes whenever a manager rearranges a bay.
+
+## What replaces it
+
+Capture one aisle at a time, from ground truth, at the moment it is worth
+capturing.
+
+> You are in ShopRite. The next item on your list is deodorant, and it is in the
+> unsorted bucket. You look it up however that store lets you — board, kiosk, or
+> asking someone. You tap the item, say "aisle sixteen", confirm, and move on.
+
+The aisle is created **as a side effect of the assignment.** There is no step where
+you first declare that aisle 16 exists. That inversion is the whole feature.
+
+This works at every store, because the input is the shopper, not the signage.
+
+### Explicitly not in scope
+
+**In-aisle position.** An earlier draft captured "international, *middle*". Cut:
+the position is not printed on any plaque, it changes when a manager rearranges the
+bay, and a shopper standing in the aisle simply looks. Storing it would age badly
+and buy nothing.
+
+**Anything AI beyond transcription.** Turning "aisle sixteen" into `16` is string
+handling, not inference. See [Parsing](#parsing).
+
+## The flow
+
+1. In At Store mode, every item in the unsorted bucket gets an inline
+   **Where is this?** control. It cannot be the row tap: in At Store mode a tap
+   crosses the item off, swipes move it to suggestions and back, and long-press is
+   the delete menu (`GroceryItemRow.swift:86-148`). The whole gesture budget is
+   spent, so capture needs its own visible control.
+   Already-mapped rows do **not** carry the chip — correcting a wrong aisle is rare
+   and goes in the long-press menu beside Delete. Long-press is wrong for the
+   unsorted bucket precisely because it is undiscoverable, which is the complaint
+   Map Aisles drew.
+2. Tapping it opens a small sheet: a microphone button and a text field. Both
+   produce the same string; the keyboard is the fallback when it is loud.
+3. Speech is recognised **on-device** by `SFSpeechRecognizer` with
+   `requiresOnDeviceRecognition = true` — see [Why not Whisper](#why-not-whisper).
+4. The transcript is normalised into an aisle label and **shown back before it is
+   written.** Never committed on the strength of the transcription alone.
+5. On confirm: resolve or create the aisle, write the mapping, dismiss. The item
+   moves out of the unsorted bucket into its section.
+
+The confirm step is not optional. Any recogniser confuses "sixteen" and "sixty" in a
+noisy shop, and this app has already shipped a fix for a transcriber emitting "Thank
+you for watching" over near-silence. Showing the parse and taking a tap is the same
+rule already applied to dictated lists.
+
+### Why not Whisper {#why-not-whisper}
+
+The app's existing `SpeechDictationService` posts audio to the `transcribeAudio`
+mutation, which calls OpenAI Whisper in a Lambda. That is the wrong tool here.
+
+- **The premise of this feature is bad signal.** You are deep inside a shop. Whisper
+  needs record → upload → Lambda → OpenAI → back. On-device recognition needs no
+  network and returns as you speak.
+- **`contextualStrings` biases recognition toward words you supply.** Feed it
+  "aisle", the number words, and the store's existing aisle names, and the
+  sixteen/sixty problem largely goes away. Whisper offers no equivalent hook.
+- **Free**, with no OpenAI key anywhere in the path.
+
+Cost: `import Speech` (unused in the project today), a new
+`NSSpeechRecognitionUsageDescription`, a one-time permission prompt on top of the
+microphone one, and a `supportsOnDeviceRecognition` check with a fallback to typing
+where it is unavailable. Deployment target is iOS 17.0, well within range.
+
+**Whisper stays for bulk list dictation.** Long, messy, free-form speech — "two
+pounds of chicken, some of that sourdough, oh and kitchen roll" — is the case
+Whisper is good at, and it already works. Different job, different tool.
+
+## Parsing {#parsing}
+
+Deterministic, on-device, no model call. In order:
+
+1. Trim, collapse whitespace, strip a trailing full stop.
+2. **Truncate at the first comma.** "International, middle" → "International".
+   Without this the store gains an aisle literally named *International, Middle* —
+   the same junk class as the `Pasta · Pasta Sauce` heading the OCR prompt
+   produced.
+3. Strip a leading "aisle" / "in aisle" / "it's in".
+4. Map number words to digits, zero through thirty ("sixteen" → `16`). The
+   recogniser returns digits for some utterances and words for others; both must
+   land in the same place or the store gets a `16` *and* a `Sixteen`.
+5. If what remains is a bare integer → a **numbered aisle**, `number` = the digits.
+6. Otherwise → a **named aisle**, Title Cased, `name` = the string.
+7. Match against the store's existing aisles through `AisleNaming.match` before
+   creating anything. Aisle 16 entered twice must not become two aisles, and
+   "dairy" must resolve to the existing Dairy & Eggs department rather than
+   creating a rival.
+
+Rejected input: empty after normalisation, or longer than ~40 characters (a
+sentence, not an aisle). Say so in the sheet and keep the text for editing rather
+than discarding it.
+
+## Data model
+
+### The blocking gap
+
+`ProductAisleMapping` already has the right field:
+
+```
+userAisleOverride: a.string()   // null = use LLM suggestion
+```
+
+`ProductAisleMapping.swift:33` resolves `userAisleOverride ?? aisleId`, so a user
+value already wins at read time. **But the write path cannot set it.** The
+`upsertProductAisleMapping` mutation (`resource.ts:563`) takes no such argument, and
+the resolver (`upsertProductAisleMapping.js`) never writes it. Anything saved today
+goes into `aisleId` — the field phases 4 and 5 of inference overwrite.
+
+So a hand-captured aisle would survive until the next inference run and then
+silently revert. This must be fixed first or the feature is a lie.
+
+**Change:** add `userAisleOverride: a.string()` to the mutation arguments and a
+corresponding conditional `SET` in the resolver, matching the existing pattern for
+`confidence`, `source`, and `reasoning`. Then `StoreService.upsertMapping` gains the
+parameter and the capture sheet passes it.
+
+### Provenance
+
+`MappingSource` is currently `['IMAGE', 'LLM_GUESS']`. Add `USER_SIGHTED` so
+"why is this here?" has an honest answer and so inference can be told to leave these
+alone. Enum values are additive; existing rows keep decoding.
+
+### Aisle creation
+
+`StoreService.addAisle(to:number:name:)` (`StoreService.swift:314`) already appends a
+`StoreAisle` and saves the store. Reuse it unchanged. New aisles land at the end of
+`displayOrder`; the existing drag-to-reorder screen is how they get into walk order.
+
+## What gets deleted
+
+| Path | Lines |
+|------|-------|
+| `GroceryApp/Views/AisleScanSheet.swift` | 834 |
+| `amplify/data/aisleExtractionJobHandler/` | 1,557 |
+| `GroceryApp/Services/AisleExtractionService.swift` | — |
+| `AisleExtractionJob` model + stream wiring | — |
+| Aisle photo S3 bucket and its grants | — |
+
+Two consequences worth naming:
+
+- **The S3 Lambda-broker problem disappears.** Photos are the only thing in that
+  bucket; with nothing uploading, there is nothing to scope.
+- **The largest AI cost in the app goes with it.** A scan is a multi-image vision
+  call plus up to four batched follow-up phases.
+- **Two permission prompts go with it.** The camera and photo-library usage strings
+  exist only to scan directories (`project.pbxproj:740,742`). With the scan gone the
+  app asks for the microphone and speech recognition, and nothing else.
+
+Retain `inferProductAisleFunction` — it works from the store's aisle list, not from
+OCR, and it is what places items into departments without any capture at all.
+
+## Migrating the two scanned stores
+
+41 OCR-derived aisles exist across ShopRite and Stop&Shop, with mappings pointing at
+them. Leaving them makes the new feature look broken on the two stores actually in
+use.
+
+1. Snapshot both `HouseholdStore` rows and all `ProductAisleMapping` rows for them.
+   PITR covers the tables, but a scoped snapshot is cheaper to reason about.
+2. Drop aisles whose id begins with `aisle-` **and** whose label is junk — the six
+   named above, plus any whose `number` is not a bare integer.
+3. For surviving numbered aisles, keep them: aisle 12 at Stop&Shop is real and
+   correct, and re-learning twenty aisles by voice is not a reasonable ask.
+4. Blank the `name` on every retained OCR aisle. They currently hold shelf-tag
+   dumps — *"mops, moth balls, oven cleaner…"* — and the section header is meant to
+   say which aisle, not what is in it. The contents stay in `description`, which is
+   what inference reads.
+5. Repoint mappings whose aisle was dropped at the matching standard department,
+   or clear them so the item returns to the unsorted bucket.
+
+This is a deliberate, case-by-case job against named tables with the live household
+on a protect list, per `CLAUDE.md`.
+
+## Tests
+
+Unit, no network:
+
+- Number words zero through thirty, each to its digit.
+- "aisle sixteen", "Aisle 16", "16", "it's in aisle 16" all resolve to the same
+  aisle.
+- "International, middle" → `International`.
+- "dairy" resolves to the existing `standard-dairy`, not a new aisle.
+- Entering the same aisle twice creates one aisle.
+- Empty and over-long input are rejected without writing.
+
+Against the deployed stack:
+
+- A capture survives a subsequent inference run — the regression the
+  `userAisleOverride` gap would otherwise cause.
+- A capture made with no signal queues and applies on reconnect, like every other
+  mutation.
+
+## Open questions
+
+1. **Does a numbered store still want department headers?** ShopRite would show
+   both "16" and "Personal Care" until every item is captured. Probably fine — the
+   unsorted bucket shrinks as you go — but it is the first thing to look at in real
+   use.
+2. **Should inference stop guessing once a store has captured aisles?** A sighted
+   aisle 16 is worth more than a confident guess, and the guess is what puts items
+   in the wrong place.
+3. **Quick Trip is unaffected** — no store, no aisles. Confirm nothing in the
+   capture path assumes a store exists.
+
+## Housekeeping noticed while writing this
+
+`amplify/data/resource.ts:92` still carries a comment describing the store layout
+type — a concept deleted on 2026-08-31. Remove it with this work.

@@ -13,6 +13,8 @@ struct AtStoreModeView: View {
     @State private var showAisleManagement = false
     @FocusState private var searchFieldFocused: Bool
     @StateObject private var dictation = SpeechDictationService()
+    /// The item whose aisle is being captured, if the sheet is up.
+    @State private var captureTarget: GroceryItem?
 
     // Get the currently selected household store (using shoppingStoreId when in shopping mode)
     private var selectedHouseholdStore: HouseholdStore? {
@@ -173,8 +175,11 @@ struct AtStoreModeView: View {
                     if !unmappedItems.isEmpty {
                         Section {
                             ForEach(unmappedItems) { item in
-                                GroceryItemRow(item: item)
-                                    .environmentObject(viewModel)
+                                HStack(spacing: 8) {
+                                    GroceryItemRow(item: item)
+                                        .environmentObject(viewModel)
+                                    whereIsThisButton(for: item)
+                                }
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -239,6 +244,14 @@ struct AtStoreModeView: View {
             if let store = selectedHouseholdStore {
                 StoreAisleManagementView(store: store)
                     .environmentObject(viewModel)
+            }
+        }
+        .sheet(item: $captureTarget) { item in
+            if let store = selectedHouseholdStore {
+                AisleCaptureSheet(itemName: item.name, store: store) { resolution in
+                    saveCapturedAisle(resolution, for: item, in: store)
+                }
+                .presentationDetents([.height(360)])
             }
         }
         .sheet(isPresented: $viewModel.showShoppingCompletedSheet) {
@@ -458,6 +471,78 @@ struct AtStoreModeView: View {
         }
         .textCase(nil)
         .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 8, trailing: 20))
+    }
+
+    // MARK: - Aisle capture
+
+    /// The one control that opens aisle capture.
+    ///
+    /// It has to be its own button. On this screen a tap on a row crosses the
+    /// item off, swipes move it between the list and suggestions, and long-press
+    /// is the delete menu — the whole gesture budget is already spent. Long-press
+    /// would also be the wrong answer even if it were free: hiding "map this"
+    /// behind a press is exactly the complaint Map Aisles drew.
+    private func whereIsThisButton(for item: GroceryItem) -> some View {
+        Button {
+            captureTarget = item
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.background)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(DesignSystem.Colors.dillGreen))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Where is \(item.name)?")
+    }
+
+    /// Creates the aisle if it is new, then records that a person put the item
+    /// there. Deliberately does not cross the item off: you have said where the
+    /// thing lives, not that you picked it up.
+    private func saveCapturedAisle(
+        _ resolution: AisleUtterance.Resolution,
+        for item: GroceryItem,
+        in store: HouseholdStore
+    ) {
+        Task {
+            do {
+                let aisleId: String
+                switch resolution {
+                case .existing(let aisle):
+                    aisleId = aisle.id
+                case .new(let number, let name):
+                    let updated = try await storeService.addAisle(to: store, number: number, name: name)
+                    guard let created = updated.aisleLayout.last else { return }
+                    aisleId = created.id
+                case .rejected:
+                    return
+                }
+
+                try await storeService.assignProductToAisle(
+                    productId: item.productId,
+                    normalizedName: item.name.lowercased(),
+                    storeId: store.id,
+                    aisleId: aisleId,
+                    sightedByUser: true
+                )
+
+                await MainActor.run {
+                    viewModel.toastMessage = "\(item.name) is in \(AisleNaming.displayName(for: aisleId, in: store.aisleLayout))"
+                    viewModel.toastType = .success
+                    viewModel.showToast = true
+                }
+            } catch {
+                // Said out loud. A silent failure here is indistinguishable from
+                // the item simply refusing to move, which is the bug pattern this
+                // app has already been bitten by twice.
+                await MainActor.run {
+                    viewModel.toastMessage = "Couldn't save that aisle"
+                    viewModel.toastType = .error
+                    viewModel.showToast = true
+                }
+            }
+        }
     }
 
     /// A store with nothing to sort against has nothing to map, so unmapped items

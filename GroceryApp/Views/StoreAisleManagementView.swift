@@ -15,6 +15,14 @@ struct StoreAisleManagementView: View {
     @State private var isCleaning = false
     @State private var selectedMapping: ProductAisleMapping? = nil
     @State private var showEditSheet = false
+    @State private var showAddAisle = false
+    @State private var newAisleText = ""
+    @State private var isAddingAisle = false
+    /// The unmapped bucket is collapsed by default. On a new store it holds the
+    /// entire product history — everything ever bought anywhere — which read as a
+    /// backlog to work through. It is not: items get mapped when a list meets a
+    /// store, and most of the catalogue is never bought at any given shop.
+    @State private var showUnmappedItems = false
     @State private var searchText = ""
 
     // MARK: - Orderable Aisle for drag-to-reorder
@@ -215,6 +223,38 @@ struct StoreAisleManagementView: View {
             }
             .onMove(perform: moveAisles)
             .onDelete(perform: deleteAisles)
+
+            // Adding one lives here, next to the list of them, rather than on the
+            // scan sheet where it used to compete with photographing the board.
+            Button {
+                newAisleText = ""
+                showAddAisle = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
+
+                    Text("Add an aisle")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.dillGreen)
+
+                    Spacer()
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(DesignSystem.Colors.dillGreen.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(DesignSystem.Colors.dillGreen.opacity(0.3), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
         } header: {
             Text("AISLE ORDER")
                 .font(.system(size: 11, weight: .bold))
@@ -223,12 +263,56 @@ struct StoreAisleManagementView: View {
                 .textCase(nil)
                 .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 6, trailing: 20))
         } footer: {
-            Text("Drag to reorder shopping sequence · swipe to remove an aisle")
+            Text("Drag to reorder the walk · swipe to remove one")
                 .font(.system(size: 12, weight: .regular))
                 .foregroundColor(DesignSystem.Colors.textTertiary)
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 16, trailing: 20))
         }
         .listSectionSeparator(.hidden)
+    }
+
+    /// Add one aisle, by whatever the shop calls it.
+    ///
+    /// A number, a letter-number, or a name — the same values the aisle field on
+    /// an item accepts, and stored the same way, so the two paths cannot disagree
+    /// about what an aisle is.
+    private func addAisle() {
+        let trimmed = newAisleText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !isAddingAisle else { return }
+
+        // Already there under some spelling — adding it again would put the same
+        // place in the walk twice.
+        if AisleNaming.match(trimmed, in: currentStore.aisleLayout) != nil {
+            viewModel.toastMessage = "\(trimmed) is already an aisle here"
+            viewModel.toastType = .error
+            viewModel.showToast = true
+            return
+        }
+
+        isAddingAisle = true
+        Task {
+            do {
+                let updated = try await storeService.addAisle(to: currentStore, number: trimmed, name: "")
+                await MainActor.run {
+                    if let index = viewModel.householdStores.firstIndex(where: { $0.id == updated.id }) {
+                        viewModel.householdStores[index] = updated
+                    }
+                    viewModel.toastMessage = "Added \(trimmed)"
+                    viewModel.toastType = .success
+                    viewModel.showToast = true
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+            } catch {
+                await MainActor.run {
+                    // Said out loud rather than swallowed — a silent failure here
+                    // looks identical to the aisle simply not appearing.
+                    viewModel.toastMessage = "Could not add that aisle"
+                    viewModel.toastType = .error
+                    viewModel.showToast = true
+                }
+            }
+            await MainActor.run { isAddingAisle = false }
+        }
     }
 
     private func moveAisles(from source: IndexSet, to destination: Int) {
@@ -343,6 +427,14 @@ struct StoreAisleManagementView: View {
                 }
             }
             .environmentObject(viewModel)
+        }
+        .alert("Add an aisle", isPresented: $showAddAisle) {
+            TextField("Number or name — 7, A2, Bakery", text: $newAisleText)
+                .autocorrectionDisabled()
+            Button("Cancel", role: .cancel) { }
+            Button("Add") { addAisle() }
+        } message: {
+            Text("Aisles you add sit at the end of the walk. Drag it into place afterwards.")
         }
         .sheet(isPresented: $showEditSheet) {
             if let mapping = selectedMapping {
@@ -533,7 +625,15 @@ struct StoreAisleManagementView: View {
             // Product items grouped by aisle
             ForEach(sortedAisleKeys, id: \.self) { aisleId in
                 Section {
-                    if let aisleItems = itemsGroupedByAisle[aisleId] {
+                    // The unmapped bucket stays shut unless asked for. On a new
+                    // store it holds the entire product history — everything the
+                    // household has ever bought anywhere — and listing all of it
+                    // made the screen look like a job of work. It is not one:
+                    // items are mapped when a shopping list meets a store, and
+                    // most of a catalogue is never bought at any given shop.
+                    if aisleId == "Unknown" && !showUnmappedItems {
+                        EmptyView()
+                    } else if let aisleItems = itemsGroupedByAisle[aisleId] {
                         ForEach(aisleItems) { displayItem in
                             DisplayItemRow(displayItem: displayItem)
                                 .listRowBackground(Color.clear)
@@ -549,7 +649,16 @@ struct StoreAisleManagementView: View {
                         }
                     }
                 } header: {
-                    aisleSectionHeader(for: aisleId)
+                    if aisleId == "Unknown" {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) { showUnmappedItems.toggle() }
+                        } label: {
+                            unmappedHeader
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        aisleSectionHeader(for: aisleId)
+                    }
                 }
                 .listSectionSeparator(.hidden)
             }
@@ -557,6 +666,39 @@ struct StoreAisleManagementView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .environment(\.editMode, .constant(.active))
+    }
+
+    /// Header for the unmapped bucket, written so a large number does not read as
+    /// a failure. These are products the household has bought somewhere, not
+    /// chores outstanding at this shop.
+    private var unmappedHeader: some View {
+        let count = itemsGroupedByAisle["Unknown"]?.count ?? 0
+        return HStack(spacing: 8) {
+            Image(systemName: showUnmappedItems ? "chevron.down" : "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("NOT MAPPED TO AN AISLE")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .tracking(1.0)
+
+                if !showUnmappedItems {
+                    Text("\(count) products you have bought elsewhere · mapped when you shop here")
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                }
+            }
+
+            Spacer()
+
+            Text("\(count)")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+        }
+        .textCase(nil)
+        .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 6, trailing: 20))
     }
 
     // MARK: - Empty State

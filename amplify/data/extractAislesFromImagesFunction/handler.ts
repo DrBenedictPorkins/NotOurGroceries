@@ -87,6 +87,11 @@ Rules:
 - Use the exact aisle numbers/names as written
 - If an aisle has multiple products, list each separately
 - Include section names like "Dairy", "Produce", "Frozen" if used instead of numbers
+- The photo may be a full directory board, or it may be the sign hanging over a
+  single aisle — "Aisle 4 · pasta, rice, sauces". Both are valid. For a single
+  aisle sign, return one entry per product listed on it, all with that aisle.
+  Many shops have no directory board at all, so this is the normal case rather
+  than the exception, and a scan is often several such photos taken in sequence.
 
 Return ONLY the JSON array, no other text.`;
 

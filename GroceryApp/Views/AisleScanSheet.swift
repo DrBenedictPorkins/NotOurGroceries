@@ -123,14 +123,33 @@ struct AisleScanSheet: View {
 
             // Instructions
             VStack(spacing: 8) {
-                Text("Capture Store Directory")
+                Text("Photograph the aisles")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.white)
 
-                Text("Take a photo of the store's aisle directory or select an existing photo to automatically map products to aisles.")
+                // The old copy said "the store's aisle directory", which assumes a
+                // board on the wall. Plenty of shops have none — they have a sign
+                // hanging over each aisle saying the number and roughly what is
+                // down it, and photographing those one by one works just as well.
+                // The scan already takes up to ten photos; it just never said so.
+                Text("Two ways, whichever your shop has.")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    scanHint(
+                        icon: "list.bullet.rectangle",
+                        title: "A directory board",
+                        detail: "The list near the entrance showing every aisle and what is in it. One photo usually does it."
+                    )
+                    scanHint(
+                        icon: "signpost.right",
+                        title: "The signs above each aisle",
+                        detail: "\"Aisle 4 — pasta, rice, sauces\". Walk the shop and photograph them one at a time. Up to ten per scan."
+                    )
+                }
+                .padding(.top, 4)
                     .padding(.horizontal, 32)
             }
 
@@ -538,6 +557,26 @@ struct AisleScanSheet: View {
 
             }
         }
+    }
+
+    private func scanHint(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.dillGreen)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(detail)
+                    .font(.system(size: 13))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Completion View

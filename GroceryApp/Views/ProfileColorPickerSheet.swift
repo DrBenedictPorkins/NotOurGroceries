@@ -131,18 +131,19 @@ private struct ColorOption: View {
         Button(action: { if !isTaken { onTap() } }) {
             ZStack {
                 Circle()
+                    // Taken colours are drawn at full strength, same as the rest.
+                    // Dimming was tried twice and read as a rendering fault both
+                    // times: #B026FF at 0.55 on a near-black ground is a black
+                    // circle. The initial is what says the colour is spoken for,
+                    // so the colour itself has no reason to hide.
                     .fill(color.color)
-                    // Held back rather than dimmed into the background. At 0.25 on
-                    // a near-black ground the darker colours vanished and looked
-                    // like a bug; 0.55 plus the initial reads as "spoken for".
-                    .opacity(isTaken ? 0.55 : 1)
                     .frame(width: 50, height: 50)
                     .shadow(color: color.color.opacity(0.4), radius: isSelected ? 8 : 0, x: 0, y: 4)
 
                 if let initial = takenBy {
                     Text(String(initial).uppercased())
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.black.opacity(0.55))
+                        .font(.system(size: 20, weight: .heavy))
+                        .foregroundColor(color.inkOnTop)
                 } else if isSelected {
                     Circle()
                         .stroke(Color.white, lineWidth: 3)

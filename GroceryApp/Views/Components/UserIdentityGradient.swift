@@ -44,6 +44,23 @@ enum ProfileColor: String, CaseIterable {
         rawValue.capitalized
     }
 
+    /// Black or white, whichever is legible on top of this colour.
+    ///
+    /// Twelve colours run from #0080FF to #FFD93D, so a single fixed ink is
+    /// wrong for half of them. Computed from the colour itself rather than
+    /// listed per case, so adding a thirteenth needs no second edit.
+    var inkOnTop: Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a) else {
+            return .white
+        }
+        func linear(_ c: CGFloat) -> CGFloat {
+            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+        return luminance > 0.35 ? .black : .white
+    }
+
     /// Tolerant lookup — the stored key has been written in mixed case, and a
     /// user who never opened the picker has none at all.
     static func named(_ key: String?) -> ProfileColor {

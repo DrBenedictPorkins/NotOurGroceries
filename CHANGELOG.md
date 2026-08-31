@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Your list
 - **Quantities are gone.** A shopping list says what to buy, not how much — "2 cups flour" is now just Flour, and "Eggs x12" is Eggs. What kind still survives, because it changes which packet you pick up: unsalted butter, waxy potatoes, plain flour
 - The name under each item is tinted in that person's own colour, so who added what is readable at a glance instead of being the same grey for everyone
-- Everyone is given a colour automatically. Tap your badge in Settings to pick a different one from twelve — a colour someone else already has is faded and wears their initial, so it's clear why you can't take it
+- Everyone is given a colour automatically. Tap your badge in Settings to pick a different one from twelve — a colour someone else already has wears their initial, so it's clear why you can't take it
 - The main list is always alphabetical now, which answers "is milk already on here?" without reading every row. Sorting moved to suggestions, where hundreds of rows make it worth having
 - Messages like "Tomatoes is already on your list" get their own full-width line instead of being cut off inside the header
 - While someone is out shopping, the list now says it's locked, who has it, and that it ends when they finish — rather than offering to send them requests that go nowhere

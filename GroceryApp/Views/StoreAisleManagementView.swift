@@ -40,7 +40,7 @@ struct StoreAisleManagementView: View {
         if hasUnmappedItems {
             // Named for what it is — a bucket of items with no aisle yet — not
             // for an aisle whose name we cannot recall.
-            aisles.append(OrderableAisle(id: "Unknown", displayName: "Not sorted yet", displayOrder: 0))
+            aisles.append(OrderableAisle(id: "Unknown", displayName: "Not mapped to an aisle", displayOrder: 0))
         }
 
         // Add all aisles from currentStore.aisleLayout sorted by displayOrder
@@ -375,6 +375,11 @@ struct StoreAisleManagementView: View {
         // thing you would attempt.
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
+                Text("AISLE SETUP")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+
                 Text(store.name)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(DesignSystem.Colors.accentGradient)
@@ -602,7 +607,7 @@ struct StoreAisleManagementView: View {
         let headerColor: Color
 
         if aisleId == "Unknown" {
-            displayName = "Not sorted yet"
+            displayName = "Not mapped to an aisle"
             headerColor = DesignSystem.Colors.neonPink
         } else {
             // Through AisleNaming, which already knows the order to try: the

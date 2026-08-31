@@ -30,8 +30,6 @@ struct AisleScanSheet: View {
     @State private var showError = false
 
     // Manual aisle setup
-    @State private var showManualSetup = false
-    @State private var manualAisleCount = 10
     @State private var isCreatingAisles = false
 
     var body: some View {
@@ -47,8 +45,6 @@ struct AisleScanSheet: View {
 
                 if let job = completedJob {
                     completionView(job: job)
-                } else if showManualSetup {
-                    manualSetupView
                 } else if showError {
                     errorView
                 } else if isProcessing {
@@ -208,44 +204,6 @@ struct AisleScanSheet: View {
                     }
                 }
 
-                // Divider with "or"
-                HStack {
-                    Rectangle()
-                        .fill(DesignSystem.Colors.glassBorder)
-                        .frame(height: 1)
-                    Text("or")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                        .padding(.horizontal, 12)
-                    Rectangle()
-                        .fill(DesignSystem.Colors.glassBorder)
-                        .frame(height: 1)
-                }
-                .padding(.vertical, 8)
-
-                // Manual setup button
-                Button(action: {
-                    showManualSetup = true
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "list.number")
-                            .font(.system(size: 18, weight: .semibold))
-                        Text("Add Aisles Manually")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(DesignSystem.Colors.glassBackground)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                            )
-                    )
-                }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 32)
@@ -578,205 +536,6 @@ struct AisleScanSheet: View {
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                 }
 
-                // Manual fallback
-                Button(action: {
-                    showError = false
-                    showManualSetup = true
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "list.number")
-                            .font(.system(size: 14, weight: .semibold))
-                        Text("Add Aisles Manually Instead")
-                            .font(.system(size: 15, weight: .medium))
-                    }
-                    .foregroundColor(DesignSystem.Colors.dillGreen)
-                }
-                .padding(.top, 8)
-            }
-        }
-    }
-
-    // MARK: - Manual Setup View
-
-    private var manualSetupView: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // Icon
-            Image(systemName: "list.number")
-                .font(.system(size: 64, weight: .thin))
-                .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.7))
-
-            // Instructions
-            VStack(spacing: 8) {
-                Text("Manual Aisle Setup")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundColor(.white)
-
-                Text("Create numbered aisles for your store. You can add custom sections like Dairy, Produce, etc. later.")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
-
-            // Aisle count stepper
-            VStack(spacing: 12) {
-                Text("Number of Aisles")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                HStack(spacing: 24) {
-                    Button(action: {
-                        if manualAisleCount > 1 {
-                            manualAisleCount -= 1
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                    }) {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(manualAisleCount > 1 ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textTertiary)
-                    }
-                    .disabled(manualAisleCount <= 1)
-
-                    Text("\(manualAisleCount)")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                        .frame(minWidth: 80)
-
-                    Button(action: {
-                        if manualAisleCount < 30 {
-                            manualAisleCount += 1
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 36))
-                            .foregroundColor(manualAisleCount < 30 ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.textTertiary)
-                    }
-                    .disabled(manualAisleCount >= 30)
-                }
-            }
-            .padding(.vertical, 24)
-
-            // Quick presets
-            HStack(spacing: 12) {
-                ForEach([5, 10, 15, 20], id: \.self) { count in
-                    Button(action: {
-                        manualAisleCount = count
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }) {
-                        Text("\(count)")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(manualAisleCount == count ? .white : DesignSystem.Colors.textSecondary)
-                            .frame(width: 50, height: 36)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(manualAisleCount == count
-                                        ? DesignSystem.Colors.dillGreen.opacity(0.3)
-                                        : DesignSystem.Colors.glassBackground)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(manualAisleCount == count
-                                                ? DesignSystem.Colors.dillGreen
-                                                : DesignSystem.Colors.glassBorder, lineWidth: 1)
-                                    )
-                            )
-                    }
-                }
-            }
-
-            Spacer()
-
-            // Action buttons
-            VStack(spacing: 12) {
-                Button(action: {
-                    Task {
-                        await createManualAisles()
-                    }
-                }) {
-                    HStack(spacing: 12) {
-                        if isCreatingAisles {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                        }
-                        Text(isCreatingAisles ? "Creating..." : "Create \(manualAisleCount) Aisles")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(DesignSystem.Colors.accentGradient)
-                    )
-                    .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8)
-                }
-                .disabled(isCreatingAisles)
-
-                Button(action: {
-                    showManualSetup = false
-                }) {
-                    Text("Back")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 32)
-        }
-    }
-
-    private func createManualAisles() async {
-        isCreatingAisles = true
-        defer { isCreatingAisles = false }
-
-        // Create numbered aisles
-        var aisles: [StoreAisle] = []
-        for i in 1...manualAisleCount {
-            aisles.append(StoreAisle(
-                id: "aisle-\(store.id)-\(i)",
-                number: "\(i)",
-                name: "",
-                displayOrder: i
-            ))
-        }
-
-        // Update the store with the new aisle layout
-        let updatedStore = HouseholdStore(
-            id: store.id,
-            householdId: store.householdId,
-            name: store.name,
-            chain: store.chain,
-            address: store.address,
-            aisleLayout: aisles
-        )
-
-        do {
-            try await storeService.updateStore(updatedStore)
-
-            // Update the viewModel's local copy
-            await MainActor.run {
-                if let index = viewModel.householdStores.firstIndex(where: { $0.id == store.id }) {
-                    viewModel.householdStores[index] = updatedStore
-                }
-                viewModel.toastMessage = "Created \(manualAisleCount) aisles"
-                viewModel.toastType = .success
-                viewModel.showToast = true
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-                onComplete?()
-                dismiss()
-            }
-        } catch {
-            await MainActor.run {
-                viewModel.toastMessage = "Failed to create aisles: \(error.localizedDescription)"
-                viewModel.toastType = .error
-                viewModel.showToast = true
             }
         }
     }

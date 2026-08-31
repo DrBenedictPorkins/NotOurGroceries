@@ -101,7 +101,6 @@ class StoreService: ObservableObject {
                 chain
                 address
                 aisleLayout
-                layoutType
             }
         }
         """
@@ -134,7 +133,6 @@ class StoreService: ObservableObject {
             "householdId": householdId,
             "name": name,
             "chain": chain ?? "",
-            "layoutType": "AISLES",   // Schema field, kept satisfied; the app ignores it.
             "aisleLayout": aisleLayoutJSON
         ]
 
@@ -171,7 +169,6 @@ class StoreService: ObservableObject {
                 chain
                 address
                 aisleLayout
-                layoutType
             }
         }
         """
@@ -281,8 +278,7 @@ class StoreService: ObservableObject {
                     chain
                     address
                     aisleLayout
-                    layoutType
-                }
+                    }
             }
         }
         """
@@ -804,7 +800,10 @@ class StoreService: ObservableObject {
             aisleLayout = aisleArray.compactMap { parseStoreAisle($0) }
         }
 
-        // `layoutType` still arrives from the backend and is deliberately not read.
+        // There was a `layoutType` on this model declaring a store "aisled" or
+        // "no aisles". It was written as a constant, never read, and described a
+        // distinction that does not exist — numbered aisles are an addition to the
+        // named departments every store has, not a rival kind of shop.
         return HouseholdStore(
             id: id,
             householdId: householdId,

@@ -91,7 +91,6 @@ const schema = a.schema({
 
   // Store layout type (whether the store has numbered/named aisles at all)
   // Nullable on HouseholdStore — null is treated as AISLES for back-compat.
-  LayoutType: a.enum(['AISLES', 'NO_AISLES']),
 
   // Job status enum for async aisle extraction
   AisleExtractionJobStatus: a.enum([
@@ -308,7 +307,6 @@ const schema = a.schema({
       chain: a.string(),
       address: a.string(),
       aisleLayout: a.json(), // [{id, number, name, displayOrder}]
-      layoutType: a.ref('LayoutType'), // null == AISLES (back-compat)
       productMappings: a.hasMany('ProductAisleMapping', 'storeId'),
     })
     .authorization((allow) => [allow.groupDefinedIn('householdId')])

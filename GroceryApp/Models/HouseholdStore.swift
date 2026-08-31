@@ -8,10 +8,7 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
     var address: String?
     var aisleLayout: [StoreAisle]
 
-    /// Whether this shop numbers its aisles, on top of the named departments
-    /// every shop has.
-    ///
-    /// The vocabulary, which the code used to muddle:
+    /// The two kinds of aisle, and the kind that is not a store.
     ///
     /// - a **named department** — Produce, Bakery, Frozen — has no number, and
     ///   every store is seeded with all eighteen of them at creation;
@@ -20,18 +17,21 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
     /// - a shop with neither is not a store in this app at all. That is a Quick
     ///   Trip.
     ///
-    /// So numbered is a superset of named, not a rival kind, and this is derived
-    /// rather than declared. Nobody is asked which sort of shop they are standing
-    /// in — a question they often cannot answer until they get there. Create the
-    /// store from home with just its departments, scan the plaque once you see
-    /// one, and the layout gains numbered entries and this turns true on its own.
+    /// Numbered is a superset of named, not a rival kind, so there is no store
+    /// *type* here and nothing to declare. A shop is created from home with its
+    /// departments; the plaque gets scanned once somebody is standing in front of
+    /// one; the layout gains numbered entries. Nothing converts, because there
+    /// was never anything to convert between.
     ///
-    /// It replaced `supportsAisleNavigation`, which asked whether the layout was
-    /// empty. That could not be false once every store was seeded, so it was a
-    /// question with one answer, and the branches behind it were unreachable.
-    var hasNumberedAisles: Bool {
-        aisleLayout.contains { Int($0.number.trimmingCharacters(in: .whitespaces)) != nil }
-    }
+    /// That is also why the directory scan is offered on every store. Hiding it
+    /// behind "this shop has numbered aisles" would be circular — scanning is how
+    /// a shop comes to have them.
+    ///
+    /// There was a `supportsAisleNavigation` here asking whether the layout was
+    /// empty, which stopped being answerable once every store was seeded, and a
+    /// `hasNumberedAisles` after it that nothing ever consumed. Both gone; the
+    /// distinction lives in the data, where `StoreAisle.number` either parses as
+    /// a number or does not.
 
     init(
         id: String = UUID().uuidString,

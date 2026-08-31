@@ -5,12 +5,16 @@ struct SettingsView: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @ObservedObject var userCache = UserCache.shared
 
-    // Colour and pattern are still stored per user and still drive the badge that
-    // tells two members apart on a shared list. Choosing them is what went: it
-    // opened a personalisation flow on the way to Settings and implied the app
-    // was tailoring something, when the colour has no bearing on shopping at all.
-    // The values assigned at sign-up stand.
+    // Your colour tints the [name] under every item you add, which is the only
+    // thing telling your rows from anyone else's on a shared list. It is assigned
+    // at random when you join, and changeable here because it is a pleasant thing
+    // to change and costs nothing.
+    //
+    // Colours already worn by other members are shown but not selectable — two
+    // people sharing one would make the attribution meaningless, which is the
+    // whole reason the colour exists.
     @State private var currentColor: String = "cyan"
+    @State private var showColorPicker = false
 
     @State private var showClearWarning = false
     @State private var showTypeToConfirm = false
@@ -58,6 +62,14 @@ struct SettingsView: View {
             }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showColorPicker) {
+            ProfileColorPickerSheet(
+                selectedColor: $currentColor,
+                takenColors: takenColors,
+                initial: userInitial,
+                onSave: saveColor
+            )
+        }
         .task {
             await loadCurrentUserProfile()
         }
@@ -68,6 +80,28 @@ struct SettingsView: View {
     private func loadCurrentUserProfile() async {
         guard let userId = amplifyService.currentUser?.userId else { return }
         currentColor = userCache.profileColor(for: userId)
+    }
+
+    /// Colours worn by everyone in the household except you.
+    private var takenColors: Set<String> {
+        let me = amplifyService.currentUser?.userId
+        return Set(userCache.users.values
+            .filter { $0.id != me }
+            .compactMap { $0.profileColor })
+    }
+
+    private func saveColor() {
+        Task {
+            do {
+                try await amplifyService.updateProfileAppearance(color: currentColor)
+            } catch {
+                // Nothing is lost — the badge shows the chosen colour until the
+                // next refresh, and the next launch reads whatever the server
+                // kept. Worth a line in the log rather than a scary alert over a
+                // colour.
+                print("Could not save profile colour: \(error)")
+            }
+        }
     }
 
     // MARK: - Header
@@ -90,12 +124,19 @@ struct SettingsView: View {
 
     private var userInfoCard: some View {
         HStack(spacing: 16) {
-            // User color badge
-            UserColorBadge(
-                colorKey: currentColor,
-                initial: userInitial,
-                size: 60
-            )
+            // Tap to recolour. The badge is the only thing on this screen that
+            // does anything, so it is the affordance.
+            Button {
+                showColorPicker = true
+            } label: {
+                UserColorBadge(
+                    colorKey: currentColor,
+                    initial: userInitial,
+                    size: 60
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Change your profile colour")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayName)

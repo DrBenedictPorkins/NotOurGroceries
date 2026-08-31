@@ -2,6 +2,18 @@ import SwiftUI
 
 struct ProfileColorPickerSheet: View {
     @Binding var selectedColor: String
+
+    /// Colours already worn by *other* people in this household.
+    ///
+    /// The colour is what tells one person's items from another's on a list row,
+    /// so two members sharing one defeats the point. Taken colours are shown but
+    /// not selectable — hiding them would leave a gappy grid and no explanation
+    /// for why.
+    var takenColors: Set<String> = []
+
+    /// The current user's initial, so the preview is their badge, not a mock-up.
+    var initial: Character? = nil
+
     let onSave: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -53,7 +65,7 @@ struct ProfileColorPickerSheet: View {
 
             UserColorBadge(
                 colorKey: selectedColor,
-                initial: "Y",
+                initial: initial,
                 size: 100
             )
 
@@ -85,12 +97,19 @@ struct ProfileColorPickerSheet: View {
                 ForEach(ProfileColor.allCases, id: \.self) { color in
                     ColorOption(
                         color: color,
-                        isSelected: selectedColor == color.rawValue
+                        isSelected: selectedColor == color.rawValue,
+                        isTaken: takenColors.contains(color.rawValue)
                     ) {
                         selectedColor = color.rawValue
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
                 }
+            }
+
+            if !takenColors.isEmpty {
+                Text("Faded colours are already used by someone else in your household.")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
             }
         }
     }
@@ -102,10 +121,11 @@ struct ProfileColorPickerSheet: View {
 private struct ColorOption: View {
     let color: ProfileColor
     let isSelected: Bool
+    var isTaken: Bool = false
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button(action: { if !isTaken { onTap() } }) {
             ZStack {
                 Circle()
                     .fill(color.color)
@@ -125,6 +145,8 @@ private struct ColorOption: View {
             }
         }
         .buttonStyle(.plain)
+        .disabled(isTaken)
+        .opacity(isTaken ? 0.25 : 1)
         .scaleEffect(isSelected ? 1.1 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
@@ -135,6 +157,8 @@ private struct ColorOption: View {
 #Preview {
     ProfileColorPickerSheet(
         selectedColor: .constant("cyan"),
+        takenColors: ["purple", "pink"],
+        initial: "M",
         onSave: {}
     )
 }

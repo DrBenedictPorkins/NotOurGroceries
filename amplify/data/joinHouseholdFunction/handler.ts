@@ -206,9 +206,15 @@ async function colourForNewMember(householdId: string): Promise<string> {
     cursor = page.LastEvaluatedKey as never;
   } while (cursor);
 
-  // Past six members the palette repeats; there is nothing better to do, and a
-  // household that large has bigger problems telling people apart.
-  return PROFILE_COLOURS.find((c) => !taken.has(c)) ?? PROFILE_COLOURS[taken.size % PROFILE_COLOURS.length];
+  // Random among whatever is left, not the first free one. Handing them out in
+  // palette order made the first member of every household cyan and the second
+  // purple, which looks like a default rather than an identity.
+  const free = PROFILE_COLOURS.filter((c) => !taken.has(c));
+  if (free.length > 0) return free[randomInt(free.length)];
+
+  // Past six members the palette has to repeat; there is nothing better to do,
+  // and a household that large has bigger problems telling people apart.
+  return PROFILE_COLOURS[randomInt(PROFILE_COLOURS.length)];
 }
 
 async function updateUserHousehold(userId: string, householdId: string, colour: string): Promise<void> {

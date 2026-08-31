@@ -63,6 +63,12 @@ async function removeFromHouseholdGroup(userId: string, householdId: string): Pr
  */
 const INVITE_CODE_TTL_MS = 30 * 60 * 1000;
 
+/**
+ * Profile colours, mirroring `ProfileColor` in UserIdentityGradient.swift.
+ * Handed out at random so no colour reads as "the default one".
+ */
+const PROFILE_COLOURS = ['cyan', 'purple', 'pink', 'blue', 'yellow', 'green'];
+
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 async function generateUniqueInviteCode(): Promise<string> {
@@ -315,10 +321,15 @@ export const handler: Handler = async (event) => {
       Key: marshall({ id: callerId }),
       // householdGroup mirrors householdId; the read rule matches on it because
       // householdId is a GSI key and cannot carry an auth filter.
-      // The creator is the household's first member, so they get the first
-      // colour. Everyone after them is assigned one the household is not using.
+      // The creator is the household's first member, so every colour is free —
+      // pick one at random rather than always the same one. Everyone joining
+      // after them gets one the household is not already using.
       UpdateExpression: 'SET householdId = :hid, householdGroup = :hid, profileColor = if_not_exists(profileColor, :colour), updatedAt = :now',
-      ExpressionAttributeValues: marshall({ ':hid': newId, ':colour': 'cyan', ':now': now.toISOString() }),
+      ExpressionAttributeValues: marshall({
+        ':hid': newId,
+        ':colour': PROFILE_COLOURS[randomInt(PROFILE_COLOURS.length)],
+        ':now': now.toISOString(),
+      }),
     }));
 
     console.log(`User ${callerId} created household ${newId}`);

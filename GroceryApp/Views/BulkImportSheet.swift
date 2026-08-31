@@ -9,7 +9,6 @@ struct ParsedIngredient: Identifiable {
     let id = UUID()
     let originalName: String
     var name: String
-    var quantity: String?
     var notes: String?
     var productId: String?
     var isSelected: Bool = true
@@ -30,7 +29,6 @@ struct ParsedIngredient: Identifiable {
 
     init(
         name: String,
-        quantity: String? = nil,
         notes: String? = nil,
         productId: String? = nil,
         isSelected: Bool? = nil,
@@ -41,7 +39,6 @@ struct ParsedIngredient: Identifiable {
     ) {
         self.originalName = name
         self.name = name
-        self.quantity = quantity
         self.notes = notes
         self.productId = productId
         // A recipe lists everything it uses; you only shop for what you are out
@@ -894,7 +891,7 @@ struct BulkImportSheet: View {
 
         Task {
             for (i, item) in selected.enumerated() {
-                await viewModel.addItem(name: item.name, quantity: item.quantity, notes: item.notes, productId: item.productId)
+                await viewModel.addItem(name: item.name, notes: item.notes, productId: item.productId)
                 await MainActor.run {
                     phase = .adding(done: i + 1, total: total)
                 }
@@ -993,7 +990,6 @@ struct BulkImportSheet: View {
             return array.compactMap { element -> ParsedIngredient? in
                 guard case .object(let obj) = element,
                       case .string(let name) = obj["name"] else { return nil }
-                let qty: String? = { if case .string(let q) = obj["quantity"] { return q }; return nil }()
                 let notes: String? = { if case .string(let q) = obj["qualifier"] { return q }; return nil }()
                 let heard: String? = { if case .string(let h) = obj["heardAs"] { return h }; return nil }()
                 let needs: Bool = { if case .boolean(let b) = obj["needsInput"] { return b }; return false }()
@@ -1002,7 +998,7 @@ struct BulkImportSheet: View {
                     return a.compactMap { if case .string(let v) = $0 { return v }; return nil }
                 }()
                 let staple: Bool = { if case .boolean(let b) = obj["staple"] { return b }; return false }()
-                return ParsedIngredient(name: name, quantity: qty, notes: notes,
+                return ParsedIngredient(name: name, notes: notes,
                                         heardAs: heard, needsInput: needs, alternatives: alts,
                                         isStaple: staple)
             }
@@ -1010,7 +1006,7 @@ struct BulkImportSheet: View {
             guard let data = s.data(using: .utf8),
                   let items = try? JSONDecoder().decode([_RawItem].self, from: data) else { return [] }
             return items.map {
-                ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier,
+                ParsedIngredient(name: $0.name, notes: $0.qualifier,
                                  heardAs: $0.heardAs, needsInput: $0.needsInput ?? false,
                                  alternatives: $0.alternatives ?? [],
                                  isStaple: $0.staple ?? false)
@@ -1029,7 +1025,7 @@ struct BulkImportSheet: View {
             guard let itemData = str.data(using: .utf8) else { return [] }
             let items = try JSONDecoder().decode([_RawItem].self, from: itemData)
             return items.map {
-                ParsedIngredient(name: $0.name, quantity: $0.quantity, notes: $0.qualifier,
+                ParsedIngredient(name: $0.name, notes: $0.qualifier,
                                  heardAs: $0.heardAs, needsInput: $0.needsInput ?? false,
                                  alternatives: $0.alternatives ?? [],
                                  isStaple: $0.staple ?? false)
@@ -1037,7 +1033,7 @@ struct BulkImportSheet: View {
         } else if let arr = dataObj["parseIngredients"] as? [[String: Any]] {
             return arr.compactMap { obj -> ParsedIngredient? in
                 guard let name = obj["name"] as? String else { return nil }
-                return ParsedIngredient(name: name, quantity: obj["quantity"] as? String, notes: obj["qualifier"] as? String,
+                return ParsedIngredient(name: name, notes: obj["qualifier"] as? String,
                                         heardAs: obj["heardAs"] as? String,
                                         needsInput: obj["needsInput"] as? Bool ?? false,
                                         alternatives: obj["alternatives"] as? [String] ?? [],
@@ -1050,7 +1046,6 @@ struct BulkImportSheet: View {
 
 private struct _RawItem: Decodable {
     let name: String
-    let quantity: String?
     let qualifier: String?
     let heardAs: String?
     let needsInput: Bool?
@@ -1121,12 +1116,6 @@ private struct IngredientReviewRow: View {
                     .background(Capsule().fill(Color.white.opacity(0.06)))
             }
 
-            if let qty = item.quantity, !qty.isEmpty {
-                Text(qty)
-                    .font(.system(size: 13))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
-                    .opacity(item.isSelected ? 1 : 0.45)
-            }
         }
         .padding(.vertical, 11)
         .padding(.horizontal, 14)
@@ -1142,13 +1131,11 @@ private struct IngredientDetailSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var editName: String
-    @State private var editQuantity: String
     @State private var editNotes: String
 
     init(item: Binding<ParsedIngredient>) {
         self._item = item
         self._editName = State(initialValue: item.wrappedValue.name)
-        self._editQuantity = State(initialValue: item.wrappedValue.quantity ?? "")
         self._editNotes = State(initialValue: item.wrappedValue.notes ?? "")
     }
 
@@ -1180,14 +1167,6 @@ private struct IngredientDetailSheet: View {
                                     .background(fieldBackground)
                             }
 
-                            fieldSection(label: "Quantity") {
-                                TextField("e.g. 2, 1 lb, 3 cups", text: $editQuantity)
-                                    .font(DesignSystem.Typography.body)
-                                    .foregroundColor(DesignSystem.Colors.textPrimary)
-                                    .padding(DesignSystem.Spacing.md)
-                                    .background(fieldBackground)
-                            }
-
                             fieldSection(label: "Notes") {
                                 TextField("Add notes (e.g., Kosher, Large size, Brand: Heinz)", text: $editNotes, axis: .vertical)
                                     .font(DesignSystem.Typography.body)
@@ -1210,8 +1189,6 @@ private struct IngredientDetailSheet: View {
                     Button("Done") {
                         let trimmedName = editName.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !trimmedName.isEmpty { item.name = trimmedName }
-                        let trimmedQty = editQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
-                        item.quantity = trimmedQty.isEmpty ? nil : trimmedQty
                         let trimmedNotes = editNotes.trimmingCharacters(in: .whitespacesAndNewlines)
                         item.notes = trimmedNotes.isEmpty ? nil : trimmedNotes
                         dismiss()
@@ -1336,11 +1313,6 @@ struct NeedsInputRow: View {
                     Text(item.name)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(DesignSystem.Colors.textPrimary)
-                    if let q = item.quantity, !q.isEmpty {
-                        Text(q)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.textTertiary)
-                    }
                     Spacer(minLength: 0)
                 }
 
@@ -1520,12 +1492,6 @@ struct IntentGroupCard: View {
                         Text(member.name)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                        if let q = member.quantity, !q.isEmpty {
-                            Text(q)
-                                .font(.system(size: 12))
-                                .foregroundColor(DesignSystem.Colors.textTertiary)
-                        }
 
                         Spacer(minLength: 0)
 

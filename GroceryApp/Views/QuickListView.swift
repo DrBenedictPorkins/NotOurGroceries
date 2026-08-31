@@ -312,11 +312,6 @@ struct QuickListView: View {
                                         Text(item.name)
                                             .font(.system(size: 15))
                                             .foregroundColor(DesignSystem.Colors.textSecondary)
-                                        if let quantity = item.quantity, !quantity.isEmpty {
-                                            Text(quantity)
-                                                .font(.system(size: 13))
-                                                .foregroundColor(DesignSystem.Colors.textTertiary)
-                                        }
                                         Spacer()
                                     }
                                     .padding(.horizontal, 20)

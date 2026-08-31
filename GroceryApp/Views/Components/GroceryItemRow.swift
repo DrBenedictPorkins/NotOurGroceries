@@ -331,10 +331,6 @@ struct GroceryItemRow: View {
                 photoBadge
             }
 
-            if let quantity = item.quantity, !quantity.isEmpty {
-                quantityBadge(quantity)
-            }
-
             // No aisle badge. It only ever rendered while at a store, which is
             // the one screen that already groups rows under an aisle heading — so
             // every row repeated the header directly above it.
@@ -400,24 +396,6 @@ struct GroceryItemRow: View {
         default:
             EmptyView()
         }
-    }
-
-    // MARK: - Quantity Badge
-
-    private func quantityBadge(_ quantity: String) -> some View {
-        Text(quantity)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundColor(DesignSystem.Colors.dillGreen)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
-                    .overlay(
-                        Capsule()
-                            .stroke(DesignSystem.Colors.dillGreen.opacity(0.3), lineWidth: 1)
-                    )
-            )
     }
 
     // MARK: - Aisle Badge

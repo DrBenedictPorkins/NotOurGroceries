@@ -271,10 +271,6 @@ struct ItemDetailSheet: View {
 
     private var metadataSection: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.md) {
-            if let quantity = item.quantity, !quantity.isEmpty {
-                metadataRow(label: "Quantity", value: quantity)
-            }
-
             metadataRow(
                 label: "Added by",
                 value: "\(UserCache.shared.displayName(for: item.addedBy)) \(formattedDate(item.addedAt))"

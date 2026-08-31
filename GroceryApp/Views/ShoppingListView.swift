@@ -923,20 +923,6 @@ private struct InCartItemRow: View {
                 .strikethrough(true, color: DesignSystem.Colors.textTertiary)
 
             Spacer()
-
-            // Quantity if present
-            if let quantity = item.quantity, !quantity.isEmpty {
-                Text(quantity)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.05))
-                    )
-            }
-
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)

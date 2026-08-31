@@ -69,7 +69,6 @@ struct StoreAisleManagementView: View {
         let aisle: String
         let mapping: ProductAisleMapping?
         let groceryItem: GroceryItem?
-        let quantity: String?
 
         var isUnmapped: Bool { mapping == nil }
     }
@@ -91,8 +90,7 @@ struct StoreAisleManagementView: View {
                 name: name,
                 aisle: mapping.effectiveAisle,
                 mapping: mapping,
-                groceryItem: nil,
-                quantity: nil
+                groceryItem: nil
             ))
 
             // Track what's been mapped (lowercase for case-insensitive comparison)
@@ -115,8 +113,7 @@ struct StoreAisleManagementView: View {
                     name: item.name,
                     aisle: "Unknown",
                     mapping: nil,
-                    groceryItem: item,
-                    quantity: item.quantity
+                    groceryItem: item
                 ))
             }
         }
@@ -680,17 +677,6 @@ private struct DisplayItemRow: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(displayItem.isUnmapped ? .white.opacity(0.7) : .white)
 
-                    if let quantity = displayItem.quantity, !quantity.isEmpty {
-                        Text(quantity)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.8))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(
-                                Capsule()
-                                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
-                            )
-                    }
                 }
 
                 if let reasoning = displayItem.mapping?.reasoning, !reasoning.isEmpty {

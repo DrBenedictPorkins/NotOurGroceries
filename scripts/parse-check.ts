@@ -121,10 +121,8 @@ function render(result: Awaited<ReturnType<typeof run>>) {
     ].filter(Boolean);
 
     const name = item.qualifier ? `${item.name} · ${item.qualifier}` : item.name;
-    // Quantity is called out because a recipe fixture should produce none.
-    const qty = item.quantity ? `  \x1b[35m[${item.quantity}]\x1b[0m` : '';
 
-    console.log(`  ${name}${qty}${flags.length ? `   ${flags.join('  ')}` : ''}`);
+    console.log(`  ${name}${flags.length ? `   ${flags.join('  ')}` : ''}`);
   }
 }
 

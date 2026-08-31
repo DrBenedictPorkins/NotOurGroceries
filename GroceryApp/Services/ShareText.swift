@@ -63,9 +63,6 @@ enum ShareText {
     }
 
     private static func bullet(_ item: GroceryItem) -> String {
-        if let quantity = item.quantity, !quantity.isEmpty {
-            return "- \(item.name) (\(quantity))"
-        }
-        return "- \(item.name)"
+        "- \(item.name)"
     }
 }

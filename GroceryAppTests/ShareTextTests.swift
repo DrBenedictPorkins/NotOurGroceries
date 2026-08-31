@@ -57,27 +57,21 @@ final class ShareTextTests: XCTestCase {
                           "the list is shared as shown, not re-sorted")
     }
 
-    func testIncludesQuantityWhenThereIsOne() {
+    /// Amounts are not shared, because they are no longer captured. The parser
+    /// strips "2 lbs" off the name and discards it — a shopping list says what to
+    /// buy, and the shopper decides what size packet when they are at the shelf.
+    func testAmountsNeverAppearInSharedText() {
         let text = ShareText.shoppingList(
             active: [item("Milk", quantity: "1 gal"), item("Eggs")],
             inCart: [],
             storeName: nil
         )
 
-        XCTAssertTrue(text.contains("- Milk (1 gal)"))
-        XCTAssertTrue(text.contains("- Eggs"))
-        XCTAssertFalse(text.contains("Eggs ()"), "an absent quantity leaves no brackets")
-    }
-
-    func testEmptyQuantityIsTreatedAsNoQuantity() {
-        let text = ShareText.shoppingList(
-            active: [item("Milk", quantity: "")],
-            inCart: [],
-            storeName: nil
-        )
-
         XCTAssertTrue(text.contains("- Milk"))
-        XCTAssertFalse(text.contains("()"))
+        XCTAssertTrue(text.contains("- Eggs"))
+        XCTAssertFalse(text.contains("1 gal"),
+                       "a stale quantity on an old row must not leak into the share text")
+        XCTAssertFalse(text.contains("()"), "and no empty brackets either")
     }
 
     func testCountsOnlyWhatIsStillToBuy() {

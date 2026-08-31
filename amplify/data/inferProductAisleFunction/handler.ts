@@ -124,10 +124,74 @@ async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]
 }
 
 /**
+ * The built-in departments, mirroring `StoreService.standardSections` in Swift.
+ *
+ * Needed here because the model answers in free text and echoes whatever form it
+ * was shown. A shop with no scanned aisles has no declared layout at all, so the
+ * only context is the existing mappings — and once one of those says "Produce"
+ * while another says "standard-produce", the model perpetuates both and the same
+ * aisle appears twice on screen with its items split between them.
+ *
+ * Canonicalising on the way in stops that at the source rather than papering over
+ * it at render time.
+ */
+const STANDARD_SECTIONS: Array<{ id: string; name: string }> = [
+  { id: 'standard-produce',    name: 'Produce' },
+  { id: 'standard-bakery',     name: 'Bakery' },
+  { id: 'standard-deli',       name: 'Deli' },
+  { id: 'standard-seafood',    name: 'Seafood' },
+  { id: 'standard-meat',       name: 'Meat & Poultry' },
+  { id: 'standard-dairy',      name: 'Dairy & Eggs' },
+  { id: 'standard-pantry',     name: 'Pantry & Dry Goods' },
+  { id: 'standard-canned',     name: 'Canned Goods' },
+  { id: 'standard-condiments', name: 'Condiments & Sauces' },
+  { id: 'standard-baking',     name: 'Baking' },
+  { id: 'standard-snacks',     name: 'Snacks' },
+  { id: 'standard-beverages',  name: 'Beverages' },
+  { id: 'standard-personal',   name: 'Personal Care' },
+  { id: 'standard-pharmacy',   name: 'Pharmacy & Health' },
+  { id: 'standard-baby',       name: 'Baby' },
+  { id: 'standard-pet',        name: 'Pet' },
+  { id: 'standard-household',  name: 'Household' },
+  { id: 'standard-frozen',     name: 'Frozen' },
+];
+
+/**
+ * One id per place, whatever form the answer arrived in.
+ *
+ * Resolution order matches AisleNaming on the client: the store's own declared
+ * layout first, since that is the only source that knows this shop; then the
+ * built-in departments by id or name; then the value untouched, because an aisle
+ * we cannot place is better kept than mangled.
+ */
+function canonicalAisleId(value: string, aisles: StoreAisle[] = []): string {
+  const trimmed = (value ?? '').trim();
+  if (!trimmed) return trimmed;
+  const key = trimmed.toLowerCase();
+
+  const declared = aisles.find(
+    (a) =>
+      a.id?.toLowerCase() === key ||
+      a.name?.trim().toLowerCase() === key ||
+      a.number?.trim().toLowerCase() === key
+  );
+  if (declared?.id) return declared.id;
+
+  const standard = STANDARD_SECTIONS.find(
+    (sec) => sec.id === key || sec.name.toLowerCase() === key
+  );
+  if (standard) return standard.id;
+
+  return trimmed;
+}
+
+/**
  * Build aisle context from existing mappings
  * Groups products by aisle for the LLM to understand store layout
  */
 function buildAisleContext(mappings: ExistingMapping[], aisles: StoreAisle[] = []): string {
+  // Collapse the historical spellings before the model ever sees them.
+  mappings = mappings.map((m) => ({ ...m, aisleId: canonicalAisleId(m.aisleId, aisles) }));
   const declared: string[] = [];
   if (aisles.length > 0) {
     declared.push('Aisles and departments in this store:');
@@ -405,7 +469,8 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
           productName: r.productName,
           normalizedName: input?.normalizedName || '',
           productId: input?.productId,
-          suggestedAisle: r.aisle,
+          // Canonical id, not whatever spelling the model echoed back.
+          suggestedAisle: canonicalAisleId(r.aisle, storeAisles),
           confidence: r.confidence,
           reasoning: r.reasoning,
         };
@@ -425,7 +490,8 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
 
     return {
       success: true,
-      suggestedAisle: result.aisle,
+      // Canonical id, not whatever spelling the model echoed back.
+      suggestedAisle: canonicalAisleId(result.aisle, storeAisles),
       confidence: result.confidence,
       reasoning: result.reasoning,
     };

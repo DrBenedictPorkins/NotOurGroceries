@@ -35,30 +35,50 @@ struct AtStoreModeView: View {
             )]
         }
 
-        // Group items by aisle using productId lookup
+        // Grouped by what the aisle is *called*, not by the id it is stored
+        // under. Mappings for one shop accumulate under several ids that mean the
+        // same place — a plain "Produce" written by one path and
+        // "standard-produce" written by another — and keying on the id put the
+        // same aisle on screen twice, once with two items and once with one.
         var groups: [String: [GroceryItem]] = [:]
+        /// A representative id per name, kept so the display order can still be
+        /// looked up. An id the store's own layout knows about wins, because that
+        /// is the one carrying a real position in the walk.
+        var idForName: [String: String] = [:]
 
         for item in viewModel.shoppingList {
             // Look up by productId first, then normalizedName
             if let mapping = storeService.mapping(for: item.productId, normalizedName: item.normalizedName, in: store.id) {
                 let aisleId = mapping.effectiveAisle
-                groups[aisleId, default: []].append(item)
+                let name = AisleNaming.displayName(for: aisleId, in: store.aisleLayout)
+
+                groups[name, default: []].append(item)
+
+                let knownToLayout = store.aisleLayout.contains {
+                    $0.id == aisleId || $0.name == aisleId || $0.number == aisleId
+                }
+                if idForName[name] == nil || knownToLayout {
+                    idForName[name] = aisleId
+                }
             }
             // Items without a match are handled by unmappedItems
         }
 
         // Build AisleGroup array directly from the groups dictionary (NOT from store.aisleLayout)
         // This ensures we show aisles that have mapped items, regardless of aisleLayout
-        let result: [AisleGroup] = groups.map { (aisleId, items) in
-            // Try to find display order from store layout, default to sorting by aisle ID
-            let displayOrder = store.aisleLayout.first(where: { $0.id == aisleId || $0.name == aisleId || $0.number == aisleId })?.displayOrder ?? 0
+        let result: [AisleGroup] = groups.map { (name, items) in
+            let aisleId = idForName[name] ?? name
 
-            // Format the display name
-            let displayName = formatAisleDisplayName(aisleId, store: store)
+            // Display order from the store's own layout, falling back to the
+            // built-in section order so a shop with no scanned aisles still walks
+            // produce first and frozen last instead of collapsing to zero.
+            let displayOrder = store.aisleLayout.first(where: { $0.id == aisleId || $0.name == aisleId || $0.number == aisleId })?.displayOrder
+                ?? StoreService.standardSections.first(where: { $0.id == aisleId || $0.name.caseInsensitiveCompare(name) == .orderedSame })?.displayOrder
+                ?? 0
 
             return AisleGroup(
                 id: aisleId,
-                displayName: displayName,
+                displayName: name.uppercased(),
                 items: items,
                 displayOrder: displayOrder
             )

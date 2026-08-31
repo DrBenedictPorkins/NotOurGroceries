@@ -130,8 +130,18 @@ struct StoreAisleManagementView: View {
         }
     }
 
+    /// Grouped by what the aisle is called, not by the id it is stored under.
+    ///
+    /// One shop accumulates several ids meaning the same place — a plain
+    /// "Produce" from one write path and "standard-produce" from another — and
+    /// grouping on the id listed that aisle twice, splitting its items between
+    /// two identical headers.
     private var itemsGroupedByAisle: [String: [DisplayItem]] {
-        Dictionary(grouping: filteredDisplayItems) { $0.aisle }
+        Dictionary(grouping: filteredDisplayItems) { item in
+            item.aisle == "Unknown"
+                ? "Unknown"
+                : AisleNaming.displayName(for: item.aisle, in: currentStore.aisleLayout)
+        }
     }
 
     private var sortedAisleKeys: [String] {

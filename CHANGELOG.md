@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Aisle names read as names everywhere, and whatever the field shows can be typed straight back in
 - Fix: saving an item to a named department like Bakery said "Aisle saved" and quietly did nothing. The two items this had broken are repaired
 - Fix: an aisle save that fails now says so and keeps what you typed, instead of disappearing without a word
+- Fix: the same aisle no longer appears twice in a row, with its items split between two identical headings
+- Fix: an AI-suggested aisle showed its storage name — "standard-produce" rather than Produce — when you opened an item
+- Tap a row in Map Aisles to change where something goes. It only responded to a long press before, which the hint mentioned in small grey type and nobody read
+- The aisle order screen has a Done button. Getting out of it previously meant guessing that you could swipe it away
 - "Unknown Aisle" is now "Not sorted yet" — those items aren't in a lost aisle, they just haven't been placed yet
 - Creating a store is one screen now: name, chain, done
 
@@ -31,7 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix: dictated lists no longer end with "Thank you for watching"
 
 ### Your household
-- The household screen was showing nothing at all — no name, no member count, no members. Members and their joined dates are back
 - An invite code now admits one person and expires after thirty minutes, instead of working over and over for a day for anyone the text was forwarded to
 - **Generate New Code** was failing silently every time it was pressed. It works, and the code's expiry is shown
 - The email invitation form is gone. Copy and Share hand the code to whatever you actually use

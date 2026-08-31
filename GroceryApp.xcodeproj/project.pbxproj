@@ -90,6 +90,7 @@
 		TT0000000000000000000343 /* TripLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000443 /* TripLogTests.swift */; };
 		TT0000000000000000000144 /* ShareTextTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000244 /* ShareTextTests.swift */; };
 		TT0000000000000000000145 /* AisleNamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000245 /* AisleNamingTests.swift */; };
+		TT0000000000000000000246 /* AWSDateTimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000146 /* AWSDateTimeTests.swift */; };
 		TT0000000000000000000143 /* ShoppingStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000243 /* ShoppingStatusTests.swift */; };
 		TT0000000000000000000005 /* UserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000015 /* UserTests.swift */; };
 		TT0000000000000000000006 /* AuthErrorParsingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000016 /* AuthErrorParsingTests.swift */; };
@@ -186,6 +187,7 @@
 		TT0000000000000000000443 /* TripLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripLogTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000244 /* ShareTextTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareTextTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000245 /* AisleNamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleNamingTests.swift; sourceTree = "<group>"; };
+		TT0000000000000000000146 /* AWSDateTimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AWSDateTimeTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000243 /* ShoppingStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingStatusTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000015 /* UserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserTests.swift; sourceTree = "<group>"; };
 		TT0000000000000000000016 /* AuthErrorParsingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthErrorParsingTests.swift; sourceTree = "<group>"; };
@@ -385,6 +387,7 @@
 				TT0000000000000000000443 /* TripLogTests.swift */,
 				TT0000000000000000000244 /* ShareTextTests.swift */,
 				TT0000000000000000000245 /* AisleNamingTests.swift */,
+				TT0000000000000000000146 /* AWSDateTimeTests.swift */,
 				TT0000000000000000000243 /* ShoppingStatusTests.swift */,
 				TT0000000000000000000015 /* UserTests.swift */,
 			);
@@ -584,6 +587,7 @@
 				TT0000000000000000000343 /* TripLogTests.swift in Sources */,
 				TT0000000000000000000144 /* ShareTextTests.swift in Sources */,
 				TT0000000000000000000145 /* AisleNamingTests.swift in Sources */,
+				TT0000000000000000000246 /* AWSDateTimeTests.swift in Sources */,
 				TT0000000000000000000143 /* ShoppingStatusTests.swift in Sources */,
 				TT0000000000000000000005 /* UserTests.swift in Sources */,
 				TT0000000000000000000006 /* AuthErrorParsingTests.swift in Sources */,

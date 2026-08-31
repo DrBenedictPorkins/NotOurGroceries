@@ -120,6 +120,38 @@ class AmplifyService: ObservableObject {
         }
     }
 
+    // MARK: - AWSDateTime
+
+    /// AppSync `AWSDateTime` parsing that accepts both shapes it arrives in.
+    ///
+    /// Lambdas write `new Date().toISOString()`, which always carries
+    /// milliseconds ("…:23.896Z"). A bare `ISO8601DateFormatter` rejects
+    /// fractional seconds and returns nil, and every call site here treated that
+    /// nil as "no date" — so the invite screen showed no expiry, member rows
+    /// showed no joined date, and `regenerateInviteCode`, which makes the parse a
+    /// required binding, threw on every attempt and the code never changed.
+    ///
+    /// Both formats are accepted because this app has written both: the
+    /// deprecated `createHousehold` above wrote timestamps without a fraction.
+    /// The rest of the codebase already does this — see `GroceryItem.swift` and
+    /// `SubscriptionService.swift`; these call sites were the outliers.
+    private static let iso8601WithFraction: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let iso8601Plain = ISO8601DateFormatter()
+
+    static func parseAWSDateTime(_ value: String) -> Date? {
+        iso8601WithFraction.date(from: value) ?? iso8601Plain.date(from: value)
+    }
+
+    /// Written with milliseconds, matching what the Lambdas write.
+    static func formatAWSDateTime(_ date: Date) -> String {
+        iso8601WithFraction.string(from: date)
+    }
+
     func signUp(email: String, password: String, displayName: String) async throws {
         let userAttributes = [
             AuthUserAttribute(.email, value: email),
@@ -497,7 +529,7 @@ class AmplifyService: ObservableObject {
     @available(*, deprecated, message: "Use createHouseholdRemotely — this creates no group and no owner")
     func createHousehold(name: String) async throws -> String {
         let inviteCode = generateInviteCode()
-        let expiresAt = ISO8601DateFormatter().string(from: Date().addingTimeInterval(24 * 60 * 60))
+        let expiresAt = Self.formatAWSDateTime(Date().addingTimeInterval(24 * 60 * 60))
 
         let document = """
         mutation CreateHousehold($input: CreateHouseholdInput!) {
@@ -763,7 +795,7 @@ class AmplifyService: ObservableObject {
 
                 var expiresAt: Date? = nil
                 if case .string(let expiresAtString) = household["inviteCodeExpiresAt"] {
-                    expiresAt = ISO8601DateFormatter().date(from: expiresAtString)
+                    expiresAt = Self.parseAWSDateTime(expiresAtString)
                 }
 
                 var members: [HouseholdMember] = []
@@ -792,7 +824,7 @@ class AmplifyService: ObservableObject {
 
                             var joinedAt: Date? = nil
                             if case .string(let createdAtString) = memberData["createdAt"] {
-                                joinedAt = ISO8601DateFormatter().date(from: createdAtString)
+                                joinedAt = Self.parseAWSDateTime(createdAtString)
                             }
 
                             // Cache each household member with their profile color/pattern
@@ -874,7 +906,7 @@ class AmplifyService: ObservableObject {
             if case .object(let result) = json,
                case .string(let inviteCode) = result["inviteCode"],
                case .string(let expiresAtString) = result["expiresAt"],
-               let expiresAt = ISO8601DateFormatter().date(from: expiresAtString) {
+               let expiresAt = Self.parseAWSDateTime(expiresAtString) {
                 return InviteCodeResult(inviteCode: inviteCode, expiresAt: expiresAt)
             }
 
@@ -883,7 +915,7 @@ class AmplifyService: ObservableObject {
                case .object(let result) = root["regenerateInviteCode"],
                case .string(let inviteCode) = result["inviteCode"],
                case .string(let expiresAtString) = result["expiresAt"],
-               let expiresAt = ISO8601DateFormatter().date(from: expiresAtString) {
+               let expiresAt = Self.parseAWSDateTime(expiresAtString) {
                 return InviteCodeResult(inviteCode: inviteCode, expiresAt: expiresAt)
             }
 

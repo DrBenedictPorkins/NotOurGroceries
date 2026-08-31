@@ -84,7 +84,6 @@
 		B411F78E2F0B6F160008B8CA /* amplify_outputs_prod.json in Resources */ = {isa = PBXBuildFile; fileRef = B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */; };
 		BCE700C7876941359C07CABF /* UserCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15546147AB154BAB9998BE81 /* UserCache.swift */; };
 		CB60F28BFD167CB0B4567A5E /* AisleScanSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCFE63ECF05EDADD036FDCC /* AisleScanSheet.swift */; };
-		AA0000000000000000000910 /* AisleCaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000910 /* AisleCaptureSheet.swift */; };
 		E8FBCD0EB31D28E134EB0960 /* StoreSwitcherSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */; };
 		TT0000000000000000000004 /* ProductTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000014 /* ProductTests.swift */; };
 		TT0000000000000000000140 /* ListPartitioningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000240 /* ListPartitioningTests.swift */; };
@@ -128,7 +127,6 @@
 		41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SonarPingView.swift; sourceTree = "<group>"; };
 		66658FDDA7D5B20B9E9E9047 /* BatchAisleMappingSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatchAisleMappingSheet.swift; sourceTree = "<group>"; };
 		7DCFE63ECF05EDADD036FDCC /* AisleScanSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AisleScanSheet.swift; sourceTree = "<group>"; };
-		BB0000000000000000000910 /* AisleCaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleCaptureSheet.swift; sourceTree = "<group>"; };
 		AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreSwitcherSheet.swift; sourceTree = "<group>"; };
 		B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = amplify_outputs_prod.json; sourceTree = "<group>"; };
 		BB0000000000000000000001 /* GroceryAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryAppApp.swift; sourceTree = "<group>"; };
@@ -345,7 +343,6 @@
 				FF0000000000000000000032 /* Auth */,
 				FF0000000000000000000031 /* Components */,
 				7DCFE63ECF05EDADD036FDCC /* AisleScanSheet.swift */,
-				BB0000000000000000000910 /* AisleCaptureSheet.swift */,
 				40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */,
 				AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */,
 				66658FDDA7D5B20B9E9E9047 /* BatchAisleMappingSheet.swift */,
@@ -580,7 +577,6 @@
 				AA0000000000000000000074 /* CreateStoreSheet.swift in Sources */,
 				AA0000000000000000000075 /* ShoppingActiveInfoModal.swift in Sources */,
 				CB60F28BFD167CB0B4567A5E /* AisleScanSheet.swift in Sources */,
-				AA0000000000000000000910 /* AisleCaptureSheet.swift in Sources */,
 				36B866D86A21E55F7AF2ED72 /* StoreAisleManagementView.swift in Sources */,
 				E8FBCD0EB31D28E134EB0960 /* StoreSwitcherSheet.swift in Sources */,
 				61C577F31452E1D49F5F8E7E /* ShoppingCompletionStats.swift in Sources */,

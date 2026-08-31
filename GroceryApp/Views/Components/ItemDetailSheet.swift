@@ -17,6 +17,11 @@ struct ItemDetailSheet: View {
     @State private var notesText: String = ""
     @State private var notesEphemeral: Bool = false
     @State private var aisleText: String = ""
+    /// On-device speech, only for the aisle field. Not the Whisper path used to
+    /// dictate a whole list: this is used standing in a shop, where the signal
+    /// goes first, and it can be told the store's own aisle names so it stops
+    /// hearing "sixty" for "sixteen".
+    @StateObject private var aisleSpeech = AisleSpeechService()
 
     // AI Aisle Inference State
     @State private var isInferring = false
@@ -357,6 +362,28 @@ struct ItemDetailSheet: View {
                             onAisleChanged?(newValue)
                         }
                     }
+                    // Words land in the field as they are recognised, run
+                    // through the same normalising as anything typed: "aisle
+                    // sixteen" and "16" have to reach one aisle, or the store
+                    // grows a 16 and a Sixteen holding half the items each.
+                    .onChange(of: aisleSpeech.transcript) { _, spoken in
+                        guard !spoken.isEmpty else { return }
+                        aisleText = AisleUtterance.normalise(spoken)
+                    }
+
+                if aisleSpeech.isAvailable && !isProposedAisleMode {
+                    Button {
+                        toggleAisleDictation()
+                    } label: {
+                        Image(systemName: aisleSpeech.state == .listening ? "waveform" : "mic.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(aisleSpeech.state == .listening
+                                             ? DesignSystem.Colors.dillGreen
+                                             : DesignSystem.Colors.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(aisleSpeech.state == .listening ? "Stop listening" : "Say the aisle")
+                }
 
                 if !aisleText.isEmpty && aisleText != currentAisleText && !isProposedAisleMode {
                     Button {
@@ -667,36 +694,38 @@ struct ItemDetailSheet: View {
             return
         }
 
-        // Match on anything the user could reasonably have typed: the number,
-        // the name, this screen's own rendering, or the header form they were
-        // just shown. That last one matters — the field is prefilled with the
-        // resolved name now, so "Aisle 15" has to find aisle 15 rather than
-        // create a new aisle called "Aisle 15".
-        let lowerName = aisleName.lowercased()
-        var targetAisle = store.aisleLayout.first { aisle in
-            aisle.number.lowercased() == lowerName ||
-            aisle.name.lowercased() == lowerName ||
-            aisle.id.lowercased() == lowerName ||
-            aisleDisplayName(aisle).lowercased() == lowerName ||
-            AisleNaming.displayName(for: aisle.id, in: [aisle]).lowercased() == lowerName
-        }
+        // One matcher, shared with dictation, so typing and saying the same thing
+        // land in the same place. Exact first — number, name, id, this screen's
+        // rendering — then a looser pass, which is what stops "Dairy" creating a
+        // rival to the "Dairy & Eggs" department that is already there. It also
+        // decides whether the words are an aisle number or a department name;
+        // writing a name into `number` is what produced an aisle called "Dairy"
+        // sitting next to "Dairy & Eggs".
+        let targetAisle: StoreAisle
+        switch AisleUtterance.resolve(aisleName, in: store.aisleLayout) {
+        case .existing(let existing):
+            targetAisle = existing
 
-        // If aisle doesn't exist, create it
-        if targetAisle == nil {
+        case .new(let number, let name):
             do {
-                store = try await StoreService.shared.addAisle(to: store, number: aisleName, name: "")
-                targetAisle = store.aisleLayout.last
+                store = try await StoreService.shared.addAisle(to: store, number: number, name: name)
+                guard let created = store.aisleLayout.last else {
+                    reportAisleFailure("Couldn't find or create aisle \(aisleName).")
+                    return
+                }
+                targetAisle = created
             } catch {
                 print("Failed to create aisle: \(error)")
                 reportAisleFailure("Couldn't add aisle \(aisleName). Check your connection and try again.")
                 return
             }
-        }
 
-        guard let aisle = targetAisle else {
-            reportAisleFailure("Couldn't find or create aisle \(aisleName).")
+        case .rejected(let reason):
+            reportAisleFailure(reason)
             return
         }
+
+        let aisle = targetAisle
 
         // Upsert mapping
         do {
@@ -713,7 +742,11 @@ struct ItemDetailSheet: View {
                 productId: item.productId,
                 normalizedName: item.productId == nil ? item.normalizedName : nil,
                 storeId: store.id,
-                aisleId: aisle.id
+                aisleId: aisle.id,
+                // Somebody opened this item and said where it is. That is worth
+                // more than any later guess, so it goes on `userAisleOverride`,
+                // which inference does not touch.
+                sightedByUser: true
             )
 
             // Refresh mappings and notify observers
@@ -733,6 +766,28 @@ struct ItemDetailSheet: View {
             // purpose, with what she typed still in the field.
             reportAisleFailure("Couldn't save aisle \(aisleName). Nothing was changed — try again when you have signal.")
         }
+    }
+
+    // MARK: - Saying the aisle out loud
+
+    /// Speech lands in the same field as typing, and Save is still a separate
+    /// tap. Any recogniser confuses "sixteen" and "sixty" over a tannoy, so what
+    /// it heard has to be on screen and editable before anything is written.
+    private func toggleAisleDictation() {
+        if aisleSpeech.state == .listening {
+            aisleSpeech.stop()
+            return
+        }
+        Task {
+            await aisleSpeech.start(hints: aisleDictationHints)
+        }
+    }
+
+    /// Every name and number this store already knows, so the recogniser leans
+    /// towards them rather than inventing a near-miss.
+    private var aisleDictationHints: [String] {
+        guard let store = currentStore else { return [] }
+        return store.aisleLayout.flatMap { [$0.name, $0.number] }.filter { !$0.isEmpty }
     }
 
     private func reportAisleFailure(_ message: String) {

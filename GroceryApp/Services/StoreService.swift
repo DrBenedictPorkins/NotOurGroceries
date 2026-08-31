@@ -312,7 +312,12 @@ class StoreService: ObservableObject {
 
     /// Add an aisle to a store's layout
     func addAisle(to store: HouseholdStore, number: String, name: String) async throws -> HouseholdStore {
-        var updatedStore = store
+        // Re-base on the freshest copy this service holds rather than trusting
+        // the caller's snapshot. `aisleLayout` is written back whole, so two
+        // saves a few seconds apart from a screen holding a stale store silently
+        // dropped the first aisle — the mapping survived, pointing at an aisle no
+        // longer in the layout, and the section header rendered a bare UUID.
+        var updatedStore = householdStores.first { $0.id == store.id } ?? store
         let newAisle = StoreAisle(
             number: number,
             name: name,

@@ -15,7 +15,7 @@ import {
 } from './data/resource';
 import { storage } from './storage/resource';
 import { Function } from 'aws-cdk-lib/aws-lambda';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, Role, ServicePrincipal, ManagedPolicy } from 'aws-cdk-lib/aws-iam';
 import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
 
 /**
@@ -51,6 +51,43 @@ backend.auth.resources.cfnResources.cfnUserPool.policies = {
     temporaryPasswordValidityDays: 7,
   },
 };
+
+// AppSync request logging.
+//
+// Off until now, which meant authorization denials were invisible server-side:
+// there was no way to answer "did that request get refused, and why" except by
+// reproducing it from a client. A claim was made on 2026-08-30 that auth was
+// behaving in production, and it had no source behind it — this is that source.
+//
+// ERROR, not ALL. Errors are the interesting events (denials land here) and ALL
+// logs every resolver invocation, which on a shopping list is mostly noise you
+// pay to store. `excludeVerboseContent` keeps request and response bodies out of
+// CloudWatch — those carry shopping lists and email addresses, and logs are a
+// worse place for personal data than the database is.
+const appSyncLogRole = new Role(backend.data.stack, 'AppSyncCloudWatchRole', {
+  assumedBy: new ServicePrincipal('appsync.amazonaws.com'),
+  managedPolicies: [
+    ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSAppSyncPushToCloudWatchLogs'),
+  ],
+});
+
+backend.data.resources.cfnResources.cfnGraphqlApi.logConfig = {
+  fieldLogLevel: 'ERROR',
+  cloudWatchLogsRoleArn: appSyncLogRole.roleArn,
+  excludeVerboseContent: true,
+};
+
+// Retention is set outside the stack, deliberately. The log group
+// `/aws/appsync/apis/<apiId>` already exists and AppSync owns it, so declaring it
+// here fails the deploy with "already exists". It is a one-off, idempotent
+// setting:
+//
+//   aws logs put-retention-policy \
+//     --log-group-name /aws/appsync/apis/vdsfrt2plzgwfdae2ucpxtwzh4 \
+//     --retention-in-days 14
+//
+// Set to 14 days on 2026-08-30. Without it the group never expires and quietly
+// becomes a running cost.
 
 // Grant Lambda functions access to DynamoDB tables
 const groceryItemTable = backend.data.resources.tables['GroceryItem'];

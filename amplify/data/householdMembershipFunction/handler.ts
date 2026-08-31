@@ -177,7 +177,8 @@ async function detachUser(userId: string): Promise<void> {
   await client.send(new UpdateItemCommand({
     TableName: USER_TABLE_NAME,
     Key: marshall({ id: userId }),
-    UpdateExpression: 'REMOVE householdId SET updatedAt = :now',
+    // householdGroup goes with it — it is what the read rule matches on.
+    UpdateExpression: 'REMOVE householdId, householdGroup SET updatedAt = :now',
     ExpressionAttributeValues: marshall({ ':now': new Date().toISOString() }),
   }));
 }
@@ -303,7 +304,9 @@ export const handler: Handler = async (event) => {
     await client.send(new UpdateItemCommand({
       TableName: USER_TABLE_NAME,
       Key: marshall({ id: callerId }),
-      UpdateExpression: 'SET householdId = :hid, updatedAt = :now',
+      // householdGroup mirrors householdId; the read rule matches on it because
+      // householdId is a GSI key and cannot carry an auth filter.
+      UpdateExpression: 'SET householdId = :hid, householdGroup = :hid, updatedAt = :now',
       ExpressionAttributeValues: marshall({ ':hid': newId, ':now': now.toISOString() }),
     }));
 

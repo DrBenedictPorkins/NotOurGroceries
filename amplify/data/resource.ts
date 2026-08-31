@@ -122,6 +122,19 @@ const schema = a.schema({
       profilePattern: a.string(), // User's chosen pattern: solid, stripes, dots, gradient
       householdId: a.id(),
       household: a.belongsTo('Household', 'householdId'),
+      /// The Cognito group that guards this row — the household's id repeated
+      /// into a plain, non-key field.
+      ///
+      /// It cannot be `householdId` itself. That column is the partition key of
+      /// the `householdId` GSI, and `groupDefinedIn` is compiled into a DynamoDB
+      /// filter expression; DynamoDB rejects a filter on a key attribute. A
+      /// top-level query survives it because AppSync folds the condition into the
+      /// key condition, but the `Household.members` connection resolver adds it
+      /// as a separate filter and the read fails with
+      /// "Filter Expression can only contain non-primary key attributes".
+      /// That took out the whole members list. Same reason `Household` carries
+      /// `groupName` instead of using its own id.
+      householdGroup: a.string(),
       lastActive: a.datetime(),
     })
     .authorization((allow) => [
@@ -131,7 +144,7 @@ const schema = a.schema({
       // Everyone else in your household, so a shopper's name resolves. This
       // replaced `authenticated().to(['read'])`, under which every account in
       // the system could read every user's row.
-      allow.groupDefinedIn('householdId').to(['read']),
+      allow.groupDefinedIn('householdGroup').to(['read']),
     ])
     .secondaryIndexes((index) => [
       index('householdId'),

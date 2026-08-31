@@ -609,7 +609,11 @@ class AmplifyService: ObservableObject {
                 variables: [
                     "input": [
                         "id": user.userId,
-                        "householdId": householdId
+                        "householdId": householdId,
+                        // Mirrors householdId. The read rule matches on this
+                        // because householdId is a GSI key and DynamoDB will not
+                        // accept an auth filter on a key attribute.
+                        "householdGroup": householdId
                     ]
                 ],
                 responseType: JSONValue.self,
@@ -665,7 +669,8 @@ class AmplifyService: ObservableObject {
                         "id": user.userId,
                         "email": email,
                         "displayName": displayName,
-                        "householdId": householdId
+                        "householdId": householdId,
+                        "householdGroup": householdId
                     ]
                 ],
                 responseType: JSONValue.self,

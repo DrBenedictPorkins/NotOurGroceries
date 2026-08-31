@@ -118,7 +118,9 @@ async function updateUserHousehold(userId: string, householdId: string): Promise
   await client.send(new UpdateItemCommand({
     TableName: USER_TABLE_NAME,
     Key: marshall({ id: userId }),
-    UpdateExpression: 'SET householdId = :householdId, updatedAt = :now',
+    // householdGroup mirrors householdId — see the User model for why the auth
+    // rule cannot read the key column directly.
+    UpdateExpression: 'SET householdId = :householdId, householdGroup = :householdId, updatedAt = :now',
     ExpressionAttributeValues: marshall({
       ':householdId': householdId,
       ':now': now,

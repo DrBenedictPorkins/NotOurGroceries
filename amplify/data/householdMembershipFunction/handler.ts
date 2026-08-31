@@ -12,6 +12,7 @@ import {
   CognitoIdentityProviderClient,
   AdminAddUserToGroupCommand,
   AdminRemoveUserFromGroupCommand,
+  AdminDeleteUserCommand,
   CreateGroupCommand,
   DeleteGroupCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
@@ -342,6 +343,46 @@ export const handler: Handler = async (event) => {
       remainingMembers: 1,
       inviteCode,
     };
+  }
+
+  if (action === 'deleteAccount') {
+    // App Store guideline 5.1.1(v): an app that creates accounts must delete
+    // them from inside the app. This is that, and it is deliberately only ever
+    // self-service — there is no memberId, so nobody can delete anybody else.
+    const ownHouseholdId = await getUserHouseholdId(callerId);
+    let householdDeleted = false;
+    let remaining = 0;
+
+    if (ownHouseholdId) {
+      await detachUser(callerId);
+      await removeFromHouseholdGroup(callerId, ownHouseholdId);
+
+      remaining = await countMembers(ownHouseholdId);
+      if (remaining === 0) {
+        // Last one out takes the household with them, exactly as leaving does.
+        await deleteHouseholdData(ownHouseholdId);
+        await deleteHouseholdGroup(ownHouseholdId);
+        householdDeleted = true;
+      }
+    }
+
+    // Their items stay with the household — the same promise the Leave dialog
+    // makes. What goes is the person: their row, then their sign-in.
+    await client.send(new DeleteItemCommand({
+      TableName: USER_TABLE_NAME,
+      Key: marshall({ id: callerId }),
+    }));
+
+    // Cognito last. If this throws, the account still signs in and the app puts
+    // them back at household setup, which is recoverable and visible. The
+    // reverse order would delete the sign-in and strand a row nobody can reach.
+    await cognito.send(new AdminDeleteUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: callerId,
+    }));
+
+    console.log(`Account ${callerId} deleted (household ${ownHouseholdId ?? 'none'}, deleted=${householdDeleted})`);
+    return { householdId: ownHouseholdId ?? '', householdDeleted, remainingMembers: remaining };
   }
 
   const householdId = await getUserHouseholdId(callerId);

@@ -1034,6 +1034,35 @@ class AmplifyService: ObservableObject {
         return result
     }
 
+    /// Delete this account: the household membership, the User row, and the
+    /// Cognito sign-in.
+    ///
+    /// Required by App Store guideline 5.1.1(v) — an app that creates accounts
+    /// has to delete them from inside the app. Self-service only; the mutation
+    /// takes no member id, so this can never be pointed at somebody else.
+    ///
+    /// Items they added stay with the household, which is the promise the Leave
+    /// dialog already makes. If they were the last member, the household and its
+    /// data go with them, exactly as leaving would.
+    @discardableResult
+    func deleteAccount() async throws -> MembershipResult {
+        let result = try await manageMembership(action: "deleteAccount", memberId: nil)
+
+        // The sign-in no longer exists, so the local session is meaningless.
+        // Clearing before signOut because signOut against a deleted user can
+        // fail, and the on-device leftovers are the part that actually matters.
+        currentHouseholdId = nil
+        UserDefaults.standard.removeObject(forKey: "cachedHouseholdId")
+        UserDefaults.standard.removeObject(forKey: "cachedUserId")
+        Self.clearLocalUserData()
+        try? await Amplify.Auth.signOut()
+        isAuthenticated = false
+        currentUser = nil
+        NotificationCenter.default.post(name: .householdChanged, object: nil)
+
+        return result
+    }
+
     private func manageMembership(action: String,
                                   memberId: String? = nil,
                                   name: String? = nil) async throws -> MembershipResult {

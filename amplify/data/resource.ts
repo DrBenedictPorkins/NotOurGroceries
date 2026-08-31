@@ -496,7 +496,7 @@ const schema = a.schema({
   manageHouseholdMembership: a
     .mutation()
     .arguments({
-      action: a.string().required(),   // "create" | "remove" | "leave"
+      action: a.string().required(),   // "create" | "remove" | "leave" | "deleteAccount"
       memberId: a.id(),                // required for "remove"
       name: a.string(),                // required for "create"
     })

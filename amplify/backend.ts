@@ -195,6 +195,10 @@ householdMembershipLambda.addToRolePolicy(new PolicyStatement({
     'cognito-idp:DeleteGroup',
     'cognito-idp:AdminAddUserToGroup',
     'cognito-idp:AdminRemoveUserFromGroup',
+    // Deleting the sign-in itself, for the deleteAccount action. App Store
+    // guideline 5.1.1(v) requires an app that creates accounts to let people
+    // delete them from inside the app.
+    'cognito-idp:AdminDeleteUser',
   ],
   resources: [backend.auth.resources.userPool.userPoolArn],
 }));

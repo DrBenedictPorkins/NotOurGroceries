@@ -22,6 +22,12 @@ struct SettingsView: View {
     @State private var isClearing = false
     @State private var clearProgress: (done: Int, total: Int) = (0, 0)
 
+    @State private var showDeleteAccountWarning = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var deleteConfirmationText = ""
+    @State private var isDeletingAccount = false
+    @State private var deleteError: String?
+
     private var displayName: String {
         guard let userId = amplifyService.currentUser?.userId else { return "User" }
         return userCache.displayName(for: userId)
@@ -273,6 +279,51 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .disabled(isClearing || viewModel.suggestions.isEmpty)
             .opacity(viewModel.suggestions.isEmpty ? 0.45 : 1)
+
+            Button {
+                deleteConfirmationText = ""
+                showDeleteAccountWarning = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle.badge.xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.error)
+                        .frame(width: 28)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delete my account")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textPrimary)
+                        Text(deleteAccountSubtitle)
+                            .font(.system(size: 12))
+                            .foregroundColor(DesignSystem.Colors.textTertiary)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if isDeletingAccount {
+                        ProgressView().tint(DesignSystem.Colors.error)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(DesignSystem.Colors.error.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(DesignSystem.Colors.error.opacity(0.35), lineWidth: 1)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isDeletingAccount)
+
+            if let deleteError {
+                Text(deleteError)
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.error)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .confirmationDialog(
@@ -291,6 +342,109 @@ struct SettingsView: View {
         .sheet(isPresented: $showTypeToConfirm) {
             typeToConfirmSheet
         }
+        .confirmationDialog(
+            "Delete your account?",
+            isPresented: $showDeleteAccountWarning,
+            titleVisibility: .visible
+        ) {
+            Button("Continue", role: .destructive) {
+                deleteConfirmationText = ""
+                showDeleteAccountConfirm = true
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(deleteAccountWarning)
+        }
+        .sheet(isPresented: $showDeleteAccountConfirm) {
+            deleteAccountSheet
+        }
+    }
+
+    /// What actually happens, which depends on whether anyone else is left.
+    private var isOnlyMember: Bool {
+        userCache.users.count <= 1
+    }
+
+    private var deleteAccountSubtitle: String {
+        isOnlyMember
+            ? "Removes your sign-in and this household"
+            : "Removes your sign-in; the household carries on"
+    }
+
+    private var deleteAccountWarning: String {
+        isOnlyMember
+            ? "You are the only member, so the household goes with you — the list, the stores, the aisle layouts and the history. Your sign-in is deleted and cannot be recovered."
+            : "Your sign-in is deleted and cannot be recovered. Items you added stay on the household list, and the other members carry on as normal."
+    }
+
+    private var deleteAccountSheet: some View {
+        VStack(spacing: 24) {
+            Text("Delete account")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+
+            Text(deleteAccountWarning)
+                .font(.system(size: 14))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Text("Type DELETE to confirm")
+                .font(.system(size: 12))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+
+            TextField("", text: $deleteConfirmationText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                .foregroundColor(DesignSystem.Colors.textPrimary)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.characters)
+                .multilineTextAlignment(.center)
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.06))
+                )
+
+            Button {
+                showDeleteAccountConfirm = false
+                Task { await deleteAccount() }
+            } label: {
+                Text("Delete my account")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(DesignSystem.Colors.error)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(deleteConfirmationText.trimmingCharacters(in: .whitespaces).uppercased() != "DELETE")
+            .opacity(deleteConfirmationText.trimmingCharacters(in: .whitespaces).uppercased() == "DELETE" ? 1 : 0.4)
+
+            Button("Cancel") { showDeleteAccountConfirm = false }
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+
+            Spacer()
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(DesignSystem.Colors.background.ignoresSafeArea())
+    }
+
+    private func deleteAccount() async {
+        isDeletingAccount = true
+        deleteError = nil
+        do {
+            try await amplifyService.deleteAccount()
+            // Nothing to dismiss — the session is gone, so the app returns to
+            // the sign-in screen on its own.
+        } catch {
+            deleteError = "Could not delete your account: \(error.localizedDescription)"
+            print("Delete account failed: \(error)")
+        }
+        isDeletingAccount = false
     }
 
     private var suggestionSubtitle: String {

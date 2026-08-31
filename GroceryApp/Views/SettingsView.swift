@@ -82,12 +82,16 @@ struct SettingsView: View {
         currentColor = userCache.profileColor(for: userId)
     }
 
-    /// Colours worn by everyone in the household except you.
-    private var takenColors: Set<String> {
+    /// Colours worn by other household members, mapped to their initial so the
+    /// picker can say who has each one rather than just refusing it.
+    private var takenColors: [String: Character] {
         let me = amplifyService.currentUser?.userId
-        return Set(userCache.users.values
-            .filter { $0.id != me }
-            .compactMap { $0.profileColor })
+        var taken: [String: Character] = [:]
+        for user in userCache.users.values where user.id != me {
+            guard let colour = user.profileColor, let initial = user.displayName.first else { continue }
+            taken[colour] = initial
+        }
+        return taken
     }
 
     private func saveColor() {

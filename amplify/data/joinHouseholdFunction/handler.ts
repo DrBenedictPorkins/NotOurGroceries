@@ -122,7 +122,10 @@ async function getUserHouseholdId(userId: string): Promise<string | null> {
  * this is assigned server-side, against the members who already exist, rather
  * than hashed from the user id (a 2-person household would collide 1 time in 6).
  */
-const PROFILE_COLOURS = ['cyan', 'purple', 'pink', 'blue', 'yellow', 'green'];
+const PROFILE_COLOURS = [
+  'cyan', 'purple', 'pink', 'blue', 'yellow', 'green',
+  'coral', 'sky', 'lavender', 'gold', 'rose', 'periwinkle',
+];
 
 /**
  * Same alphabet as the membership function: no I, O, 0 or 1, because these get

@@ -3,13 +3,13 @@ import SwiftUI
 struct ProfileColorPickerSheet: View {
     @Binding var selectedColor: String
 
-    /// Colours already worn by *other* people in this household.
+    /// Colours worn by *other* people in this household, mapped to their initial.
     ///
     /// The colour is what tells one person's items from another's on a list row,
-    /// so two members sharing one defeats the point. Taken colours are shown but
-    /// not selectable — hiding them would leave a gappy grid and no explanation
-    /// for why.
-    var takenColors: Set<String> = []
+    /// so two members sharing one defeats the point. Taken colours stay in the
+    /// grid wearing the initial of whoever has them: a dimmed circle alone reads
+    /// as a rendering fault, while a circle with a B on it explains itself.
+    var takenColors: [String: Character] = [:]
 
     /// The current user's initial, so the preview is their badge, not a mock-up.
     var initial: Character? = nil
@@ -98,7 +98,7 @@ struct ProfileColorPickerSheet: View {
                     ColorOption(
                         color: color,
                         isSelected: selectedColor == color.rawValue,
-                        isTaken: takenColors.contains(color.rawValue)
+                        takenBy: takenColors[color.rawValue]
                     ) {
                         selectedColor = color.rawValue
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -107,7 +107,7 @@ struct ProfileColorPickerSheet: View {
             }
 
             if !takenColors.isEmpty {
-                Text("Faded colours are already used by someone else in your household.")
+                Text("Colours showing someone's initial are already taken in your household.")
                     .font(.system(size: 12))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }
@@ -121,18 +121,29 @@ struct ProfileColorPickerSheet: View {
 private struct ColorOption: View {
     let color: ProfileColor
     let isSelected: Bool
-    var isTaken: Bool = false
+    /// Initial of the household member already wearing this colour, if any.
+    var takenBy: Character? = nil
     let onTap: () -> Void
+
+    private var isTaken: Bool { takenBy != nil }
 
     var body: some View {
         Button(action: { if !isTaken { onTap() } }) {
             ZStack {
                 Circle()
                     .fill(color.color)
+                    // Held back rather than dimmed into the background. At 0.25 on
+                    // a near-black ground the darker colours vanished and looked
+                    // like a bug; 0.55 plus the initial reads as "spoken for".
+                    .opacity(isTaken ? 0.55 : 1)
                     .frame(width: 50, height: 50)
                     .shadow(color: color.color.opacity(0.4), radius: isSelected ? 8 : 0, x: 0, y: 4)
 
-                if isSelected {
+                if let initial = takenBy {
+                    Text(String(initial).uppercased())
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.black.opacity(0.55))
+                } else if isSelected {
                     Circle()
                         .stroke(Color.white, lineWidth: 3)
                         .frame(width: 50, height: 50)
@@ -146,9 +157,11 @@ private struct ColorOption: View {
         }
         .buttonStyle(.plain)
         .disabled(isTaken)
-        .opacity(isTaken ? 0.25 : 1)
         .scaleEffect(isSelected ? 1.1 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+        .accessibilityLabel(isTaken
+            ? "\(color.displayName), taken by \(takenBy.map(String.init) ?? "")"
+            : color.displayName)
     }
 }
 
@@ -157,7 +170,7 @@ private struct ColorOption: View {
 #Preview {
     ProfileColorPickerSheet(
         selectedColor: .constant("cyan"),
-        takenColors: ["purple", "pink"],
+        takenColors: ["purple": "B", "pink": "J"],
         initial: "M",
         onSave: {}
     )

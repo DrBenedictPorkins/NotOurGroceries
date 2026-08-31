@@ -67,7 +67,10 @@ const INVITE_CODE_TTL_MS = 30 * 60 * 1000;
  * Profile colours, mirroring `ProfileColor` in UserIdentityGradient.swift.
  * Handed out at random so no colour reads as "the default one".
  */
-const PROFILE_COLOURS = ['cyan', 'purple', 'pink', 'blue', 'yellow', 'green'];
+const PROFILE_COLOURS = [
+  'cyan', 'purple', 'pink', 'blue', 'yellow', 'green',
+  'coral', 'sky', 'lavender', 'gold', 'rose', 'periwinkle',
+];
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 

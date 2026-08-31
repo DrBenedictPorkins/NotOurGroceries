@@ -1,6 +1,14 @@
 import SwiftUI
 
 /// Available profile colors mapped to DesignSystem colors
+/// Twelve colours, all bright enough to read as 11pt text on the near-black
+/// ground (`#0A100B`). That constraint is why this is a fixed palette and not a
+/// colour wheel: an arbitrary dark navy would make someone's name invisible on
+/// every row they added, and silently correcting their choice is worse than not
+/// offering it.
+///
+/// The first six are the original names and must keep their spellings — they are
+/// stored on `User.profileColor` and on rows written before the palette grew.
 enum ProfileColor: String, CaseIterable {
     case cyan
     case purple
@@ -8,6 +16,12 @@ enum ProfileColor: String, CaseIterable {
     case blue
     case yellow
     case green
+    case coral
+    case sky
+    case lavender
+    case gold
+    case rose
+    case periwinkle
 
     var color: Color {
         switch self {
@@ -17,6 +31,12 @@ enum ProfileColor: String, CaseIterable {
         case .blue: return DesignSystem.Colors.neonBlue
         case .yellow: return DesignSystem.Colors.neonAmber
         case .green: return DesignSystem.Colors.success
+        case .coral: return Color(hex: "FF6B5C")
+        case .sky: return Color(hex: "3DDCFF")
+        case .lavender: return Color(hex: "C9A7FF")
+        case .gold: return Color(hex: "FFD93D")
+        case .rose: return Color(hex: "FF8FB1")
+        case .periwinkle: return Color(hex: "8AA0FF")
         }
     }
 

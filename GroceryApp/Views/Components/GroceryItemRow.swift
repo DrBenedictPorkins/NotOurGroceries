@@ -272,10 +272,11 @@ struct GroceryItemRow: View {
             if item.status == .active {
                 Text("[\(addedByDisplayName)]")
                     .font(.system(size: 11, weight: .medium))
-                    // Muted, because this sits under the item name and must not
-                    // compete with it. Enough colour to tell two people apart at
-                    // a glance, not enough to shout.
-                    .foregroundColor(addedByColor.opacity(0.75))
+                    // Near full strength. The 11pt size already keeps this
+                    // subordinate to the item name, and knocking the colour back
+                    // as well pushed the darker end of the palette — purple,
+                    // blue — close to invisible on the near-black ground.
+                    .foregroundColor(addedByColor.opacity(0.9))
             }
         }
     }

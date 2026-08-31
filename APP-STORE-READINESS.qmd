@@ -1,0 +1,135 @@
+---
+title: "Got Dill? — App Store Readiness"
+subtitle: "What Apple requires, what we require, and where each stands"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+---
+
+Status as of **2026-08-31**. This tracks the path from a two-person TestFlight
+beta to something a stranger can install. Update the status column as things
+move; do not delete rows, so the history of what was decided stays readable.
+
+**Legend** — ✅ done and verified · 🟡 done but unverified · ⬜ not started ·
+❓ unknown, needs a look · 🚫 blocked on a decision
+
+---
+
+## The decision everything else hangs on
+
+**How are we distributing?** Still open, and it changes which rows below matter.
+
+| Option | Cap | Review | Longevity |
+|---|---|---|---|
+| TestFlight external | 10,000 testers | Beta App Review | Builds expire every 90 days |
+| Unlisted App Distribution | none | Full App Store review | Permanent, no discovery |
+| Public listing | none | Full App Store review | Permanent |
+
+If we stay on TestFlight, most of *Store listing* below is not required yet.
+Everything in *Apple hard requirements* and *Our own bar* applies either way.
+
+You cannot cap downloads on a normal listing. Any "limited release" has to come
+from TestFlight's own cap or from being unlisted.
+
+---
+
+## Apple hard requirements
+
+These are rejections, not preferences.
+
+| Item | Status | Notes |
+|---|---|---|
+| In-app account deletion (5.1.1(v)) | 🟡 | Built 2026-08-31. Settings → Danger Zone. **Not yet exercised against the deployed stack.** |
+| Account deletion documented publicly | 🟡 | `website/account-deletion.md` drafted, not hosted |
+| Privacy policy URL | 🟡 | `website/privacy-policy.md` drafted, not hosted, has placeholders |
+| Privacy nutrition labels | ⬜ | Must declare email, audio, photos, and the Anthropic/OpenAI processing. Wrong answers here are a rejection |
+| Demo account for review (2.1) | ⬜ | Reviewers need a working account **and** a household with data in it. A fresh account sees an empty app |
+| Age rating questionnaire | ⬜ | |
+| Export compliance declaration | ❓ | HTTPS-only usually qualifies for the exemption; needs confirming, not assuming |
+| Support URL | ⬜ | `website/support.md` drafted, not hosted |
+
+---
+
+## Our own bar before strangers get in
+
+Not Apple's rules — ours. See `world-release-blockers` in session memory.
+
+| Item | Status | Notes |
+|---|---|---|
+| Per-household authorization | ✅ | Verified 2026-08-30 with a real outsider account: reads and writes both denied |
+| Invite codes single-use, 30 min | ✅ | Verified against production |
+| Household required for every AI call | ✅ | Reject and allow paths both verified |
+| AppSync request logging | ✅ | ERROR level, bodies excluded, 14-day retention; verified by generating denials |
+| S3 enumeration closed | ✅ | `list` withheld; deployed policy confirmed |
+| S3 per-household scoping | ⬜ | Anyone holding a key can still read or delete that file. Lambda broker is the fix, ~a day. See `s3-scoping-plan` |
+| `joinHousehold` rate limiting | 🚫 | Deliberately deferred. Needs a decision: lock after N failures, throttle, or both |
+| Password floor above 6 chars | ⬜ | Cognito is at its own minimum with no complexity rules |
+| Signup gating | ⬜ | Much less urgent now — a junk account costs a Cognito row and nothing else |
+
+---
+
+## Store listing
+
+Only needed if we go past TestFlight.
+
+| Item | Status | Notes |
+|---|---|---|
+| App name | ✅ | **Got Dill?** — the question mark is part of the name. Chosen to clear the OURGROCERIES trademark |
+| Bundle ID / SKU | ✅ | `com.byteclub.grocery.app` / `notourgroceries`. Both locked by Apple forever; internal-only, never shown |
+| App icon | ✅ | |
+| Screenshots | ⬜ | Needed per device size |
+| Description, keywords, subtitle | ⬜ | |
+| Marketing URL | ⬜ | Optional |
+
+---
+
+## Website
+
+Drafted 2026-08-31, parked. See `website/README.md` for the full placeholder list.
+
+| Item | Status |
+|---|---|
+| Privacy policy | 🟡 drafted |
+| Terms of service | 🟡 drafted |
+| Support page | 🟡 drafted |
+| Account deletion page | 🟡 drafted |
+| Domain | ⬜ to be purchased or reused |
+| Hosting | ⬜ S3 + CloudFront, or Amplify |
+
+**Open questions carried from the drafts:** effective date, support email, legal
+entity, jurisdiction, retention period after deletion (including AWS PITR
+windows), and whether a lawyer reviews before public release.
+
+---
+
+## Legal
+
+| Item | Status | Notes |
+|---|---|---|
+| Trademark clearance | ✅ | Renamed off `NotOurGroceries`; OURGROCERIES is a live mark covering the same goods |
+| CCPA / CPRA | ❓ | Almost certainly below all three thresholds — revenue, 100k California consumers, 50% of revenue from selling data. Revisit before wide release. Not a lawyer |
+| GDPR | ❓ | Plausible the moment there is one EU or UK user. No compliance claim written either way |
+| Legal entity | ⬜ | Individual or company; drives the seller name and the liability wording |
+
+---
+
+## Release mechanics
+
+| Item | Status | Notes |
+|---|---|---|
+| `scripts/release.sh` | ✅ | Tags `vX.Y.Z`, bumps `main` to the next minor |
+| TestFlight CI on tag push | ✅ | `.github/workflows/testflight.yml`, stamps a datetime build number |
+| 90-day expiry job | ✅ | Scheduled rebuild so TestFlight builds do not lapse |
+| CHANGELOG up to date | ⬜ | `[Unreleased]` empty with 27 commits since v1.6.0 |
+| TestFlight build current | ⬜ | Stale at v1.6.0, several schema changes behind and broken against the current backend |
+
+---
+
+## What is deliberately not being built
+
+- **Monetization.** Direction agreed — no feature gating, volume metered on
+  trips, roughly \$0.99 to finish the month. Blocked on cost-per-household, which
+  needs the Anthropic and OpenAI usage figures. AWS is \$3.19/month for the whole
+  account, so those two numbers are the entire equation.
+- **Ads.** Rejected. Sessions are seconds long and it is a shared family utility.

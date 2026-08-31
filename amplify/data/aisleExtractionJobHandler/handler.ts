@@ -201,18 +201,23 @@ STANDARD SECTIONS — if a product is listed under one of these areas, use EXACT
 - "standard-bakery"   → bread, rolls, muffins, cakes, pastries
 - "standard-frozen"   → frozen vegetables, meals, pizza, ice cream
 
-For numbered aisles, use ONLY the number — never add a prefix like "Aisle".
+If the sign shows an aisle NUMBER, use ONLY that number — never a prefix like "Aisle".
+
+If a product fits no standard section AND the sign shows no number, use the sign's
+own heading as the aisle value, in Title Case. Many shops label departments by name
+only. NEVER invent a number that is not printed on the sign.
 
 Examples:
 {"productName":"Apples","aisle":"standard-produce"}
 {"productName":"Cheddar","aisle":"standard-dairy"}
-{"productName":"Canned Tomatoes","aisle":"4"}
-{"productName":"Pasta","aisle":"4"}
+{"productName":"Canned Tomatoes","aisle":"7"}      ← sign read "AISLE 7"
+{"productName":"Corkscrews","aisle":"Wine & Spirits"}  ← sign read "WINE & SPIRITS", no number
 
 Rules:
 - Extract EVERY item visible
 - Use exact product names from the sign
 - List each product separately
+- An aisle value is a number ONLY when that number appears on the sign
 
 Return a JSON array ONLY — no markdown, no code fences, no explanation.`;
 

@@ -2,6 +2,15 @@ import { DynamoDBClient, UpdateItemCommand, GetItemCommand } from '@aws-sdk/clie
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import type { Schema } from '../resource';
 
+/**
+ * An invite code lives 30 minutes and admits one person.
+ *
+ * Short because the code is now handed over deliberately — you generate it with
+ * the person in front of you, or you text it and they act on it. A code that
+ * outlives that conversation is just a spare key left in a group chat.
+ */
+const INVITE_CODE_TTL_MS = 30 * 60 * 1000;
+
 const client = new DynamoDBClient({});
 
 const HOUSEHOLD_TABLE_NAME = process.env.HOUSEHOLD_TABLE_NAME!;
@@ -71,7 +80,7 @@ export const handler: Handler = async (event) => {
 
     // Generate new invite code with 24-hour expiration
     const newInviteCode = generateInviteCode();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + INVITE_CODE_TTL_MS).toISOString();
     const now = new Date().toISOString();
 
     // Update household with new invite code

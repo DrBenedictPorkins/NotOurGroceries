@@ -6,6 +6,7 @@ import {
   AdminAddUserToGroupCommand,
   AdminRemoveUserFromGroupCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
+import { randomInt } from 'node:crypto';
 import type { Schema } from '../resource';
 
 const client = new DynamoDBClient({});
@@ -123,6 +124,68 @@ async function getUserHouseholdId(userId: string): Promise<string | null> {
  */
 const PROFILE_COLOURS = ['cyan', 'purple', 'pink', 'blue', 'yellow', 'green'];
 
+/**
+ * Same alphabet as the membership function: no I, O, 0 or 1, because these get
+ * read aloud and typed by hand. `randomInt` rather than `Math.random()`.
+ */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+async function generateUniqueInviteCode(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
+    const existing = await client.send(new QueryCommand({
+      TableName: HOUSEHOLD_TABLE_NAME,
+      IndexName: 'householdsByInviteCode',
+      KeyConditionExpression: 'inviteCode = :code',
+      ExpressionAttributeValues: marshall({ ':code': code }),
+      Select: 'COUNT',
+    }));
+    if (!existing.Count) return code;
+    console.warn(`Invite code collision on ${code}, retrying`);
+  }
+  throw new Error('Could not generate a unique invite code');
+}
+
+/**
+ * Spend the invite code, so it admits exactly one person.
+ *
+ * The condition is what makes it single-use: two people racing the same code
+ * both read the same row, but only the first conditional write matches, and the
+ * loser is told to ask for a new one rather than silently joining.
+ *
+ * The code is rotated *and* expired. Rotating means the string that was texted
+ * around can never work again, whatever the expiry logic does later; expiring
+ * means the fresh string is not a live invite nobody asked for — a member has to
+ * press Generate New Code deliberately.
+ *
+ * Spent before the joiner is granted anything. If a later step fails they are
+ * left outside holding a dead code, which a member fixes by regenerating; the
+ * other order would let two people through on one code, which nothing fixes.
+ */
+async function consumeInviteCode(householdId: string, usedCode: string): Promise<void> {
+  const replacement = await generateUniqueInviteCode();
+  try {
+    await client.send(new UpdateItemCommand({
+      TableName: HOUSEHOLD_TABLE_NAME,
+      Key: marshall({ id: householdId }),
+      UpdateExpression: 'SET inviteCode = :new, inviteCodeExpiresAt = :spent, updatedAt = :now',
+      ConditionExpression: 'inviteCode = :used',
+      ExpressionAttributeValues: marshall({
+        ':new': replacement,
+        ':used': usedCode,
+        // Already in the past, so the replacement is not itself a live invite.
+        ':spent': new Date().toISOString(),
+        ':now': new Date().toISOString(),
+      }),
+    }));
+  } catch (error: unknown) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
+      throw new Error('This invite code has already been used. Please request a new one from a household member.');
+    }
+    throw error;
+  }
+}
+
 async function colourForNewMember(householdId: string): Promise<string> {
   const taken = new Set<string>();
   let cursor: Record<string, unknown> | undefined;
@@ -206,6 +269,9 @@ export const handler: Handler = async (event) => {
     if (previousHouseholdId === household.id) {
       throw new Error('You are already a member of this household');
     }
+
+    // Single use. Spent before anything is granted — see consumeInviteCode.
+    await consumeInviteCode(household.id, inviteCode);
 
     // Grant the claim first. If this fails the join throws and nothing has
     // changed, which is recoverable; the reverse order would leave somebody

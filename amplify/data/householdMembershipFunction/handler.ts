@@ -54,6 +54,15 @@ async function removeFromHouseholdGroup(userId: string, householdId: string): Pr
  * `Math.random()`, which is predictable, for a string whose only job is to keep
  * strangers out of somebody's household.
  */
+/**
+ * An invite code lives 30 minutes and admits one person.
+ *
+ * Short because the code is now handed over deliberately — you generate it with
+ * the person in front of you, or you text it and they act on it. A code that
+ * outlives that conversation is just a spare key left in a group chat.
+ */
+const INVITE_CODE_TTL_MS = 30 * 60 * 1000;
+
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 async function generateUniqueInviteCode(): Promise<string> {
@@ -276,7 +285,7 @@ export const handler: Handler = async (event) => {
     const newId = randomUUID();
     const inviteCode = await generateUniqueInviteCode();
     const now = new Date();
-    const expires = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const expires = new Date(now.getTime() + INVITE_CODE_TTL_MS);
 
     // Group first. A household the creator cannot read is worse than no
     // household — and if this throws, nothing has been written yet.

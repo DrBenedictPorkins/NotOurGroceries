@@ -102,7 +102,7 @@ enum AisleNaming {
     private static func tidiedStandardId(_ id: String) -> String? {
         guard id.lowercased().hasPrefix("standard-") else { return nil }
 
-        if let known = StoreService.standardSections.first(where: {
+        if let known = StoreService.namedDepartments.first(where: {
             $0.id.lowercased() == id.lowercased()
         }) {
             return known.name

@@ -69,10 +69,12 @@ struct ItemDetailSheet: View {
         return viewModel.householdStores.first
     }
 
-    /// Whether the relevant store organizes by aisle at all.
-    /// Stores flagged NO_AISLES get no aisle UI and no AI aisle inference.
+    /// Whether there is anywhere to put this item.
+    ///
+    /// Every store carries the named departments, so this is only false when no
+    /// store is selected at all — it is a nil guard rather than a kind of shop.
     private var storeSupportsAisles: Bool {
-        currentStore?.supportsAisleNavigation ?? false
+        !(currentStore?.aisleLayout.isEmpty ?? true)
     }
 
     /// Aisle UI only makes sense in proposed mode, or while shopping at an aisle-based store.

@@ -8,16 +8,30 @@ struct HouseholdStore: Identifiable, Codable, Hashable {
     var address: String?
     var aisleLayout: [StoreAisle]
 
-    /// True when aisle-based navigation/inference should be attempted.
+    /// Whether this shop numbers its aisles, on top of the named departments
+    /// every shop has.
     ///
-    /// Keyed on whether there is a layout to sort against, and nothing else.
-    /// There used to be a `layoutType` beside it declaring a store "aisled" or
-    /// "no aisles", but by the time every store was seeded with the standard
-    /// departments the two kinds held identical data — the flag only decided
-    /// which buttons appeared, and one of those branches was missed, which is
-    /// how a no-aisle store ended up offering a directory scan. The backend
-    /// field is still there and simply ignored.
-    var supportsAisleNavigation: Bool { !aisleLayout.isEmpty }
+    /// The vocabulary, which the code used to muddle:
+    ///
+    /// - a **named department** — Produce, Bakery, Frozen — has no number, and
+    ///   every store is seeded with all eighteen of them at creation;
+    /// - a **numbered aisle** — 4, 12 — is the extra that larger shops add, and
+    ///   is the only reason the directory scan exists;
+    /// - a shop with neither is not a store in this app at all. That is a Quick
+    ///   Trip.
+    ///
+    /// So numbered is a superset of named, not a rival kind, and this is derived
+    /// rather than declared. Nobody is asked which sort of shop they are standing
+    /// in — a question they often cannot answer until they get there. Create the
+    /// store from home with just its departments, scan the plaque once you see
+    /// one, and the layout gains numbered entries and this turns true on its own.
+    ///
+    /// It replaced `supportsAisleNavigation`, which asked whether the layout was
+    /// empty. That could not be false once every store was seeded, so it was a
+    /// question with one answer, and the branches behind it were unreachable.
+    var hasNumberedAisles: Bool {
+        aisleLayout.contains { Int($0.number.trimmingCharacters(in: .whitespaces)) != nil }
+    }
 
     init(
         id: String = UUID().uuidString,

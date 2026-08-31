@@ -389,7 +389,7 @@ interface StoreAisle {
 
 /**
  * Hardcoded standard sections present in virtually every US grocery store.
- * IDs match the iOS StoreService.standardSections stable IDs.
+ * IDs match the iOS StoreService.namedDepartments stable IDs.
  * Used as extra context in LLM prompts so the model can assign perimeter
  * items (produce, dairy, meat, etc.) even when they are absent from the
  * store's numbered aisle directory.
@@ -433,8 +433,8 @@ async function updateStoreAisleLayout(
   );
   const householdId: string = currentItem.Item?.householdId ?? '';
   const existingLayout: StoreAisle[] = currentItem.Item?.aisleLayout || [];
-  const standardSections = existingLayout.filter((a: StoreAisle) => a.id.startsWith('standard-'));
-  console.log(`[PHASE 1.5] Preserving ${standardSections.length} existing standard sections`);
+  const namedDepartments = existingLayout.filter((a: StoreAisle) => a.id.startsWith('standard-'));
+  console.log(`[PHASE 1.5] Preserving ${namedDepartments.length} existing standard sections`);
 
   // Group entries by aisle
   const aisleGroups = new Map<string, string[]>();
@@ -478,9 +478,9 @@ async function updateStoreAisleLayout(
   });
 
   // Final layout: OCR aisles + preserved standard sections (standard sections keep 900+ displayOrder)
-  const finalLayout: StoreAisle[] = [...ocrAisles, ...standardSections];
+  const finalLayout: StoreAisle[] = [...ocrAisles, ...namedDepartments];
 
-  console.log(`[PHASE 1.5] Created ${ocrAisles.length} OCR aisles + ${standardSections.length} standard sections`);
+  console.log(`[PHASE 1.5] Created ${ocrAisles.length} OCR aisles + ${namedDepartments.length} standard sections`);
 
   // Update the HouseholdStore record
   // Store as native DynamoDB List (L type), NOT a JSON string (S type).
@@ -665,7 +665,7 @@ async function matchProductBatch(
     2
   );
 
-  const standardSectionsContext = buildStandardSectionsContext();
+  const namedDepartmentsContext = buildStandardSectionsContext();
 
   const prompt = `You are matching grocery products to store aisles.
 
@@ -673,7 +673,7 @@ STORE AISLE DIRECTORY (extracted from store sign):
 ${aisleDirectory}
 
 STANDARD STORE SECTIONS (perimeter areas not in the numbered directory):
-${standardSectionsContext}
+${namedDepartmentsContext}
 Use the section ID (e.g. "standard-produce") as the aisleId for products in these sections.
 
 PRODUCTS TO MATCH:
@@ -1028,7 +1028,7 @@ async function inferUnmappedBatch(
     2
   );
 
-  const standardSectionsContext = buildStandardSectionsContext();
+  const namedDepartmentsContext = buildStandardSectionsContext();
 
   const prompt = `You are assigning grocery products to store aisles based on general grocery store knowledge.
 
@@ -1036,7 +1036,7 @@ STORE AISLE DIRECTORY (what this store stocks in each aisle):
 ${aisleDirectory}
 
 STANDARD STORE SECTIONS (perimeter areas not in the numbered directory):
-${standardSectionsContext}
+${namedDepartmentsContext}
 Use the section ID (e.g. "standard-produce") as the aisleId for products in these sections.
 
 PRODUCTS TO ASSIGN (not found in store scan — use your best judgment):

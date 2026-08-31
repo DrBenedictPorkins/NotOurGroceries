@@ -148,14 +148,14 @@ final class AisleNamingTests: XCTestCase {
     // MARK: - The standard set
 
     func testStandardIdsAreUnique() {
-        let ids = StoreService.standardSections.map(\.id)
+        let ids = StoreService.namedDepartments.map(\.id)
 
         XCTAssertEqual(Set(ids).count, ids.count,
                        "a duplicate id would make backfill and lookup disagree")
     }
 
     func testEveryStandardSectionResolvesToItsOwnName() {
-        for section in StoreService.standardSections {
+        for section in StoreService.namedDepartments {
             XCTAssertEqual(AisleNaming.displayName(for: section.id, in: []), section.name,
                            "\(section.id) does not resolve to its name")
         }
@@ -163,12 +163,12 @@ final class AisleNamingTests: XCTestCase {
 
     func testMedicineHasSomewhereToGoThatIsNotHousehold() {
         // Unisom was being filed under Household, next to the bin bags.
-        let ids = Set(StoreService.standardSections.map(\.id))
+        let ids = Set(StoreService.namedDepartments.map(\.id))
 
         XCTAssertTrue(ids.contains("standard-pharmacy"))
         XCTAssertTrue(ids.contains("standard-personal"))
 
-        let household = StoreService.standardSections.first { $0.id == "standard-household" }
+        let household = StoreService.namedDepartments.first { $0.id == "standard-household" }
         XCTAssertNotNil(household)
         XCTAssertFalse((household!.description ?? "").lowercased().contains("toiletries"),
                        "toiletries belong to Personal Care now")
@@ -182,7 +182,7 @@ final class AisleNamingTests: XCTestCase {
     /// which is why Aisle Management can drag it into any order. These tests pin
     /// the bands, not anybody's preference.
     private func order(_ id: String) -> Int {
-        StoreService.standardSections.first { $0.id == id }?.displayOrder ?? .max
+        StoreService.namedDepartments.first { $0.id == id }?.displayOrder ?? .max
     }
 
     func testPerimeterSortsBeforeAStoresNumberedAisles() {
@@ -205,14 +205,14 @@ final class AisleNamingTests: XCTestCase {
     }
 
     func testProduceIsFirstAndFrozenIsLast() {
-        let orders = StoreService.standardSections.map(\.displayOrder)
+        let orders = StoreService.namedDepartments.map(\.displayOrder)
 
         XCTAssertEqual(order("standard-produce"), orders.min())
         XCTAssertEqual(order("standard-frozen"), orders.max(), "frozen melts")
     }
 
     func testStandardSectionsHaveDistinctDisplayOrders() {
-        let orders = StoreService.standardSections.map(\.displayOrder)
+        let orders = StoreService.namedDepartments.map(\.displayOrder)
 
         XCTAssertEqual(Set(orders).count, orders.count,
                        "equal orders sort unstably, so the walk order changes between launches")
@@ -221,7 +221,7 @@ final class AisleNamingTests: XCTestCase {
     func testStandardSectionsAllDescribeThemselves() {
         // The description is what the inference prompt reads; an empty one makes
         // that section invisible to the model.
-        for section in StoreService.standardSections {
+        for section in StoreService.namedDepartments {
             XCTAssertFalse(section.name.trimmingCharacters(in: .whitespaces).isEmpty)
             XCTAssertFalse((section.description ?? "").trimmingCharacters(in: .whitespaces).isEmpty,
                            "\(section.id) has no description")

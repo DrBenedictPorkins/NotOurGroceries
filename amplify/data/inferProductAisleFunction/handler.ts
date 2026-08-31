@@ -124,7 +124,7 @@ async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]
 }
 
 /**
- * The built-in departments, mirroring `StoreService.standardSections` in Swift.
+ * The built-in departments, mirroring `StoreService.namedDepartments` in Swift.
  *
  * Needed here because the model answers in free text and echoes whatever form it
  * was shown. A shop with no scanned aisles has no declared layout at all, so the

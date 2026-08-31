@@ -2324,7 +2324,7 @@ class ShoppingListViewModel: ObservableObject {
         // seven perimeter ones, so none of them qualified, and brown sugar stayed
         // homeless. addMissingStandardSections adds by id and is idempotent, and
         // scanned aisles sit alongside these — every store already carries both.
-        let standardIds = Set(StoreService.standardSections.map { $0.id })
+        let standardIds = Set(StoreService.namedDepartments.map { $0.id })
         let needsTopUp = householdStores.filter { store in
             !standardIds.isSubset(of: Set(store.aisleLayout.map { $0.id }))
         }
@@ -2570,7 +2570,7 @@ class ShoppingListViewModel: ObservableObject {
                         let unmappedCustomItems = items.filter { item in
                             item.isCustom && item.status == .active && !mappedNames.contains(item.normalizedName)
                         }
-                        if !store.supportsAisleNavigation {
+                        if store.aisleLayout.isEmpty {
                             logger.info("At-Store pre-check: skipped aisle inference (store has no aisle layout)")
                         } else if !unmappedCustomItems.isEmpty {
                             let batchInputs = unmappedCustomItems.map {

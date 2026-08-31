@@ -41,7 +41,7 @@ class StoreService: ObservableObject {
     ///
     /// All of this is only a default. Aisle Management lets a store's order be
     /// dragged into whatever shape the real building has.
-    static let standardSections: [StoreAisle] = [
+    static let namedDepartments: [StoreAisle] = [
         // Band 1 — the perimeter, in the order he has actually walked it: in past
         // the produce, bakery, then the deli and fish counters, the butcher, and
         // round to the chilled wall. Fish before meat because the counters
@@ -77,7 +77,7 @@ class StoreService: ObservableObject {
     /// Safe to call repeatedly — only adds what isn't already there.
     func addMissingStandardSections(to store: HouseholdStore) async throws -> HouseholdStore {
         let existingIds = Set(store.aisleLayout.map { $0.id })
-        let missing = Self.standardSections.filter { !existingIds.contains($0.id) }
+        let missing = Self.namedDepartments.filter { !existingIds.contains($0.id) }
         guard !missing.isEmpty else { return store }
 
         var updatedStore = store
@@ -111,7 +111,7 @@ class StoreService: ObservableObject {
         // order at all — but a shop without numbered aisles still has a cooler,
         // a produce rack and a bread shelf, and those are what these sections
         // are. "No aisles" means no numbers, not no organisation.
-        let initialAisles: [[String: Any]] = Self.standardSections.map { aisle -> [String: Any] in
+        let initialAisles: [[String: Any]] = Self.namedDepartments.map { aisle -> [String: Any] in
             var dict: [String: Any] = ["id": aisle.id, "number": aisle.number, "name": aisle.name, "displayOrder": aisle.displayOrder]
             if let description = aisle.description { dict["description"] = description }
             return dict

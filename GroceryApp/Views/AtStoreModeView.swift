@@ -73,7 +73,7 @@ struct AtStoreModeView: View {
             // built-in section order so a shop with no scanned aisles still walks
             // produce first and frozen last instead of collapsing to zero.
             let displayOrder = store.aisleLayout.first(where: { $0.id == aisleId || $0.name == aisleId || $0.number == aisleId })?.displayOrder
-                ?? StoreService.standardSections.first(where: { $0.id == aisleId || $0.name.caseInsensitiveCompare(name) == .orderedSame })?.displayOrder
+                ?? StoreService.namedDepartments.first(where: { $0.id == aisleId || $0.name.caseInsensitiveCompare(name) == .orderedSame })?.displayOrder
                 ?? 0
 
             return AisleGroup(
@@ -463,23 +463,28 @@ struct AtStoreModeView: View {
     /// A store with nothing to sort against has nothing to map, so unmapped items
     /// aren't an error state — they're just the list. Show a neutral header
     /// instead of the pink "unknown" warning.
-    private var storeHasNoAisles: Bool {
-        !(selectedHouseholdStore?.supportsAisleNavigation ?? false)
+    /// Nothing has been placed in an aisle for this trip.
+    ///
+    /// Either the mapping step was skipped, or none of these items has been seen
+    /// at this shop before. Both are ordinary, so the heading says what the list
+    /// is — things to get — rather than complaining that it is unsorted.
+    private var nothingMapped: Bool {
+        aisleGroups.isEmpty
     }
 
     private var unmappedHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: storeHasNoAisles ? "cart.fill" : "questionmark.circle.fill")
+                Image(systemName: nothingMapped ? "cart.fill" : "questionmark.circle.fill")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
+                    .foregroundColor(nothingMapped ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
 
                 // Not "UNKNOWN AISLE" — that claims there is an aisle whose name
                 // we have lost. These items simply have not been placed yet, and
                 // the header should say so rather than invent a mystery.
-                Text(storeHasNoAisles ? "TO GET" : "NOT SORTED YET")
+                Text(nothingMapped ? "TO GET" : "NOT SORTED YET")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(storeHasNoAisles ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
+                    .foregroundColor(nothingMapped ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
                     .tracking(1.2)
 
                 Spacer()
@@ -489,7 +494,7 @@ struct AtStoreModeView: View {
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }
 
-            if !storeHasNoAisles {
+            if !nothingMapped {
                 Text("Long-press an item to say which aisle it's in")
                     .font(.system(size: 11, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textTertiary)

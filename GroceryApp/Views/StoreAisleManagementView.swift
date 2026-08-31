@@ -368,16 +368,45 @@ struct StoreAisleManagementView: View {
     // MARK: - Header View
 
     private var headerView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(store.name)
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(DesignSystem.Colors.accentGradient)
+        // Done sits here rather than in a navigation bar because this sheet has
+        // no navigation bar. Without it the only way out was a downward swipe,
+        // which is not something a screen full of drag handles invites you to
+        // try — the rows want to be dragged, so dragging the sheet is the last
+        // thing you would attempt.
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(store.name)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(DesignSystem.Colors.accentGradient)
 
-            if let chain = store.chain, !chain.isEmpty {
-                Text(chain)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                if let chain = store.chain, !chain.isEmpty {
+                    Text(chain)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
             }
+
+            Spacer(minLength: 12)
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                dismiss()
+            } label: {
+                Text("Done")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(DesignSystem.Colors.dillGreen.opacity(0.12))
+                            .overlay(
+                                Capsule()
+                                    .stroke(DesignSystem.Colors.dillGreen.opacity(0.35), lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)

@@ -22,7 +22,6 @@
 		61C577F31452E1D49F5F8E7E /* ShoppingCompletionStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */; };
 		6F86254645EFD5A78889AB51 /* ReadyToShopSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */; };
 		7117A30606C7459A532CDAD4 /* ShoppingCompletedSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C91CEFFA5AF53A106CA602 /* ShoppingCompletedSheet.swift */; };
-		8AE93CD8079C5629CE9DED63 /* SonarPingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */; };
 		AA0000000000000000000001 /* GroceryAppApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000001 /* GroceryAppApp.swift */; };
 		AA0000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* ContentView.swift */; };
 		AA0000000000000000000097 /* AppIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000097 /* AppIdentity.swift */; };
@@ -83,7 +82,6 @@
 		AA0000000000000000000091 /* ShopperReminderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000091 /* ShopperReminderService.swift */; };
 		B411F78E2F0B6F160008B8CA /* amplify_outputs_prod.json in Resources */ = {isa = PBXBuildFile; fileRef = B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */; };
 		BCE700C7876941359C07CABF /* UserCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15546147AB154BAB9998BE81 /* UserCache.swift */; };
-		E8FBCD0EB31D28E134EB0960 /* StoreSwitcherSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */; };
 		TT0000000000000000000004 /* ProductTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000014 /* ProductTests.swift */; };
 		TT0000000000000000000140 /* ListPartitioningTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000240 /* ListPartitioningTests.swift */; };
 		TT0000000000000000000141 /* SortStabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TT0000000000000000000241 /* SortStabilityTests.swift */; };
@@ -123,9 +121,7 @@
 		15546147AB154BAB9998BE81 /* UserCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserCache.swift; sourceTree = "<group>"; };
 		1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShoppingCompletionStats.swift; sourceTree = "<group>"; };
 		40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreAisleManagementView.swift; sourceTree = "<group>"; };
-		41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SonarPingView.swift; sourceTree = "<group>"; };
 		66658FDDA7D5B20B9E9E9047 /* BatchAisleMappingSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BatchAisleMappingSheet.swift; sourceTree = "<group>"; };
-		AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreSwitcherSheet.swift; sourceTree = "<group>"; };
 		B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = amplify_outputs_prod.json; sourceTree = "<group>"; };
 		BB0000000000000000000001 /* GroceryAppApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroceryAppApp.swift; sourceTree = "<group>"; };
 		BB0000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -341,7 +337,6 @@
 				FF0000000000000000000032 /* Auth */,
 				FF0000000000000000000031 /* Components */,
 				40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */,
-				AD5E7CF2C5F5856879555D0B /* StoreSwitcherSheet.swift */,
 				66658FDDA7D5B20B9E9E9047 /* BatchAisleMappingSheet.swift */,
 				FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */,
 				BB0000000000000000000088 /* StoresView.swift */,
@@ -366,7 +361,6 @@
 				BB0000000000000000000059 /* UserIdentityGradient.swift */,
 				BB0000000000000000000060 /* UserColorBadge.swift */,
 				02C91CEFFA5AF53A106CA602 /* ShoppingCompletedSheet.swift */,
-				41F1C6E407F95C2FAF0CE771 /* SonarPingView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -574,12 +568,10 @@
 				AA0000000000000000000074 /* CreateStoreSheet.swift in Sources */,
 				AA0000000000000000000075 /* ShoppingActiveInfoModal.swift in Sources */,
 				36B866D86A21E55F7AF2ED72 /* StoreAisleManagementView.swift in Sources */,
-				E8FBCD0EB31D28E134EB0960 /* StoreSwitcherSheet.swift in Sources */,
 				61C577F31452E1D49F5F8E7E /* ShoppingCompletionStats.swift in Sources */,
 				7117A30606C7459A532CDAD4 /* ShoppingCompletedSheet.swift in Sources */,
 				1785903FD63E50BDBCE5B365 /* BatchAisleMappingSheet.swift in Sources */,
 				6F86254645EFD5A78889AB51 /* ReadyToShopSheet.swift in Sources */,
-				8AE93CD8079C5629CE9DED63 /* SonarPingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

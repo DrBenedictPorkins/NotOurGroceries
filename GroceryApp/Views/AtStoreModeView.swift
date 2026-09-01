@@ -9,7 +9,6 @@ struct AtStoreModeView: View {
     @ObservedObject private var storeService = StoreService.shared
     @State private var showDoneShoppingAlert = false
     @State private var searchText = ""
-    @State private var showStoreSwitcher = false
     @State private var showAisleManagement = false
     @FocusState private var searchFieldFocused: Bool
     @StateObject private var dictation = SpeechDictationService()
@@ -231,10 +230,6 @@ struct AtStoreModeView: View {
             shoppingActiveBorderOverlay
         }
         .navigationBarHidden(true)
-        .sheet(isPresented: $showStoreSwitcher) {
-            StoreSwitcherSheet(currentStoreId: selectedHouseholdStore?.id)
-                .environmentObject(viewModel)
-        }
         .sheet(isPresented: $showAisleManagement) {
             if let store = selectedHouseholdStore {
                 StoreAisleManagementView(store: store)
@@ -281,20 +276,9 @@ struct AtStoreModeView: View {
         HStack(alignment: .top) {
             // Left side: Store name + action icons
             VStack(alignment: .leading, spacing: 12) {
-                // Tappable store name - opens store switcher
-                Button(action: {
-                    showStoreSwitcher = true
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                }) {
-                    HStack(spacing: 4) {
-                        Text(selectedHouseholdStore?.name ?? "Select Store")
-                            .font(.system(size: 28, weight: .bold))
-                            .foregroundStyle(DesignSystem.Colors.accentGradient)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.dillGreen)
-                    }
-                }
+                Text(selectedHouseholdStore?.name ?? "Select Store")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(DesignSystem.Colors.accentGradient)
 
                 // Action icons row (gear + inbox)
                 HStack(spacing: 12) {

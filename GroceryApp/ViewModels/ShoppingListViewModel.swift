@@ -2323,69 +2323,6 @@ class ShoppingListViewModel: ObservableObject {
 
     static let defaultStoreName = "My Store"
 
-    /// Switch to a different store during shopping
-    /// Updates the household's shoppingStoreId and reloads mappings
-    func switchStore(_ store: HouseholdStore) async {
-        guard let householdId = householdId else {
-            showToast(message: "No household selected", type: .error)
-            return
-        }
-
-        // Don't switch if already at this store
-        if shoppingStoreId == store.id {
-            showToast(message: "Already shopping at \(store.name)", type: .info)
-            return
-        }
-
-        do {
-            // 1. Update Household.shoppingStoreId in backend
-            let document = """
-            mutation UpdateHousehold($input: UpdateHouseholdInput!) {
-                updateHousehold(input: $input) {
-                    id
-                    shoppingStoreId
-                }
-            }
-            """
-
-            let input: [String: Any] = [
-                "id": householdId,
-                "shoppingStoreId": store.id
-            ]
-
-            let request = GraphQLRequest<JSONValue>(
-                document: document,
-                variables: ["input": input],
-                responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-            )
-
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                // 2. Update local shoppingStoreId
-                shoppingStoreId = store.id
-                selectedHouseholdStore = store
-
-                // 3. Reload ProductAisleMappings for new store
-                if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
-                    productAisleMappings[store.id] = mappings
-                }
-
-                // 4. Show toast
-                showToast(message: "Switched to \(store.name)")
-                logger.info("Switched store to: \(store.name)")
-
-            case .failure(let error):
-                showToast(message: "Failed to switch store", type: .error)
-                logger.error("Failed to switch store: \(error)")
-            }
-        } catch {
-            showToast(message: "Failed to switch store", type: .error)
-            logger.error("Failed to switch store: \(error)")
-        }
-    }
 
     // MARK: - Reminder Timer Management
 

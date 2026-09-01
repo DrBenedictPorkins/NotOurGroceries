@@ -1,5 +1,29 @@
 # Got Dill? - Development Notes
 
+# Before writing any code — the gate
+
+Answer these four, in order. Any "no" means stop and say so in one sentence
+instead of building.
+
+1. **Did the user ask for this?** Not "would it help" — did they ask. A helper, a
+   shortcut, a second way to do something already possible, an "also" on an
+   existing screen: none of these were asked for.
+2. **Is this the plainest thing that works?** If there is a version with fewer
+   parts, fewer taps, fewer knobs, build that one.
+3. **Does it stay on its own plane?** A screen has one job. Store layout is not
+   the shopping list. Item detail is not aisle management. If the change makes a
+   screen do a second kind of thing, it is wrong.
+4. **Can I delete something instead?** Propose the deletion first. It has been the
+   right answer far more often than the addition.
+
+Track record when this gate was skipped, all removed within a day of being
+written: eleven invented departments, a mid-trip store switcher, per-item AI
+re-guessing, a pin on every row, a separate capture sheet, and a mapping review
+queue on the aisle setup screen.
+
+**KISS and YAGNI are the standard, not an aspiration.** If something seems useful
+but was not requested, say so in one sentence and stop.
+
 ## AWS Configuration
 
 Always use `AWS_PROFILE=mine` before any AWS CLI calls.

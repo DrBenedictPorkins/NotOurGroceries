@@ -2301,48 +2301,10 @@ class ShoppingListViewModel: ObservableObject {
 
             if householdStores.isEmpty {
                 await createDefaultStore()
-            } else {
-                await backfillStandardSections()
             }
         } catch {
             print("[BACKFILL] fetchStores THREW: \(String(describing: error))")
             logger.error("Failed to load stores: \(error)")
-        }
-    }
-
-    /// Stores created before departments were seeded for every store came up with
-    /// an empty layout, so their lists had no order at all. Fill them in once.
-    ///
-    /// Only touches stores with nothing at all — a store someone has curated is
-    /// left alone, and addMissingStandardSections is itself idempotent. Failures
-    /// are ignored on purpose: an unsorted list is a worse list, not a broken one,
-    /// and this runs on every load.
-    private func backfillStandardSections() async {
-        // Any store missing a standard section, not just an empty one. The
-        // original "empty only" test meant that adding the seven centre
-        // departments later reached nobody: every existing store already had the
-        // seven perimeter ones, so none of them qualified, and brown sugar stayed
-        // homeless. addMissingStandardSections adds by id and is idempotent, and
-        // scanned aisles sit alongside these — every store already carries both.
-        let standardIds = Set(StoreService.namedDepartments.map { $0.id })
-        let needsTopUp = householdStores.filter { store in
-            !standardIds.isSubset(of: Set(store.aisleLayout.map { $0.id }))
-        }
-        print("[BACKFILL] check — \(self.householdStores.count) stores, \(needsTopUp.count) missing standard sections")
-        guard !needsTopUp.isEmpty else { return }
-
-        for store in needsTopUp {
-            do {
-                let updated = try await StoreService.shared.addMissingStandardSections(to: store)
-                if let index = householdStores.firstIndex(where: { $0.id == updated.id }) {
-                    householdStores[index] = updated
-                }
-                print("[BACKFILL] OK — \(updated.aisleLayout.count) departments into \(store.name)")
-            } catch {
-                // Was `try?`, which meant a failing write looked identical to a
-                // store that needed nothing — the reason this went unnoticed.
-                print("[BACKFILL] FAILED for \(store.name): \(String(describing: error))")
-            }
         }
     }
 

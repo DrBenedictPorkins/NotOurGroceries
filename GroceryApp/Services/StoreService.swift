@@ -41,11 +41,27 @@ class StoreService: ObservableObject {
     ///
     /// All of this is only a default. Aisle Management lets a store's order be
     /// dragged into whatever shape the real building has.
+    /// The seven departments every shop has, corner shop included.
+    ///
+    /// A department is a *place*: it has a sign over it and you walk to it. Eleven
+    /// categories used to sit in here too — Canned Goods, Condiments & Sauces,
+    /// Baking, Personal Care and the rest. They are not places. In a real shop
+    /// "Condiments & Sauces" is *in* aisle 5, so offering it as a section header
+    /// sent people to somewhere that does not exist.
+    ///
+    /// They were added to stop aisle inference inventing placeholder sections
+    /// when it had nowhere to put brown sugar. Both halves of that reason are
+    /// gone: inference now reads the store's own layout and cannot invent, and an
+    /// item with no known aisle has an honest home in "Not sorted yet", which one
+    /// spoken aisle fixes for good. Across 1,306 mappings the eleven held 24
+    /// between them, and four had never been used at all.
+    ///
+    /// A store has named departments and numbered aisles. There is no third kind.
     static let namedDepartments: [StoreAisle] = [
-        // Band 1 — the perimeter, in the order he has actually walked it: in past
-        // the produce, bakery, then the deli and fish counters, the butcher, and
-        // round to the chilled wall. Fish before meat because the counters
-        // usually sit that way round.
+        // The perimeter, in the order it is actually walked: in past the produce,
+        // bakery, then the deli and fish counters, the butcher, and round to the
+        // chilled wall. Fish before meat because the counters usually sit that
+        // way round.
         StoreAisle(id: "standard-produce",  number: "", name: "Produce",        displayOrder: -100, description: "Fresh fruits, vegetables, leafy greens, and fresh herbs"),
         StoreAisle(id: "standard-bakery",   number: "", name: "Bakery",         displayOrder: -95,  description: "Fresh bread, rolls, muffins, cakes, pastries, and baked goods"),
         StoreAisle(id: "standard-deli",     number: "", name: "Deli",           displayOrder: -90,  description: "Sliced meats, deli cheese, prepared foods, and cold cuts"),
@@ -53,37 +69,39 @@ class StoreService: ObservableObject {
         StoreAisle(id: "standard-meat",     number: "", name: "Meat & Poultry", displayOrder: -80,  description: "Fresh and packaged beef, chicken, pork, turkey, lamb, and sausages"),
         StoreAisle(id: "standard-dairy",    number: "", name: "Dairy & Eggs",   displayOrder: -75,  description: "Milk, cream, yogurt, butter, cheese, eggs, and dairy alternatives"),
 
-        // Band 3 — centre of the store. Before these existed the only sections
-        // were the seven perimeter ones, so brown sugar and soy sauce had nowhere
-        // to go: inference invented placeholder aisles, those got saved, and they
-        // rendered as real section headers.
-        StoreAisle(id: "standard-pantry",     number: "", name: "Pantry & Dry Goods", displayOrder: 900, description: "Flour, sugar, rice, pasta, beans, cereal, oats, and dry staples"),
-        StoreAisle(id: "standard-canned",     number: "", name: "Canned Goods",       displayOrder: 901, description: "Canned vegetables, beans, soup, tuna, tomatoes, and broth"),
-        StoreAisle(id: "standard-condiments", number: "", name: "Condiments & Sauces", displayOrder: 902, description: "Ketchup, mustard, mayo, salsa, soy sauce, oils, vinegar, and dressings"),
-        StoreAisle(id: "standard-baking",     number: "", name: "Baking",             displayOrder: 903, description: "Baking mixes, brown sugar, chocolate chips, spices, and extracts"),
-        StoreAisle(id: "standard-snacks",     number: "", name: "Snacks",             displayOrder: 904, description: "Chips, crackers, nuts, popcorn, cookies, and sweets"),
-        StoreAisle(id: "standard-beverages",  number: "", name: "Beverages",          displayOrder: 905, description: "Water, juice, soda, coffee, tea, and drink mixes"),
-        StoreAisle(id: "standard-personal",   number: "", name: "Personal Care",       displayOrder: 910, description: "Shampoo, soap, deodorant, toothpaste, razors, and cosmetics"),
-        StoreAisle(id: "standard-pharmacy",   number: "", name: "Pharmacy & Health",   displayOrder: 911, description: "Over-the-counter medicine, sleep aids, vitamins, supplements, and first aid"),
-        StoreAisle(id: "standard-baby",       number: "", name: "Baby",                displayOrder: 912, description: "Nappies, wipes, formula, baby food, and baby care"),
-        StoreAisle(id: "standard-pet",        number: "", name: "Pet",                 displayOrder: 913, description: "Pet food, treats, litter, and pet supplies"),
-        StoreAisle(id: "standard-household",  number: "", name: "Household",           displayOrder: 914, description: "Cleaning supplies, paper goods, foil, bags, trash bags, and laundry"),
-
         // Last on purpose.
         StoreAisle(id: "standard-frozen",   number: "", name: "Frozen",         displayOrder: 950, description: "Frozen vegetables, meals, pizza, ice cream, and frozen meats"),
     ]
 
-    /// Adds any missing standard sections to a store and persists to backend.
-    /// Safe to call repeatedly — only adds what isn't already there.
-    func addMissingStandardSections(to store: HouseholdStore) async throws -> HouseholdStore {
-        let existingIds = Set(store.aisleLayout.map { $0.id })
-        let missing = Self.namedDepartments.filter { !existingIds.contains($0.id) }
-        guard !missing.isEmpty else { return store }
+    /// Strips any `standard-` section that is not one of the seven.
+    ///
+    /// `namedDepartments` is a read-only template and this is what makes that
+    /// true in practice rather than by convention. Every layout write in the app
+    /// funnels through `updateStore`, so an eighth department cannot reach the
+    /// backend from any path — not a new call site, not a stale client, not a
+    /// well-meaning backfill.
+    ///
+    /// There was one of those. Eleven product categories — Baking, Snacks, Baby,
+    /// Pharmacy & Health — were added as departments to give aisle inference
+    /// somewhere to put brown sugar, and a backfill pushed them into every
+    /// existing store. None of them is a place you can walk to. A supermarket has
+    /// seven departments with signs over them; everything else is a numbered
+    /// aisle that only the shopper can tell us about, and an item nobody has
+    /// placed belongs in "Not sorted yet", not in an invented section.
+    ///
+    /// Custom aisles are untouched — they carry UUIDs, not `standard-` ids, and
+    /// adding them is the whole point.
+    private func enforcingDepartmentTemplate(_ store: HouseholdStore) -> HouseholdStore {
+        let allowed = Set(Self.namedDepartments.map(\.id))
+        let offenders = store.aisleLayout.filter {
+            $0.id.hasPrefix("standard-") && !allowed.contains($0.id)
+        }
+        guard !offenders.isEmpty else { return store }
 
-        var updatedStore = store
-        updatedStore.aisleLayout.append(contentsOf: missing)
-        try await updateStore(updatedStore)
-        return updatedStore
+        print("[DEPARTMENTS] refused \(offenders.count) non-template: \(offenders.map(\.id).joined(separator: ", "))")
+        var cleaned = store
+        cleaned.aisleLayout.removeAll { $0.id.hasPrefix("standard-") && !allowed.contains($0.id) }
+        return cleaned
     }
 
     // MARK: - Store CRUD
@@ -160,6 +178,7 @@ class StoreService: ObservableObject {
 
     /// Update an existing store
     func updateStore(_ store: HouseholdStore) async throws {
+        let store = enforcingDepartmentTemplate(store)
         let document = """
         mutation UpdateHouseholdStore($input: UpdateHouseholdStoreInput!) {
             updateHouseholdStore(input: $input) {

@@ -58,8 +58,8 @@ final class AisleNamingTests: XCTestCase {
         // A store that has not been backfilled yet still has mappings pointing
         // at standard ids, and they have to read as words.
         XCTAssertEqual(AisleNaming.displayName(for: "standard-frozen", in: []), "Frozen")
-        XCTAssertEqual(AisleNaming.displayName(for: "standard-household", in: []), "Household")
-        XCTAssertEqual(AisleNaming.displayName(for: "standard-pharmacy", in: []), "Pharmacy & Health")
+        XCTAssertEqual(AisleNaming.displayName(for: "standard-produce", in: []), "Produce")
+        XCTAssertEqual(AisleNaming.displayName(for: "standard-meat", in: []), "Meat & Poultry")
     }
 
     func testTidiesAnUnknownStandardStyleId() {
@@ -161,17 +161,30 @@ final class AisleNamingTests: XCTestCase {
         }
     }
 
-    func testMedicineHasSomewhereToGoThatIsNotHousehold() {
-        // Unisom was being filed under Household, next to the bin bags.
+    /// A department is a place you walk to. A category is what kind of thing
+    /// something is, and the app does not model that at all.
+    ///
+    /// Eleven categories used to live in this list — Pharmacy & Health, Baby,
+    /// Personal Care, Condiments & Sauces and the rest. None of them is a place:
+    /// nappies sit in a numbered aisle, and "Baby" is a fact about the product,
+    /// not somewhere in the shop. They were added to give inference a bucket for
+    /// things it could not place; the honest bucket is "Not sorted yet", which one
+    /// spoken aisle empties for good.
+    func testDepartmentsArePlacesNotProductCategories() {
         let ids = Set(StoreService.namedDepartments.map(\.id))
 
-        XCTAssertTrue(ids.contains("standard-pharmacy"))
-        XCTAssertTrue(ids.contains("standard-personal"))
+        XCTAssertEqual(ids, [
+            "standard-produce", "standard-bakery", "standard-deli", "standard-seafood",
+            "standard-meat", "standard-dairy", "standard-frozen",
+        ], "a store has named departments and numbered aisles; there is no third kind")
 
-        let household = StoreService.namedDepartments.first { $0.id == "standard-household" }
-        XCTAssertNotNil(household)
-        XCTAssertFalse((household!.description ?? "").lowercased().contains("toiletries"),
-                       "toiletries belong to Personal Care now")
+        for category in ["standard-pharmacy", "standard-baby", "standard-pet",
+                         "standard-personal", "standard-household", "standard-snacks",
+                         "standard-canned", "standard-condiments", "standard-baking",
+                         "standard-pantry", "standard-beverages"] {
+            XCTAssertFalse(ids.contains(category),
+                           "\(category) is a product category, not a place in a shop")
+        }
     }
 
     // MARK: - Walk order

@@ -142,6 +142,15 @@ async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]
  * Canonicalising on the way in stops that at the source rather than papering over
  * it at render time.
  */
+/**
+ * The seven places every shop has, whatever its size.
+ *
+ * These are departments — somewhere you walk to, with a sign over it. They are
+ * not categories. "Condiments & Sauces" was in this list for a while and is not
+ * a place: in a real shop it is *in* aisle 5, and offering it as a section told
+ * people to walk somewhere that does not exist. A store has named departments
+ * and numbered aisles; there is no third kind.
+ */
 const STANDARD_SECTIONS: Array<{ id: string; name: string }> = [
   { id: 'standard-produce',    name: 'Produce' },
   { id: 'standard-bakery',     name: 'Bakery' },
@@ -149,17 +158,6 @@ const STANDARD_SECTIONS: Array<{ id: string; name: string }> = [
   { id: 'standard-seafood',    name: 'Seafood' },
   { id: 'standard-meat',       name: 'Meat & Poultry' },
   { id: 'standard-dairy',      name: 'Dairy & Eggs' },
-  { id: 'standard-pantry',     name: 'Pantry & Dry Goods' },
-  { id: 'standard-canned',     name: 'Canned Goods' },
-  { id: 'standard-condiments', name: 'Condiments & Sauces' },
-  { id: 'standard-baking',     name: 'Baking' },
-  { id: 'standard-snacks',     name: 'Snacks' },
-  { id: 'standard-beverages',  name: 'Beverages' },
-  { id: 'standard-personal',   name: 'Personal Care' },
-  { id: 'standard-pharmacy',   name: 'Pharmacy & Health' },
-  { id: 'standard-baby',       name: 'Baby' },
-  { id: 'standard-pet',        name: 'Pet' },
-  { id: 'standard-household',  name: 'Household' },
   { id: 'standard-frozen',     name: 'Frozen' },
 ];
 

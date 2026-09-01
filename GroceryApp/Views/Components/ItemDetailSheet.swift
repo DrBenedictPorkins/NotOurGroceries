@@ -22,6 +22,9 @@ struct ItemDetailSheet: View {
     /// goes first, and it can be told the store's own aisle names so it stops
     /// hearing "sixty" for "sixteen".
     @StateObject private var aisleSpeech = AisleSpeechService()
+    /// What the model proposed, kept because the batch sheet overwrites
+    /// `suggestedAisle` with whatever the person types next.
+    @State private var originalSuggestion: String?
 
     // AI Aisle Inference State
     @State private var isInferring = false
@@ -32,6 +35,22 @@ struct ItemDetailSheet: View {
     private var isProposedAisleMode: Bool {
         if case .proposedAisle = mode { return true }
         return false
+    }
+
+    /// True once the person has changed the aisle the model proposed.
+    ///
+    /// Everything the model said — the label, its reasoning, its confidence —
+    /// describes the value it picked. The moment that value is replaced, all
+    /// three describe something that is no longer on screen: a 95% confidence
+    /// about the pharmacy aisle sitting under the number 7. Keeping them would
+    /// assert a certainty nobody has.
+    private var hasReplacedSuggestion: Bool {
+        guard let original = originalSuggestion else { return false }
+        let now = aisleText.trimmingCharacters(in: .whitespaces)
+        guard !now.isEmpty else { return false }
+        return AisleUtterance.normalise(now).caseInsensitiveCompare(
+            AisleUtterance.normalise(original)
+        ) != .orderedSame
     }
 
     /// The proposed aisle result (if in proposed mode)
@@ -178,6 +197,7 @@ struct ItemDetailSheet: View {
                         for: proposed.suggestedAisle,
                         in: currentStore?.aisleLayout ?? []
                     )
+                    if originalSuggestion == nil { originalSuggestion = aisleText }
                 } else {
                     aisleText = currentAisleText
                 }
@@ -338,7 +358,7 @@ struct ItemDetailSheet: View {
                     .font(DesignSystem.Typography.headline)
                     .foregroundColor(DesignSystem.Colors.textPrimary)
 
-                if isProposedAisleMode {
+                if isProposedAisleMode && !hasReplacedSuggestion {
                     Text("(AI Suggested)")
                         .font(DesignSystem.Typography.caption)
                         .foregroundColor(DesignSystem.Colors.neonPurple)
@@ -371,7 +391,7 @@ struct ItemDetailSheet: View {
                         aisleText = AisleUtterance.normalise(spoken)
                     }
 
-                if aisleSpeech.isAvailable && !isProposedAisleMode {
+                if aisleSpeech.isAvailable {
                     Button {
                         toggleAisleDictation()
                     } label: {
@@ -419,7 +439,7 @@ struct ItemDetailSheet: View {
             )
 
             // Show AI confidence info in proposed mode
-            if isProposedAisleMode, let result = proposedAisleResult {
+            if isProposedAisleMode, !hasReplacedSuggestion, let result = proposedAisleResult {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 12))
@@ -441,10 +461,16 @@ struct ItemDetailSheet: View {
                 aiInferenceSection
             }
 
-            Text(isProposedAisleMode ? "Edit to change the suggested aisle" : "Type any aisle identifier - number, letter, or name")
+            Text(hintText)
                 .font(DesignSystem.Typography.caption)
                 .foregroundColor(DesignSystem.Colors.textTertiary)
         }
+    }
+
+    private var hintText: String {
+        if hasReplacedSuggestion { return "Your aisle. It replaces what was suggested." }
+        if isProposedAisleMode { return "Say or type a different aisle to change the suggestion" }
+        return "Say it or type it — an aisle number, or what the section is called"
     }
 
     /// Handle aisle change in proposed mode - just updates text, actual save happens on batch apply

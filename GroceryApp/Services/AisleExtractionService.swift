@@ -292,105 +292,6 @@ class AisleExtractionService: ObservableObject {
         let reasoning: String
     }
 
-    /// Infer aisle for a single product using AI and existing store mappings
-    /// - Parameters:
-    ///   - productName: Display name of the product
-    ///   - normalizedName: Normalized name for matching
-    ///   - productId: Optional product ID
-    ///   - storeId: Store to infer aisle for
-    /// - Returns: AI suggestion with confidence and reasoning
-    func inferProductAisle(
-        productName: String,
-        normalizedName: String,
-        productId: String?,
-        storeId: String
-    ) async throws -> AisleInferenceResult {
-        logger.info("[INFER] Requesting aisle inference for '\(productName)' in store \(storeId)")
-
-        let document = """
-        mutation InferProductAisle(
-            $storeId: ID!,
-            $productName: String!,
-            $normalizedName: String!,
-            $productId: ID
-        ) {
-            inferProductAisle(
-                storeId: $storeId,
-                productName: $productName,
-                normalizedName: $normalizedName,
-                productId: $productId
-            ) {
-                success
-                suggestedAisle
-                confidence
-                reasoning
-                error
-            }
-        }
-        """
-
-        var variables: [String: Any] = [
-            "storeId": storeId,
-            "productName": productName,
-            "normalizedName": normalizedName
-        ]
-
-        if let productId = productId {
-            variables["productId"] = productId
-        }
-
-        let request = GraphQLRequest<JSONValue>(
-            document: document,
-            variables: variables,
-            responseType: JSONValue.self,
-                authMode: AWSAuthorizationType.amazonCognitoUserPools
-        )
-
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success(let json):
-            guard case .object(let root) = json,
-                  case .object(let result) = root["inferProductAisle"],
-                  case .boolean(let success) = result["success"] else {
-                throw AisleExtractionError.parseFailed("Invalid response format")
-            }
-
-            if !success {
-                var errorMsg = "Inference failed"
-                if case .string(let e) = result["error"] {
-                    errorMsg = e
-                }
-                // Check if this is an API key configuration error
-                if AisleExtractionError.isApiKeyError(errorMsg) {
-                    throw AisleExtractionError.apiKeyNotConfigured
-                }
-                throw AisleExtractionError.processingFailed(errorMsg)
-            }
-
-            guard case .string(let aisle) = result["suggestedAisle"],
-                  case .string(let reasoning) = result["reasoning"] else {
-                throw AisleExtractionError.parseFailed("Missing aisle or reasoning in response")
-            }
-
-            var confidence: Double = 0.5
-            if case .number(let c) = result["confidence"] {
-                confidence = c
-            }
-
-            logger.info("[INFER] Result: aisle=\(aisle), confidence=\(confidence)")
-
-            return AisleInferenceResult(
-                suggestedAisle: aisle,
-                confidence: confidence,
-                reasoning: reasoning
-            )
-
-        case .failure(let error):
-            logger.error("[INFER] GraphQL error: \(error)")
-            throw error
-        }
-    }
 
     // MARK: - Batch Inference
 
@@ -553,6 +454,7 @@ class AisleExtractionService: ObservableObject {
         logger.info("[INFER-BATCH] Saved \(savedCount) of \(items.count) mappings")
         return savedCount
     }
+
 
     /// Create a new mapping from an accepted inference result
     func createMappingFromInference(

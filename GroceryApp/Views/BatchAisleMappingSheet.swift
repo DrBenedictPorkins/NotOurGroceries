@@ -18,6 +18,43 @@ struct BatchAisleMappingSheet: View {
     @State private var error: String?
     @State private var isSaving = false
 
+    // MARK: - Not asking twice
+    //
+    // The model answers from the store's aisles and what is already in them. Ask
+    // it again with neither changed and it returns the same Unknowns, having
+    // spent the same tokens. So remember which items it could not place, and what
+    // the store's aisles looked like at the time; an item is only worth asking
+    // about again once the store has learned something.
+
+    private var aisleSignature: String {
+        store.aisleLayout.map(\.id).sorted().joined(separator: "|")
+    }
+
+    private var previouslyUnplaced: Set<String> {
+        guard UserDefaults.standard.string(forKey: "batchAisleSig.\(store.id)") == aisleSignature else {
+            return []   // the store has changed; everything is worth asking again
+        }
+        return Set(UserDefaults.standard.stringArray(forKey: "batchUnplaced.\(store.id)") ?? [])
+    }
+
+    /// Items the model has not already failed on, given the store as it stands.
+    private var itemsWorthAsking: [GroceryItem] {
+        let skip = previouslyUnplaced
+        return unmappedItems.filter { !skip.contains($0.normalizedName.lowercased()) }
+    }
+
+    private func rememberUnplaced(_ results: [String: AisleExtractionService.AisleInferenceResult]) {
+        let unplaced = unmappedItems.filter { item in
+            guard let r = results[item.id] else { return true }
+            let aisle = r.suggestedAisle.trimmingCharacters(in: .whitespaces)
+            return aisle.isEmpty || aisle.caseInsensitiveCompare("unknown") == .orderedSame
+        }.map { $0.normalizedName.lowercased() }
+
+        let existing = Set(UserDefaults.standard.stringArray(forKey: "batchUnplaced.\(store.id)") ?? [])
+        UserDefaults.standard.set(Array(existing.union(unplaced)), forKey: "batchUnplaced.\(store.id)")
+        UserDefaults.standard.set(aisleSignature, forKey: "batchAisleSig.\(store.id)")
+    }
+
     // Item detail sheet state
     @State private var selectedItemForDetail: GroceryItem?
     @State private var selectedItemResult: AisleExtractionService.AisleInferenceResult?
@@ -90,7 +127,9 @@ struct BatchAisleMappingSheet: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.white)
 
-                Text("Use AI to automatically find the best aisle for each item based on \(store.name)'s layout.")
+                Text(itemsWorthAsking.isEmpty
+                     ? "These were already tried against \(store.name)'s aisles and couldn't be placed. Asking again won't change the answer — say where one is while you're in the shop, and the rest get easier."
+                     : "Use AI to automatically find the best aisle for each item based on \(store.name)'s layout.")
                     .font(.system(size: 15, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                     .multilineTextAlignment(.center)
@@ -129,7 +168,10 @@ struct BatchAisleMappingSheet: View {
 
             Spacer()
 
-            // Map with AI button
+            // Map with AI button. Hidden once the model has already failed on every
+            // item with the store exactly as it stands — pressing it would spend
+            // the same tokens to return the same Unknowns.
+            if !itemsWorthAsking.isEmpty {
             Button {
                 Task { await performBatchInference() }
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -154,13 +196,14 @@ struct BatchAisleMappingSheet: View {
                 .shadow(color: DesignSystem.Colors.neonPurple.opacity(0.3), radius: 8)
             }
             .padding(.horizontal, 24)
+            }
 
             // Skip button
             Button {
                 onComplete()
                 dismiss()
             } label: {
-                Text("Skip")
+                Text(itemsWorthAsking.isEmpty ? "Done" : "Skip")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
@@ -192,21 +235,36 @@ struct BatchAisleMappingSheet: View {
 
     // MARK: - Results View
 
+    /// Items the model actually put somewhere. An "Unknown" is not a placement,
+    /// and counting it as one made the header claim 13 of 13 while a row two
+    /// lines below read Unknown.
+    private var placedCount: Int {
+        results.values.filter { result in
+            let aisle = result.suggestedAisle.trimmingCharacters(in: .whitespaces)
+            return !aisle.isEmpty && aisle.caseInsensitiveCompare("unknown") != .orderedSame
+        }.count
+    }
+
     private var resultsView: some View {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: placedCount == unmappedItems.count
+                      ? "checkmark.circle.fill" : "questionmark.circle.fill")
                     .font(.system(size: 40))
-                    .foregroundColor(DesignSystem.Colors.success)
+                    .foregroundColor(placedCount == unmappedItems.count
+                                     ? DesignSystem.Colors.success : DesignSystem.Colors.neonAmber)
 
-                Text("Aisles Found")
+                Text(placedCount == unmappedItems.count ? "Aisles Found" : "Some Aisles Found")
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(.white)
 
-                Text("\(results.count) of \(unmappedItems.count) items mapped")
+                Text(placedCount == unmappedItems.count
+                     ? "\(placedCount) of \(unmappedItems.count) placed"
+                     : "\(placedCount) of \(unmappedItems.count) placed — say where the rest are when you find them")
                     .font(.system(size: 14))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
+                    .multilineTextAlignment(.center)
             }
             .padding(.top, 24)
             .padding(.bottom, 16)
@@ -341,11 +399,11 @@ struct BatchAisleMappingSheet: View {
 
     private func performBatchInference() async {
         isProcessing = true
-        processingMessage = "Analyzing \(unmappedItems.count) items..."
+        processingMessage = "Analyzing \(itemsWorthAsking.count) items..."
 
         do {
             // Build input items
-            let inputs = unmappedItems.map { item in
+            let inputs = itemsWorthAsking.map { item in
                 AisleExtractionService.BatchInferenceInput(
                     id: item.id,
                     productName: item.name,
@@ -362,6 +420,7 @@ struct BatchAisleMappingSheet: View {
 
             await MainActor.run {
                 results = inferenceResults
+                rememberUnplaced(inferenceResults)
                 isProcessing = false
             }
 
@@ -475,9 +534,12 @@ private struct BatchMappingResultRow: View {
 
             // Confidence indicator + hint
             HStack(spacing: 4) {
-                Text("\(Int(result.confidence * 100))%")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(result.confidence >= 0.7 ? DesignSystem.Colors.success : DesignSystem.Colors.warning)
+                // A percentage on "Unknown" is a number measured against nothing.
+                if result.suggestedAisle.caseInsensitiveCompare("unknown") != .orderedSame {
+                    Text("\(Int(result.confidence * 100))%")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(result.confidence >= 0.7 ? DesignSystem.Colors.success : DesignSystem.Colors.warning)
+                }
 
                 Spacer()
 

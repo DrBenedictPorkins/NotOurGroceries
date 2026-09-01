@@ -1,7 +1,7 @@
 import { defineStorage } from '@aws-amplify/backend';
 
 /**
- * Aisle-directory scans and item photos.
+ * Item photos.
  *
  * `authenticated` here means *any* signed-in account, not any member of the
  * household that owns the file. Signup is open, so that is any stranger. This is
@@ -12,8 +12,7 @@ import { defineStorage } from '@aws-amplify/backend';
  * meantime. With it, one new account could enumerate every key in the bucket and
  * delete every household's photos. Without it, reaching a file means guessing
  * `item-images/{householdId}_{itemId}_{imageId}.jpg` — three UUIDs — which is
- * not a realistic attack. Nothing reads by listing: not the app, not the
- * extraction handler.
+ * not a realistic attack. Nothing reads by listing.
  *
  * That narrows the blast radius; it does not scope access. Anyone holding a key
  * can still read, overwrite or delete a file belonging to someone else.
@@ -34,9 +33,6 @@ import { defineStorage } from '@aws-amplify/backend';
 export const storage = defineStorage({
   name: 'aisleImages',
   access: (allow) => ({
-    'store-images/*': [
-      allow.authenticated.to(['get', 'write', 'delete']),
-    ],
     'item-images/*': [
       allow.authenticated.to(['get', 'write', 'delete']),
     ],

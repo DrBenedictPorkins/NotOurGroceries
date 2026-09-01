@@ -11,7 +11,6 @@ struct StoreAisleManagementView: View {
     let store: HouseholdStore
 
     // MARK: - State
-    @State private var showAisleScanSheet = false
     @State private var isCleaning = false
     @State private var selectedMapping: ProductAisleMapping? = nil
     @State private var showEditSheet = false
@@ -224,8 +223,9 @@ struct StoreAisleManagementView: View {
             .onMove(perform: moveAisles)
             .onDelete(perform: deleteAisles)
 
-            // Adding one lives here, next to the list of them, rather than on the
-            // scan sheet where it used to compete with photographing the board.
+            // Adding one lives here, next to the list of them. The usual way an
+            // aisle appears is being named on an item while shopping; this is for
+            // the times you already know.
             Button {
                 newAisleText = ""
                 showAddAisle = true
@@ -410,24 +410,6 @@ struct StoreAisleManagementView: View {
         }
         .navigationTitle("Aisle Management")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showAisleScanSheet) {
-            AisleScanSheet(store: currentStore) {
-                // Refresh store AND mappings after processing complete
-                // Lambda updates aisleLayout in Phase 1.5, so we need fresh store data
-                Task {
-                    if let householdId = viewModel.householdId {
-                        let stores = try? await storeService.fetchStores(householdId: householdId)
-                        await MainActor.run {
-                            if let stores = stores {
-                                viewModel.householdStores = stores
-                            }
-                        }
-                    }
-                    try? await storeService.fetchMappings(storeId: store.id)
-                }
-            }
-            .environmentObject(viewModel)
-        }
         .alert("Add an aisle", isPresented: $showAddAisle) {
             TextField("Number or name — 7, A2, Bakery", text: $newAisleText)
                 .autocorrectionDisabled()
@@ -515,32 +497,6 @@ struct StoreAisleManagementView: View {
 
     private var actionButtonsView: some View {
         HStack(spacing: 12) {
-            // Scan Directory. Offered for every store now — a corner shop with no
-            // board simply never taps it, which is cheaper than asking everyone
-            // to declare up front which kind of shop they are standing in.
-            Button(action: {
-                showAisleScanSheet = true
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "doc.viewfinder")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Scan Directory")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.dillGreen.opacity(0.2))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(DesignSystem.Colors.dillGreen, lineWidth: 1)
-                        )
-                )
-            }
-
             // Cleanup Invalid Button (only show if there are invalid mappings)
             if invalidMappingsCount > 0 {
                 Button(action: {
@@ -715,7 +671,7 @@ struct StoreAisleManagementView: View {
                 .font(.system(size: 18, weight: .medium))
                 .foregroundColor(.white.opacity(0.6))
 
-            Text("Add items to your shopping list, then scan a store directory to map them to aisles")
+            Text("Add items to your list. They'll be sorted into departments, and you can say which aisle each one is in while you shop.")
                 .font(.system(size: 14, weight: .regular))
                 .foregroundColor(.white.opacity(0.4))
                 .multilineTextAlignment(.center)

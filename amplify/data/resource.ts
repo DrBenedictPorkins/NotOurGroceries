@@ -1,13 +1,12 @@
 import { type ClientSchema, a, defineData, defineFunction } from '@aws-amplify/backend';
 
 // Import Lambda handlers defined in their own resource files (with secrets)
-import { aisleExtractionJobHandler } from './aisleExtractionJobHandler/resource';
 import { inferProductAisleFunction } from './inferProductAisleFunction/resource';
 import { parseIngredientsFunction } from './parseIngredientsFunction/resource';
 import { transcribeAudioFunction } from './transcribeAudioFunction/resource';
 
 // Re-export for backend.ts
-export { aisleExtractionJobHandler, inferProductAisleFunction, parseIngredientsFunction, transcribeAudioFunction };
+export { inferProductAisleFunction, parseIngredientsFunction, transcribeAudioFunction };
 
 // ========================================
 // LAMBDA FUNCTIONS
@@ -91,15 +90,6 @@ const schema = a.schema({
   // the sign. Inference must never overwrite one.
   MappingSource: a.enum(['IMAGE', 'LLM_GUESS', 'USER_SIGHTED']),
 
-  // Job status enum for async aisle extraction
-  AisleExtractionJobStatus: a.enum([
-    'PENDING',
-    'EXTRACTING',
-    'MATCHING',
-    'APPLYING',
-    'COMPLETE',
-    'FAILED'
-  ]),
 
   // ========================================
   // USER MODEL
@@ -405,42 +395,6 @@ const schema = a.schema({
     .secondaryIndexes((index) => [
       index('householdId').sortKeys(['requestedAt']).queryField('requestsByHousehold'),
       index('householdId').sortKeys(['status']).queryField('requestsByHouseholdAndStatus'),
-    ]),
-
-  // ========================================
-  // AISLE EXTRACTION JOB MODEL (Async processing)
-  // ========================================
-  AisleExtractionJob: a
-    .model({
-      /// Same reason as ProductAisleMapping — authorization needs the owner on
-      /// the row, not one hop away.
-      householdId: a.id(),
-      storeId: a.id().required(),
-      imageKeys: a.string().array().required(),
-
-      // Status tracking
-      status: a.ref('AisleExtractionJobStatus').required(),
-      phase: a.integer(),           // 1, 2, 3
-      phaseLabel: a.string(),       // "Reading store directory..."
-      detail: a.string(),           // "Extracted 47 items so far..."
-
-      // Error handling
-      retryCount: a.integer().default(0),
-      lastError: a.string(),
-      failedAt: a.datetime(),
-
-      // Results (stats only, not full data)
-      entriesExtracted: a.integer(),
-      mappingsCreated: a.integer(),
-      highConfidence: a.integer(),
-      lowConfidence: a.integer(),
-
-      // Timestamps
-      completedAt: a.datetime(),
-    })
-    .authorization((allow) => [allow.groupDefinedIn('householdId')])
-    .secondaryIndexes((index) => [
-      index('storeId').queryField('jobsByStore'),
     ]),
 
   // ========================================

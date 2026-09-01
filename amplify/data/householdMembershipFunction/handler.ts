@@ -260,9 +260,9 @@ async function deleteHouseholdData(householdId: string): Promise<void> {
     } while (lastKey);
   }
 
-  // ProductAisleMapping and AisleExtractionJob hang off storeId rather than
-  // householdId, so they are not reachable by this query and are left behind.
-  // They are inert without the store that owns them.
+  // ProductAisleMapping hangs off storeId rather than householdId, so it is not
+  // reachable by this query and is left behind. It is inert without the store
+  // that owns it.
   await client.send(new DeleteItemCommand({
     TableName: HOUSEHOLD_TABLE_NAME,
     Key: marshall({ id: householdId }),

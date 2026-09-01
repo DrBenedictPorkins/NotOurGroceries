@@ -131,3 +131,59 @@ final class AisleUtteranceTests: XCTestCase {
         }
     }
 }
+
+/// Where a newly added aisle lands in the walk order.
+///
+/// Aisles now arrive one at a time, in whatever order somebody finds them, so
+/// appending is not good enough — capture aisle 4 after aisle 10 exists and the
+/// walk order is wrong from the start.
+@MainActor
+final class AislePlacementTests: XCTestCase {
+
+    private func layout(_ numbers: [String]) -> [StoreAisle] {
+        numbers.enumerated().map { index, number in
+            StoreAisle(id: "aisle-\(number)", number: number, name: "", displayOrder: index)
+        }
+    }
+
+    /// Reproduces the order the placement rule produces, given a store layout.
+    private func order(after adding: String, to existing: [StoreAisle]) -> [String] {
+        let slot = StoreService.displayOrderForNewAisleForTesting(numbered: adding, in: existing)
+        var shifted = existing.map { aisle -> StoreAisle in
+            guard aisle.displayOrder >= slot else { return aisle }
+            var copy = aisle
+            copy.displayOrder += 1
+            return copy
+        }
+        shifted.append(StoreAisle(number: adding, name: "", displayOrder: slot))
+        return shifted.sorted { $0.displayOrder < $1.displayOrder }.map(\.number)
+    }
+
+    func testNumberedAisleLandsInNumericPosition() {
+        XCTAssertEqual(order(after: "4", to: layout(["1", "3", "5", "10"])),
+                       ["1", "3", "4", "5", "10"])
+    }
+
+    /// The case that made this necessary: a low number captured after a high one.
+    func testLowNumberDoesNotLandAfterAHighOne() {
+        XCTAssertEqual(order(after: "4", to: layout(["10"])), ["4", "10"])
+    }
+
+    func testHighestNumberGoesOnTheEnd() {
+        XCTAssertEqual(order(after: "12", to: layout(["1", "4"])), ["1", "4", "12"])
+    }
+
+    /// A department has no natural numeric home, so it goes on the end and the
+    /// numbered aisles around it are left alone.
+    func testNamedDepartmentIsAppended() {
+        let existing = layout(["1", "4"])
+        let slot = StoreService.displayOrderForNewAisleForTesting(numbered: "Bakery", in: existing)
+        XCTAssertEqual(slot, 2)
+    }
+
+    /// Numbers must not be compared as text, or 10 sorts before 4.
+    func testTwoDigitNumbersAreComparedNumerically() {
+        XCTAssertEqual(order(after: "9", to: layout(["8", "10", "11"])),
+                       ["8", "9", "10", "11"])
+    }
+}

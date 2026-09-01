@@ -7,7 +7,6 @@ import {
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
   householdMembershipFunction,
-  aisleExtractionJobHandler,
   inferProductAisleFunction,
   parseIngredientsFunction,
   transcribeAudioFunction,
@@ -30,7 +29,6 @@ const backend = defineBackend({
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
   householdMembershipFunction,
-  aisleExtractionJobHandler,
   inferProductAisleFunction,
   parseIngredientsFunction,
   transcribeAudioFunction,
@@ -220,49 +218,6 @@ householdMembershipLambda.addToRolePolicy(new PolicyStatement({
 }));
 
 // ========================================
-// AISLE EXTRACTION JOB HANDLER (Stream-Triggered)
-// ========================================
-
-// Get the AisleExtractionJob table
-const aisleExtractionJobTable = backend.data.resources.tables['AisleExtractionJob'];
-
-// Get the S3 bucket for aisle images
-const aisleImagesBucket = backend.storage.resources.bucket;
-
-// Get the Lambda
-const aisleExtractionJobLambda = backend.aisleExtractionJobHandler.resources.lambda as Function;
-
-// Configure DynamoDB Stream trigger
-aisleExtractionJobTable.grantStreamRead(aisleExtractionJobLambda);
-aisleExtractionJobLambda.addEventSourceMapping('AisleExtractionJobStreamMapping', {
-  eventSourceArn: aisleExtractionJobTable.tableStreamArn,
-  startingPosition: StartingPosition.LATEST,
-  batchSize: 1, // Process one job at a time
-  retryAttempts: 0, // We handle retries in the Lambda
-});
-
-// Get the HouseholdStore table for updating aisle layout
-const householdStoreTableForJob = backend.data.resources.tables['HouseholdStore'];
-
-// Add environment variables
-addEnvVars(aisleExtractionJobLambda, {
-  JOB_TABLE_NAME: aisleExtractionJobTable.tableName,
-  PRODUCT_TABLE_NAME: productTable.tableName,
-  MAPPING_TABLE_NAME: backend.data.resources.tables['ProductAisleMapping'].tableName,
-  BUCKET_NAME: aisleImagesBucket.bucketName,
-  HOUSEHOLD_STORE_TABLE_NAME: householdStoreTableForJob.tableName,
-  GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
-});
-
-// Grant permissions
-aisleExtractionJobTable.grantReadWriteData(aisleExtractionJobLambda);
-productTable.grantReadData(aisleExtractionJobLambda);
-backend.data.resources.tables['ProductAisleMapping'].grantReadWriteData(aisleExtractionJobLambda);
-aisleImagesBucket.grantRead(aisleExtractionJobLambda);
-householdStoreTableForJob.grantReadWriteData(aisleExtractionJobLambda);
-groceryItemTable.grantReadData(aisleExtractionJobLambda);
-
-// ========================================
 // INFER PRODUCT AISLE FUNCTION
 // ========================================
 
@@ -314,7 +269,6 @@ addEnvVars(adminMcpLambda, {
   PRODUCT_AISLE_MAPPING_TABLE: productAisleMappingTable.tableName,
   COMMIT_TABLE: commitTable.tableName,
   SHOPPING_REQUEST_TABLE: shoppingRequestTable.tableName,
-  AISLE_EXTRACTION_JOB_TABLE: aisleExtractionJobTable.tableName,
 });
 
 // Grant DynamoDB permissions to all tables
@@ -329,7 +283,6 @@ const allTables = [
   productAisleMappingTable,
   commitTable,
   shoppingRequestTable,
-  aisleExtractionJobTable,
 ];
 
 // Grant read/write access to all tables

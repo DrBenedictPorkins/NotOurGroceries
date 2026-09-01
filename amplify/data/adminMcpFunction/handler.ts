@@ -36,7 +36,6 @@ const TABLE_NAMES = {
   productAisleMapping: process.env.PRODUCT_AISLE_MAPPING_TABLE!,
   commit: process.env.COMMIT_TABLE!,
   shoppingRequest: process.env.SHOPPING_REQUEST_TABLE!,
-  aisleExtractionJob: process.env.AISLE_EXTRACTION_JOB_TABLE!,
 };
 
 // ========================================

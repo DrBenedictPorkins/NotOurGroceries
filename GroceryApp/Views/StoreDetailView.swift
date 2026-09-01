@@ -6,7 +6,6 @@ struct StoreDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @StateObject private var storeService = StoreService.shared
-    @ObservedObject private var extractionService = AisleExtractionService.shared
 
     let store: HouseholdStore
 
@@ -14,7 +13,6 @@ struct StoreDetailView: View {
 
     @State private var storeName: String
     @State private var isSaving = false
-    @State private var showAisleScanSheet = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var hasChanges = false
@@ -43,9 +41,6 @@ struct StoreDetailView: View {
         !isSaving
     }
 
-    private var hasActiveExtractionJob: Bool {
-        extractionService.activeJobId(for: store.id) != nil
-    }
 
     // MARK: - Body
 
@@ -71,8 +66,7 @@ struct StoreDetailView: View {
                     // route to this feature never had it.
                     aisleManagementSection
 
-                    actionsSection
-
+    
                     // Delete Section
                     deleteSection
                 }
@@ -93,24 +87,6 @@ struct StoreDetailView: View {
                     .foregroundColor(DesignSystem.Colors.dillGreen)
                 }
             }
-        }
-        .sheet(isPresented: $showAisleScanSheet) {
-            AisleScanSheet(store: currentStore) {
-                // Refresh store AND mappings after scan complete
-                // Lambda updates aisleLayout in Phase 1.5, so we need fresh store data
-                Task {
-                    if let householdId = viewModel.householdId {
-                        let stores = try? await storeService.fetchStores(householdId: householdId)
-                        await MainActor.run {
-                            if let stores = stores {
-                                viewModel.householdStores = stores
-                            }
-                        }
-                    }
-                    try? await storeService.fetchMappings(storeId: store.id)
-                }
-            }
-            .environmentObject(viewModel)
         }
         .alert("Delete Store", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -221,80 +197,6 @@ struct StoreDetailView: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - Actions Section
-
-    private var actionsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            sectionHeader(title: "QUICK ACTIONS", icon: "bolt.fill")
-
-            // Scan Aisle Directory Button
-            Button(action: {
-                showAisleScanSheet = true
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            }) {
-                HStack(spacing: 16) {
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .fill(hasActiveExtractionJob ?
-                                  DesignSystem.Colors.dillGreen.opacity(0.15) :
-                                  DesignSystem.Colors.neonPurple.opacity(0.15))
-                            .frame(width: 48, height: 48)
-
-                        if hasActiveExtractionJob {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                                .tint(DesignSystem.Colors.dillGreen)
-                        } else {
-                            Image(systemName: "doc.viewfinder")
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.neonPurple)
-                        }
-                    }
-
-                    // Content
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(hasActiveExtractionJob ? "Extraction In Progress" : "Scan Aisle Directory")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-
-                        Text(hasActiveExtractionJob ?
-                             "Tap to view progress" :
-                             "Take a photo to auto-map products")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
-
-                    Spacer()
-
-                    // Arrow or pulse indicator
-                    if hasActiveExtractionJob {
-                        Circle()
-                            .fill(DesignSystem.Colors.dillGreen)
-                            .frame(width: 12, height: 12)
-                            .shadow(color: DesignSystem.Colors.dillGreen.opacity(0.5), radius: 4)
-                    } else {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(DesignSystem.Colors.neonPurple.opacity(0.7))
-                    }
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(DesignSystem.Colors.glassBackground)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(hasActiveExtractionJob ?
-                                        DesignSystem.Colors.dillGreen.opacity(0.3) :
-                                        DesignSystem.Colors.neonPurple.opacity(0.3), lineWidth: 1)
                         )
                 )
             }

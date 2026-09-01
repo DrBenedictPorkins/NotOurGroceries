@@ -5,7 +5,6 @@ struct CreateStoreSheet: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @State private var storeName = ""
     @State private var chainName = ""
-    @State private var showAisleScanSheet = false
     @State private var createdStore: HouseholdStore?
     @State private var createStoreFailed = false
     @State private var isSaving = false
@@ -57,14 +56,6 @@ struct CreateStoreSheet: View {
                         dismiss()
                     }
                     .foregroundColor(DesignSystem.Colors.dillGreen)
-                }
-            }
-            .sheet(isPresented: $showAisleScanSheet) {
-                if let store = createdStore {
-                    AisleScanSheet(store: store) {
-                        // Scan complete - dismiss both sheets
-                        dismiss()
-                    }
                 }
             }
         }
@@ -153,7 +144,7 @@ struct CreateStoreSheet: View {
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text("Set up aisles now, or do it later from the store detail page.")
+                    Text("It comes with the usual departments. Put them in the order you walk the shop from the store's page.")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -161,53 +152,12 @@ struct CreateStoreSheet: View {
                 }
             }
 
-            // Scan Aisle Sign - primary CTA
-            Button(action: {
-                showAisleScanSheet = true
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            }) {
-                HStack(spacing: 12) {
-                    // Always the camera. A ProgressView here read as "scanning",
-                    // as though the app were already working on something.
-                    Image(systemName: "camera.viewfinder")
-                        .font(.system(size: 20, weight: .medium))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Scan Aisle Sign")
-                            .font(.system(size: 15, weight: .semibold))
-                        Text("Take a photo of the store directory")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                }
-                .foregroundColor(DesignSystem.Colors.dillGreen)
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                        .fill(DesignSystem.Colors.dillGreen.opacity(0.08))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                                .stroke(DesignSystem.Colors.dillGreen.opacity(0.3), lineWidth: 1)
-                        )
-                )
-            }
-            .disabled(createdStore == nil)
-            .opacity(createdStore == nil ? 0.6 : 1.0)
-            .padding(.horizontal, 20)
-
-            // Done button - secondary
             Button(action: {
                 dismiss()
             }) {
-                Text("Skip")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Text("Done")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
             }
 
             Spacer()
@@ -299,8 +249,8 @@ struct CreateStoreSheet: View {
         // Straight to created. Every store arrives with the standard sections
         // already on it, so there is nothing to set up here — and asking someone
         // to type aisle numbers before they have ever used the store was the
-        // step people abandoned. Scanning a directory board, or adding aisles by
-        // hand, is available afterwards for anyone who wants it.
+        // step people abandoned. Aisles are added afterwards, one at a time, by
+        // saying where something is while standing in front of it.
         isSaving = true
         UINotificationFeedbackGenerator().notificationOccurred(.success)
 

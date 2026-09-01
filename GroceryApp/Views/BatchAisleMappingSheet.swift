@@ -25,7 +25,7 @@ struct BatchAisleMappingSheet: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background (same as AisleScanSheet)
+                // Background
                 DesignSystem.Colors.background
                     .ignoresSafeArea()
 

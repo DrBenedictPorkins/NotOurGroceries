@@ -66,7 +66,9 @@ struct StoreAisle: Identifiable, Codable, Hashable {
     let id: String
     let number: String
     let name: String
-    let displayOrder: Int
+    /// Position in the walk order. Mutable because inserting an aisle shifts
+    /// the ones after it, and dragging rewrites the lot.
+    var displayOrder: Int
     var description: String?
 
     init(

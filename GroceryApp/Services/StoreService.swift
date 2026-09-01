@@ -318,15 +318,57 @@ class StoreService: ObservableObject {
         // dropped the first aisle — the mapping survived, pointing at an aisle no
         // longer in the layout, and the section header rendered a bare UUID.
         var updatedStore = householdStores.first { $0.id == store.id } ?? store
-        let newAisle = StoreAisle(
-            number: number,
-            name: name,
-            displayOrder: store.aisleLayout.count
+
+        // A new aisle 4 belongs between 3 and 5, not on the end. Appending was
+        // fine when the whole layout arrived at once from a scan; now that aisles
+        // are added one at a time, in the order somebody happens to find them,
+        // appending puts 4 after 10 and the walk order is wrong from the start.
+        //
+        // Only numbered aisles are placed this way. A named department has no
+        // natural position, and dragging is how a walk order gets set anyway —
+        // this only has to pick a sensible place to start from.
+        let slot = displayOrderForNewAisle(numbered: number, in: updatedStore.aisleLayout)
+
+        // Everything at or past the slot shifts down. Bumping rather than
+        // renumbering from zero keeps the gaps other code relies on, notably the
+        // 900+ block the standard departments sit in.
+        updatedStore.aisleLayout = updatedStore.aisleLayout.map { aisle in
+            guard aisle.displayOrder >= slot else { return aisle }
+            var shifted = aisle
+            shifted.displayOrder += 1
+            return shifted
+        }
+
+        updatedStore.aisleLayout.append(
+            StoreAisle(number: number, name: name, displayOrder: slot)
         )
-        updatedStore.aisleLayout.append(newAisle)
 
         try await updateStore(updatedStore)
         return updatedStore
+    }
+
+    /// Test seam for the placement rule, which is pure but sits on a service
+    /// that otherwise needs a network.
+    static func displayOrderForNewAisleForTesting(numbered number: String, in layout: [StoreAisle]) -> Int {
+        shared.displayOrderForNewAisle(numbered: number, in: layout)
+    }
+
+    /// Where a newly added aisle should sit.
+    ///
+    /// For a numbered aisle, immediately before the lowest-numbered aisle that
+    /// outranks it. For anything else, on the end.
+    func displayOrderForNewAisle(numbered number: String, in layout: [StoreAisle]) -> Int {
+        let end = (layout.map(\.displayOrder).max() ?? -1) + 1
+        guard let value = Int(number.trimmingCharacters(in: .whitespaces)) else { return end }
+
+        let successor = layout
+            .compactMap { aisle -> (Int, Int)? in
+                guard let n = Int(aisle.number.trimmingCharacters(in: .whitespaces)), n > value else { return nil }
+                return (n, aisle.displayOrder)
+            }
+            .min { $0.0 < $1.0 }
+
+        return successor?.1 ?? end
     }
 
     /// Remove an aisle from a store's layout

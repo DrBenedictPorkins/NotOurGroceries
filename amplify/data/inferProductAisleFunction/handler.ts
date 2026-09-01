@@ -101,7 +101,7 @@ async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]
         ExpressionAttributeValues: {
           ':storeId': storeId,
         },
-        ProjectionExpression: 'aisleId, normalizedName, productId, confidence',
+        ProjectionExpression: 'aisleId, userAisleOverride, normalizedName, productId, confidence',
         ExclusiveStartKey: lastEvaluatedKey,
       })
     );
@@ -109,10 +109,17 @@ async function fetchExistingMappings(storeId: string): Promise<ExistingMapping[]
     if (result.Items) {
       mappings.push(
         ...result.Items.map((item) => ({
-          aisleId: item.aisleId as string,
+          // What a person said beats what a model guessed. The app resolves
+          // `userAisleOverride ?? aisleId` on read, and the model has to learn
+          // from the same answer the shopper sees — otherwise a sighting made in
+          // the shop teaches inference nothing, and if `aisleId` ever drifts the
+          // two diverge silently.
+          aisleId: (item.userAisleOverride ?? item.aisleId) as string,
           normalizedName: item.normalizedName as string | undefined,
           productId: item.productId as string | undefined,
-          confidence: item.confidence as number | undefined,
+          // A sighting is not a guess with a confidence score. Dropping the
+          // model's old score stops a stale 0.4 arguing with something seen.
+          confidence: item.userAisleOverride ? undefined : (item.confidence as number | undefined),
         }))
       );
     }

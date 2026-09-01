@@ -1,6 +1,7 @@
 ---
 title: "Aisle capture: learning a store one item at a time"
 subtitle: "Replacing the directory scan with in-aisle voice capture"
+abstract: "Built and shipped 2026-08-31. Kept as the record of why."
 date: 2026-08-31
 format: html
 ---
@@ -175,7 +176,7 @@ alone. Enum values are additive; existing rows keep decoding.
 `StoreAisle` and saves the store. Reuse it unchanged. New aisles land at the end of
 `displayOrder`; the existing drag-to-reorder screen is how they get into walk order.
 
-## What gets deleted
+## What was deleted {#deleted}
 
 | Path | Lines |
 |------|-------|
@@ -185,20 +186,23 @@ alone. Enum values are additive; existing rows keep decoding.
 | `AisleExtractionJob` model + stream wiring | — |
 | Aisle photo S3 bucket and its grants | — |
 
-Two consequences worth naming:
+Done in `7d4950d` — 3,215 lines removed. Two consequences worth naming:
 
 - **The S3 Lambda-broker problem disappears.** Photos are the only thing in that
   bucket; with nothing uploading, there is nothing to scope.
 - **The largest AI cost in the app goes with it.** A scan is a multi-image vision
   call plus up to four batched follow-up phases.
-- **Two permission prompts go with it.** The camera and photo-library usage strings
-  exist only to scan directories (`project.pbxproj:740,742`). With the scan gone the
-  app asks for the microphone and speech recognition, and nothing else.
+- **The camera and photo-library permissions stay.** An earlier draft of this spec
+  claimed they went with the scan. Wrong — item photos use both. Only their usage
+  strings changed, from describing directory scanning to describing what they are
+  actually for.
 
 Retain `inferProductAisleFunction` — it works from the store's aisle list, not from
 OCR, and it is what places items into departments without any capture at all.
 
-## Migrating the two scanned stores
+## Migrating the two scanned stores {#migration}
+
+*Done 2026-08-31. Recorded as run.*
 
 41 OCR-derived aisles exist across ShopRite and Stop&Shop, with mappings pointing at
 them. Leaving them makes the new feature look broken on the two stores actually in
@@ -217,8 +221,25 @@ use.
 5. Repoint mappings whose aisle was dropped at the matching standard department,
    or clear them so the item returns to the unsorted bucket.
 
-This is a deliberate, case-by-case job against named tables with the live household
-on a protect list, per `CLAUDE.md`.
+This was a deliberate, case-by-case job against named tables with the live household
+on a protect list, per `CLAUDE.md`. What actually happened:
+
+| | ShopRite | Stop&Shop |
+|---|---|---|
+| Aisles before | 38 | 39 |
+| Junk dropped | 4 — `6,9`, `6,11`, `9,16`, `Beer Garden` | 2 — `Florist-19`, `Three` |
+| Aisles after | 34 | 37 |
+
+11 mappings pointed at the dropped aisles and were deleted, returning those items to
+the unsorted bucket. Every retained scan aisle had its shelf-tag dump moved out of
+`name` and into `description`, so section headers say which aisle rather than what is
+on the shelf. Final check: 1,306 mappings, **0 orphaned**.
+
+One trap worth recording. The first orphan check compared each mapping's aisle
+against the set of aisle *ids* and reported 949 orphans. Mappings store the aisle
+*number* just as often — `AisleNaming.match` resolves id, name **or** number — so the
+check was wrong, not the data. Re-run with the app's own rule it found 11, exactly
+the mappings belonging to the six dropped aisles.
 
 ## Tests
 
@@ -245,13 +266,15 @@ Against the deployed stack:
    both "16" and "Personal Care" until every item is captured. Probably fine — the
    unsorted bucket shrinks as you go — but it is the first thing to look at in real
    use.
-2. **Should inference stop guessing once a store has captured aisles?** A sighted
-   aisle 16 is worth more than a confident guess, and the guess is what puts items
-   in the wrong place.
+2. **Should inference stop guessing once a store has captured aisles?** Partly
+   answered: inference now reads `userAisleOverride` in preference to `aisleId`
+   and drops the stale confidence score that came with the guess, so what a person
+   saw is what the model learns from. Whether a sighting should suppress guessing
+   for neighbouring items is still open.
 3. **Quick Trip is unaffected** — no store, no aisles. Confirm nothing in the
    capture path assumes a store exists.
 
 ## Housekeeping noticed while writing this
 
-`amplify/data/resource.ts:92` still carries a comment describing the store layout
-type — a concept deleted on 2026-08-31. Remove it with this work.
+`amplify/data/resource.ts:92` carried a comment describing the store layout type, a
+concept deleted earlier the same day. Removed.

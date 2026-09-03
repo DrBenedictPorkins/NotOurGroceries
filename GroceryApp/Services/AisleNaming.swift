@@ -33,7 +33,15 @@ enum AisleNaming {
             return tidied
         }
 
-        return id
+        // Last resort used to be the id itself. For a `standard-` slug that was
+        // an improvement on nothing; for a UUID it is never right — it belongs to
+        // an aisle that is no longer in this store's layout, and printing it puts
+        // 36 characters of hex where a place name goes.
+        return looksLikeUUID(id) ? "Unsorted" : id
+    }
+
+    private static func looksLikeUUID(_ id: String) -> Bool {
+        UUID(uuidString: id) != nil
     }
 
     /// The same name, upper-cased for a section header.

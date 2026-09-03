@@ -25,6 +25,15 @@ struct ItemDetailSheet: View {
     /// What the model proposed, kept because the batch sheet overwrites
     /// `suggestedAisle` with whatever the person types next.
     @State private var originalSuggestion: String?
+    @State private var isHoldingToTalk = false
+    /// What the aisle was before the last change, so it can be put back.
+    @State private var undoTarget: String??
+    @State private var waveAnimating = false
+
+    /// Five bars at rest; they grow while listening.
+    private var waveHeights: [CGFloat] {
+        waveAnimating ? [14, 20, 9, 17, 12] : [4, 4, 4, 4, 4]
+    }
 
 
     /// Whether we're in proposed aisle mode (from batch mapping)
@@ -387,30 +396,6 @@ struct ItemDetailSheet: View {
                         aisleText = AisleUtterance.normalise(spoken)
                     }
 
-                if aisleSpeech.isAvailable {
-                    Button {
-                        toggleAisleDictation()
-                    } label: {
-                        Image(systemName: aisleSpeech.state == .listening ? "waveform" : "mic.fill")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(aisleSpeech.state == .listening
-                                             ? DesignSystem.Colors.dillGreen
-                                             : DesignSystem.Colors.textTertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(aisleSpeech.state == .listening ? "Stop listening" : "Say the aisle")
-                }
-
-                if !aisleText.isEmpty && aisleText != currentAisleText && !isProposedAisleMode {
-                    Button {
-                        saveAisle()
-                    } label: {
-                        Text("Save")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundColor(DesignSystem.Colors.dillGreen)
-                    }
-                }
-
                 if !aisleText.isEmpty && !isProposedAisleMode {
                     Button {
                         aisleText = ""
@@ -453,9 +438,77 @@ struct ItemDetailSheet: View {
 
             // AI Inference Button - hide in proposed mode (already AI-generated)
             // and for stores with no aisles (nothing to infer against).
+            if !isProposedAisleMode {
+                numberStrip
+            }
+
+            if aisleSpeech.isAvailable {
+                holdToTalkPill
+            }
+
+            // What it actually heard, when that is not what the field now shows.
+            // "aisle sixteen" becoming 16 is correct but looks like a misfire
+            // unless the original is visible next to it.
+            if !aisleSpeech.transcript.isEmpty,
+               aisleSpeech.transcript.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(aisleText) != .orderedSame {
+                HStack(spacing: 6) {
+                    Text("Heard")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(0.8)
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                    Text("\u{201C}\(aisleSpeech.transcript)\u{201D}")
+                        .font(.system(size: 13))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+            }
+
+            if let outcome = saveOutcome {
+                HStack(spacing: 8) {
+                    Text("Saves to")
+                        .font(.system(size: 13))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                    Text(outcome.label)
+                        .font(.system(size: 14, weight: .bold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundColor(DesignSystem.Colors.background)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(outcome.isNew
+                                                   ? DesignSystem.Colors.neonAmber
+                                                   : DesignSystem.Colors.dillGreen))
+                    Text(outcome.note)
+                        .font(.system(size: 11))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+
+                    Spacer()
+
+                    if undoTarget != nil {
+                        Button("Undo") { undoLastChange() }
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.neonAmber)
+                    }
+                }
+            }
+
             Text(hintText)
                 .font(DesignSystem.Typography.caption)
                 .foregroundColor(DesignSystem.Colors.textTertiary)
+        }
+    }
+
+    /// Where the current text will land, resolved the same way saving resolves it.
+    private var saveOutcome: (label: String, note: String, isNew: Bool)? {
+        let text = aisleText.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return nil }
+        switch AisleUtterance.resolve(text, in: currentStore?.aisleLayout ?? []) {
+        case .existing(let aisle):
+            return (AisleNaming.displayName(for: aisle.id, in: currentStore?.aisleLayout ?? []),
+                    "already an aisle here", false)
+        case .new(let number, let name):
+            return (number.isEmpty ? name : "Aisle \(number)", "new — added to the end", true)
+        case .rejected:
+            return nil
         }
     }
 
@@ -484,6 +537,33 @@ struct ItemDetailSheet: View {
     private var currentAisleText: String {
         guard let raw = currentAisleString, !raw.isEmpty else { return "" }
         return AisleNaming.displayName(for: raw, in: currentStore?.aisleLayout ?? [])
+    }
+
+    /// Applies a choice straight away and keeps what it replaced.
+    ///
+    /// There is no Save. A picker that needs confirming is two taps for one
+    /// decision, and the decision is cheap to reverse — Undo puts back exactly
+    /// what was there, including nothing.
+    private func apply(_ aisle: String) {
+        undoTarget = .some(currentAisleString)
+        aisleText = AisleUtterance.normalise(aisle)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task { await assignToAisleByName(aisleText) }
+    }
+
+    private func undoLastChange() {
+        guard let previous = undoTarget else { return }
+        undoTarget = nil
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            if let previous, !previous.isEmpty {
+                aisleText = AisleNaming.displayName(for: previous, in: currentStore?.aisleLayout ?? [])
+                await assignToAisleByName(aisleText)
+            } else {
+                aisleText = ""
+                await clearAisleAssignment()
+            }
+        }
     }
 
     private func saveAisle() {
@@ -568,11 +648,12 @@ struct ItemDetailSheet: View {
             _ = try await StoreService.shared.fetchMappings(storeId: store.id)
             StoreService.shared.objectWillChange.send()
 
-            // Show toast and dismiss
+            // Stays open. Picking an aisle is one tap in a screen you may have
+            // opened to do something else, and closing on it takes away both the
+            // Undo and the chance to correct a mis-tap. Done is how you leave.
             viewModel.toastMessage = "Aisle saved: \(aisleName)"
             viewModel.toastType = .success
             viewModel.showToast = true
-            dismiss()
         } catch {
             print("Failed to assign aisle: \(error)")
             // The one she actually hit. Not queued anywhere either — the outbox
@@ -588,14 +669,113 @@ struct ItemDetailSheet: View {
     /// Speech lands in the same field as typing, and Save is still a separate
     /// tap. Any recogniser confuses "sixteen" and "sixty" over a tannoy, so what
     /// it heard has to be on screen and editable before anything is written.
-    private func toggleAisleDictation() {
-        if aisleSpeech.state == .listening {
-            aisleSpeech.stop()
-            return
+    /// Numbers, always visible, no popup to open or dismiss.
+    ///
+    /// Standing in aisle 7 you should not have to talk, and you should not have
+    /// to open anything either. Tapping applies straight away — Undo is what
+    /// takes it back, so there is no Save to forget.
+    /// 1–20, plus any higher aisle this shop has actually recorded.
+    ///
+    /// Twenty covers the supermarkets in use — ShopRite has 16, Stop&Shop 21 —
+    /// and a strip long enough for every conceivable shop is a strip nobody can
+    /// reach the end of. Aisle 99 exists somewhere; you say it rather than scroll
+    /// to it, and once said it appears here.
+    private var stripNumbers: [Int] {
+        let recorded = (currentStore?.aisleLayout ?? [])
+            .compactMap { Int($0.number.trimmingCharacters(in: .whitespaces)) }
+            .filter { $0 > 20 }
+        return Array(1...20) + Set(recorded).sorted()
+    }
+
+    private var numberStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(stripNumbers, id: \.self) { n in
+                    let known = AisleUtterance.findExisting("\(n)", in: currentStore?.aisleLayout ?? []) != nil
+                    let selected = AisleUtterance.normalise(aisleText) == "\(n)"
+                    Button {
+                        apply("\(n)")
+                    } label: {
+                        Text("\(n)")
+                            .font(.system(size: 20, weight: .semibold))
+                            .monospacedDigit()
+                            .frame(width: 58, height: 58)
+                            .foregroundColor(selected ? DesignSystem.Colors.background
+                                             : known ? DesignSystem.Colors.dillGreen
+                                             : DesignSystem.Colors.textSecondary)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(selected ? DesignSystem.Colors.dillGreen
+                                          : known ? DesignSystem.Colors.dillGreen.opacity(0.10)
+                                          : DesignSystem.Colors.glassBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(known && !selected
+                                                    ? DesignSystem.Colors.dillGreen.opacity(0.55)
+                                                    : DesignSystem.Colors.glassBorder, lineWidth: 1)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.vertical, 2)
         }
-        Task {
-            await aisleSpeech.start(hints: aisleDictationHints)
+    }
+
+    private var holdToTalkPill: some View {
+        let listening = aisleSpeech.state == .listening
+        return HStack(spacing: 10) {
+            if listening {
+                // Bars, not a static glyph. While your thumb is down the only
+                // question is "is it hearing me", and a still icon does not
+                // answer it.
+                HStack(spacing: 3) {
+                    ForEach(0..<5, id: \.self) { i in
+                        Capsule()
+                            .frame(width: 3, height: waveHeights[i])
+                            .animation(.easeInOut(duration: 0.28).repeatForever(autoreverses: true)
+                                       .delay(Double(i) * 0.07), value: waveAnimating)
+                    }
+                }
+                .frame(height: 20)
+            } else {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            Text(listening ? "Listening — let go when you're done" : "Hold to say the aisle")
+                .font(.system(size: 14, weight: .semibold))
         }
+        .foregroundColor(listening ? DesignSystem.Colors.background : DesignSystem.Colors.dillGreen)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 13)
+        .background(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                .fill(listening ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.dillGreen.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                        .stroke(DesignSystem.Colors.dillGreen.opacity(listening ? 0 : 0.4), lineWidth: 1)
+                )
+        )
+        // minimumDistance 0 so it fires on touch-down rather than after a drag.
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isHoldingToTalk else { return }
+                    isHoldingToTalk = true
+                    waveAnimating = true
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Task { await aisleSpeech.start(hints: aisleDictationHints) }
+                }
+                .onEnded { _ in
+                    isHoldingToTalk = false
+                    waveAnimating = false
+                    aisleSpeech.stop()
+                    let heard = aisleSpeech.transcript.trimmingCharacters(in: .whitespaces)
+                    if !heard.isEmpty { apply(heard) }
+                }
+        )
+        .accessibilityLabel("Hold to say the aisle")
     }
 
     /// Every name and number this store already knows, so the recogniser leans

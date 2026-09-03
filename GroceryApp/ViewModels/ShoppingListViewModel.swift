@@ -48,6 +48,16 @@ class ShoppingListViewModel: ObservableObject {
     }
     @Published var selectedHouseholdStore: HouseholdStore?
     @Published var productAisleMappings: [String: [ProductAisleMapping]] = [:] // storeId -> mappings
+    /// The item a delete has been asked for, waiting on confirmation.
+    ///
+    /// Lives here rather than in `GroceryItemRow` because the row is inside a
+    /// List that animates and recycles its rows. A confirmation owned by the row
+    /// was being presented as the swipe collapsed and the row was rebuilt: the
+    /// dialog flashed and its Delete fired without anybody tapping it, which
+    /// deleted the item outright. Owned above the list, nothing tears it down
+    /// mid-present.
+    @Published var itemPendingDeletion: GroceryItem?
+
     @Published var showToast: Bool = false
     @Published var toastMessage: String = ""
     @Published var toastUserName: String = ""
@@ -2260,7 +2270,7 @@ class ShoppingListViewModel: ObservableObject {
 
     /// Create a new store and add it to the household
     @discardableResult
-    func createStore(name: String, chain: String?, aisles: [StoreAisle]) async -> HouseholdStore? {
+    func createStore(name: String, chain: String?, aisles: [StoreAisle], seedDepartments: Bool = true) async -> HouseholdStore? {
         guard let householdId = householdId else {
             showToast(message: "No household selected", type: .error)
             return nil
@@ -2268,7 +2278,7 @@ class ShoppingListViewModel: ObservableObject {
 
         do {
             // Create the store
-            var store = try await StoreService.shared.createStore(name: name, chain: chain, householdId: householdId)
+            var store = try await StoreService.shared.createStore(name: name, chain: chain, householdId: householdId, seedDepartments: seedDepartments)
 
             // Add aisles to the store
             for aisle in aisles {
@@ -2327,13 +2337,29 @@ class ShoppingListViewModel: ObservableObject {
 
         logger.info("No stores for this household — creating the default one")
         _ = await createStore(
-            name: Self.defaultStoreName,
+            name: StoreService.defaultStoreName,
             chain: nil,
             aisles: []
         )
     }
 
-    static let defaultStoreName = "My Store"
+    /// The stores, with the small shops last.
+    ///
+    /// A shop with no aisles is the fallback you reach for when you are not at
+    /// one of your regular stores, so it belongs at the bottom rather than
+    /// sitting above them. Keyed off the layout, so a store somebody strips the
+    /// departments from moves down with it. Stable within each group, which
+    /// keeps the fetch order everywhere else.
+    var storesInPickingOrder: [HouseholdStore] {
+        householdStores.enumerated()
+            .sorted { a, b in
+                let aSmall = a.element.aisleLayout.isEmpty
+                let bSmall = b.element.aisleLayout.isEmpty
+                return aSmall == bSmall ? a.offset < b.offset : !aSmall
+            }
+            .map(\.element)
+    }
+
 
 
     // MARK: - Reminder Timer Management

@@ -52,7 +52,7 @@ class StoreService: ObservableObject {
     /// They were added to stop aisle inference inventing placeholder sections
     /// when it had nowhere to put brown sugar. Both halves of that reason are
     /// gone: inference now reads the store's own layout and cannot invent, and an
-    /// item with no known aisle has an honest home in "Not sorted yet", which one
+    /// item with no known aisle has an honest home in "No aisle yet", which one
     /// spoken aisle fixes for good. Across 1,306 mappings the eleven held 24
     /// between them, and four had never been used at all.
     ///
@@ -87,7 +87,7 @@ class StoreService: ObservableObject {
     /// existing store. None of them is a place you can walk to. A supermarket has
     /// seven departments with signs over them; everything else is a numbered
     /// aisle that only the shopper can tell us about, and an item nobody has
-    /// placed belongs in "Not sorted yet", not in an invented section.
+    /// placed belongs in "No aisle yet", not in an invented section.
     ///
     /// Custom aisles are untouched — they carry UUIDs, not `standard-` ids, and
     /// adding them is the whole point.
@@ -105,6 +105,39 @@ class StoreService: ObservableObject {
     }
 
     // MARK: - Store CRUD
+
+    static let defaultStoreName = "My Store"
+    static let deliStoreName = "Deli/Bodega"
+
+    /// The small shop every household starts with, created once when the
+    /// household is.
+    ///
+    /// A deli or bodega has no departments to walk to and no numbered aisles —
+    /// a fridge, a counter, and shelves. Nothing to lay out, nothing to map, no
+    /// AI to spend: all of that follows from an empty `aisleLayout` rather than
+    /// from any stored store type, so nothing marks this row as special and
+    /// nothing needs to.
+    ///
+    /// Done at household creation and never again. Seeding on every store fetch
+    /// instead would mean checking for it by name, which makes deleting it or
+    /// renaming it impossible — the next launch would put it straight back, or
+    /// add a second one beside the renamed one. Once, here, is what lets the
+    /// store behave like any other store afterwards.
+    func seedStartingStores(householdId: String) async {
+        print("[STORES] New household — seeding its starting stores")
+        _ = try? await createStore(
+            name: Self.defaultStoreName,
+            chain: nil,
+            householdId: householdId
+        )
+        _ = try? await createStore(
+            name: Self.deliStoreName,
+            chain: nil,
+            householdId: householdId,
+            seedDepartments: false
+        )
+    }
+
 
     /// Is this name already on another store in the household?
     ///
@@ -126,7 +159,7 @@ class StoreService: ObservableObject {
     }
 
     /// Create a new store for a household
-    func createStore(name: String, chain: String?, householdId: String) async throws -> HouseholdStore {
+    func createStore(name: String, chain: String?, householdId: String, seedDepartments: Bool = true) async throws -> HouseholdStore {
         let storeId = UUID().uuidString
 
         let document = """
@@ -147,7 +180,15 @@ class StoreService: ObservableObject {
         // order at all — but a shop without numbered aisles still has a cooler,
         // a produce rack and a bread shelf, and those are what these sections
         // are. "No aisles" means no numbers, not no organisation.
-        let initialAisles: [[String: Any]] = Self.namedDepartments.map { aisle -> [String: Any] in
+        //
+        // Unless there is nothing to seed. A corner deli in NYC has no produce
+        // section and no bread aisle — it has a fridge and a counter — and seven
+        // headings you cannot walk to is the same mistake the eleven categories
+        // were. An empty layout needs no new flag or second kind of store: it is
+        // simply a store whose `aisleLayout` is empty, which every screen already
+        // handles. If the deli turns out to have a cooler after all, adding
+        // "Dairy & Eggs" brings the real department back.
+        let initialAisles: [[String: Any]] = !seedDepartments ? [] : Self.namedDepartments.map { aisle -> [String: Any] in
             var dict: [String: Any] = ["id": aisle.id, "number": aisle.number, "name": aisle.name, "displayOrder": aisle.displayOrder]
             if let description = aisle.description { dict["description"] = description }
             return dict

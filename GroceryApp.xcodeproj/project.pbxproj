@@ -17,6 +17,7 @@
 		AA0000000000000000000907 /* TrackRecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000907 /* TrackRecordView.swift */; };
 		AA0000000000000000000908 /* AisleNaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000908 /* AisleNaming.swift */; };
 		AA0000000000000000000909 /* AisleUtterance.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000909 /* AisleUtterance.swift */; };
+		AA0000000000000000000913 /* AppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000913 /* AppVersion.swift */; };
 		AA0000000000000000000911 /* AisleSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000911 /* AisleSpeechService.swift */; };
 		36B866D86A21E55F7AF2ED72 /* StoreAisleManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F17CB37BD52AC48533DAB3 /* StoreAisleManagementView.swift */; };
 		61C577F31452E1D49F5F8E7E /* ShoppingCompletionStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */; };
@@ -42,6 +43,7 @@
 		AA0000000000000000000096 /* ListMenuSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000096 /* ListMenuSheet.swift */; };
 		AA0000000000000000000032 /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* SearchBar.swift */; };
 		AA0000000000000000000033 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* ToastView.swift */; };
+		AA0000000000000000000912 /* StoreCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000912 /* StoreCard.swift */; };
 		AA0000000000000000000034 /* ShoppingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* ShoppingListView.swift */; };
 		A1B2C3D4E5F601234567890B /* BulkImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */; };
 		AA0000000000000000000035 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000035 /* SettingsView.swift */; };
@@ -117,6 +119,7 @@
 		BB0000000000000000000907 /* TrackRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRecordView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000908 /* AisleNaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleNaming.swift; sourceTree = "<group>"; };
 		BB0000000000000000000909 /* AisleUtterance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleUtterance.swift; sourceTree = "<group>"; };
+		BB0000000000000000000913 /* AppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersion.swift; sourceTree = "<group>"; };
 		BB0000000000000000000911 /* AisleSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleSpeechService.swift; sourceTree = "<group>"; };
 		15546147AB154BAB9998BE81 /* UserCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserCache.swift; sourceTree = "<group>"; };
 		1D3522D68D2D87FC767A7AAA /* ShoppingCompletionStats.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ShoppingCompletionStats.swift; sourceTree = "<group>"; };
@@ -143,6 +146,7 @@
 		BB0000000000000000000096 /* ListMenuSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListMenuSheet.swift; sourceTree = "<group>"; };
 		BB0000000000000000000032 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
 		BB0000000000000000000033 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
+		BB0000000000000000000912 /* StoreCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCard.swift; sourceTree = "<group>"; };
 		BB0000000000000000000034 /* ShoppingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportSheet.swift; sourceTree = "<group>"; };
 		BB0000000000000000000035 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -291,6 +295,7 @@
 				BB0000000000000000000906 /* ShareText.swift */,
 				BB0000000000000000000908 /* AisleNaming.swift */,
 				BB0000000000000000000909 /* AisleUtterance.swift */,
+				BB0000000000000000000913 /* AppVersion.swift */,
 				BB0000000000000000000911 /* AisleSpeechService.swift */,
 				BB0000000000000000000090 /* SpeechDictationService.swift */,
 				BB0000000000000000000091 /* ShopperReminderService.swift */,
@@ -358,6 +363,7 @@
 				BB0000000000000000000075 /* ShoppingActiveInfoModal.swift */,
 				BB0000000000000000000087 /* StatusSubtitleView.swift */,
 				BB0000000000000000000033 /* ToastView.swift */,
+				BB0000000000000000000912 /* StoreCard.swift */,
 				BB0000000000000000000059 /* UserIdentityGradient.swift */,
 				BB0000000000000000000060 /* UserColorBadge.swift */,
 				02C91CEFFA5AF53A106CA602 /* ShoppingCompletedSheet.swift */,
@@ -529,6 +535,7 @@
 				AA0000000000000000000907 /* TrackRecordView.swift in Sources */,
 				AA0000000000000000000908 /* AisleNaming.swift in Sources */,
 				AA0000000000000000000909 /* AisleUtterance.swift in Sources */,
+				AA0000000000000000000913 /* AppVersion.swift in Sources */,
 				AA0000000000000000000911 /* AisleSpeechService.swift in Sources */,
 				BCE700C7876941359C07CABF /* UserCache.swift in Sources */,
 				AA0000000000000000000021 /* DesignSystem.swift in Sources */,
@@ -542,6 +549,7 @@
 				AA0000000000000000000088 /* StoresView.swift in Sources */,
 				AA0000000000000000000089 /* StoreDetailView.swift in Sources */,
 				AA0000000000000000000033 /* ToastView.swift in Sources */,
+				AA0000000000000000000912 /* StoreCard.swift in Sources */,
 				AA0000000000000000000057 /* MarqueeText.swift in Sources */,
 				AA0000000000000000000034 /* ShoppingListView.swift in Sources */,
 				A1B2C3D4E5F601234567890B /* BulkImportSheet.swift in Sources */,

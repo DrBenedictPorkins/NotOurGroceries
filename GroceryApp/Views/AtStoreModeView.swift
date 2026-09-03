@@ -282,19 +282,23 @@ struct AtStoreModeView: View {
 
                 // Action icons row (gear + inbox)
                 HStack(spacing: 12) {
-                    // Gear icon for aisle management
-                    Button(action: {
-                        showAisleManagement = true
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    }) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(8)
-                            .background(
-                                Circle()
-                                    .fill(Color.white.opacity(0.1))
-                            )
+                    // Hidden for a shop with no aisles or departments — there is
+                    // no layout behind it. Reappears once the store has one.
+                    if selectedHouseholdStore?.aisleLayout.isEmpty == false {
+                        // Gear icon for aisle management
+                        Button(action: {
+                            showAisleManagement = true
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }) {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white.opacity(0.7))
+                                .padding(8)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(0.1))
+                                )
+                        }
                     }
 
                 }
@@ -466,7 +470,7 @@ struct AtStoreModeView: View {
                 // Not "UNKNOWN AISLE" — that claims there is an aisle whose name
                 // we have lost. These items simply have not been placed yet, and
                 // the header should say so rather than invent a mystery.
-                Text(nothingMapped ? "TO GET" : "NOT SORTED YET")
+                Text(nothingMapped ? "TO GET" : "NO AISLE YET")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(nothingMapped ? DesignSystem.Colors.dillGreen : DesignSystem.Colors.neonPink)
                     .tracking(1.2)
@@ -479,7 +483,7 @@ struct AtStoreModeView: View {
             }
 
             if !nothingMapped {
-                Text("Tap ••• on an item to say which aisle it's in")
+                Text("Tap ••• on an item to assign it to an aisle")
                     .font(.system(size: 11, weight: .regular))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }

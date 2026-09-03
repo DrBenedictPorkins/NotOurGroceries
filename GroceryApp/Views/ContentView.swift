@@ -62,6 +62,30 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isAtStoreMode)
+        // Deleting an item is confirmed here, above every list that shows one.
+        // Owned by a row, this dialog was presented while the swipe collapsed and
+        // the row was rebuilt underneath it — it flashed and its Delete fired on
+        // its own. Delete is for an item that should not exist: a mis-heard
+        // dictation, a typo. It is not "not this week", which is what tapping the
+        // row does, and the message says so because both make the row disappear
+        // and only one is recoverable.
+        .confirmationDialog(
+            viewModel.itemPendingDeletion.map { "Delete \($0.name)?" } ?? "Delete this item?",
+            isPresented: Binding(
+                get: { viewModel.itemPendingDeletion != nil },
+                set: { if !$0 { viewModel.itemPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                guard let doomed = viewModel.itemPendingDeletion else { return }
+                viewModel.itemPendingDeletion = nil
+                Task { await viewModel.deleteItem(doomed) }
+            }
+            Button("Cancel", role: .cancel) { viewModel.itemPendingDeletion = nil }
+        } message: {
+            Text("This removes it permanently. To keep it for next time, tap the item instead — it moves to suggestions.")
+        }
         .task {
             await checkShoppingStatusOnLaunch()
         }

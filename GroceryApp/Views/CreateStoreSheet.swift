@@ -221,6 +221,7 @@ struct CreateStoreSheet: View {
                         )
                         .focused($focusedField, equals: .chainName)
                 }
+
             }
             .padding(16)
             .background(

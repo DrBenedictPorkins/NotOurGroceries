@@ -425,9 +425,14 @@ class AisleExtractionService: ObservableObject {
         // able to invent one ("Not mapped (likely Baking/Dry Goods aisle)") and it
         // was saved and then rendered as a section header.
         let store = await StoreService.shared.householdStores.first(where: { $0.id == storeId })
+        // Numbers count too. A mapping legitimately stores an aisle's number,
+        // and leaving them out meant a correction to a numbered aisle — the most
+        // common kind — was discarded here as an invented one.
         let validAisleIds: Set<String> = Set(
-            (store?.aisleLayout.map { $0.id } ?? []) + (store?.aisleLayout.map { $0.name } ?? [])
-        )
+            (store?.aisleLayout.map { $0.id } ?? [])
+                + (store?.aisleLayout.map { $0.name } ?? [])
+                + (store?.aisleLayout.map { $0.number } ?? [])
+        ).subtracting([""])
 
         for item in items {
             guard let result = results[item.id] else { continue }

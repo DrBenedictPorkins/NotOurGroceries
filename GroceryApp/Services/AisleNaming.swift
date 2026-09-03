@@ -19,7 +19,7 @@ enum AisleNaming {
     /// Human-readable name for an aisle id, in title case.
     static func displayName(for aisleId: String, in layout: [StoreAisle]) -> String {
         let id = aisleId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !id.isEmpty else { return "Unsorted" }
+        guard !id.isEmpty else { return "No aisle yet" }
 
         if let aisle = match(id, in: layout) {
             return label(for: aisle)
@@ -37,7 +37,7 @@ enum AisleNaming {
         // an improvement on nothing; for a UUID it is never right — it belongs to
         // an aisle that is no longer in this store's layout, and printing it puts
         // 36 characters of hex where a place name goes.
-        return looksLikeUUID(id) ? "Unsorted" : id
+        return looksLikeUUID(id) ? "No aisle yet" : id
     }
 
     private static func looksLikeUUID(_ id: String) -> Bool {
@@ -80,7 +80,7 @@ enum AisleNaming {
 
         switch (number.isEmpty, name.isEmpty) {
         case (true, true):
-            return "Unsorted"
+            return "No aisle yet"
         case (true, false):
             // No number to fall back on, so the name has to serve — but a
             // contents blob still gets cut at its first item rather than run on.

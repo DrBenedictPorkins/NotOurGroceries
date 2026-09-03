@@ -32,6 +32,8 @@ final class AisleSpeechService: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    /// Set when the recogniser has delivered everything it is going to.
+    private var didFinish = false
 
     /// Whether talking to it is worth offering at all. When false the sheet opens
     /// straight onto the keyboard rather than a microphone that cannot work.
@@ -53,9 +55,18 @@ final class AisleSpeechService: ObservableObject {
             state = .unavailable("Speech recognition is off for this app. Settings › Got Dill?")
             return
         }
+        // Speech recognition and the microphone are two separate grants. Only
+        // the first was ever asked for, so on a phone that had never used bulk
+        // import the engine started against a microphone nobody had allowed and
+        // recorded silence.
+        guard await requestMicrophone() else {
+            state = .unavailable("The microphone is off for this app. Settings › Got Dill?")
+            return
+        }
 
         stop()
         transcript = ""
+        didFinish = false
 
         do {
             try configureSession()
@@ -95,10 +106,41 @@ final class AisleSpeechService: ObservableObject {
                 // An aisle is one breath long, so the first final result is the
                 // answer — there is nothing to wait around for after it.
                 if result?.isFinal == true || error != nil {
+                    self.didFinish = true
                     self.stop()
                 }
             }
         }
+    }
+
+    /// End the recording and wait for what was actually said.
+    ///
+    /// `stop()` cancels the recognition task, which throws away anything the
+    /// recogniser has not delivered yet — and on a one-word utterance that is
+    /// usually all of it, because partial results lag the audio by a few hundred
+    /// milliseconds. Reading `transcript` the instant a thumb lifted therefore
+    /// read an empty string, and the aisle was never applied. This stops feeding
+    /// the recogniser but leaves it alive long enough to finish the job.
+    func finish() async -> String {
+        guard state == .listening else {
+            return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        request?.endAudio()
+
+        // Capped, because a recogniser that never finalises must not leave a
+        // thumb-lift hanging with no aisle and no explanation.
+        let deadline = Date().addingTimeInterval(2)
+        while !didFinish && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        stop()
+        return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func stop() {
@@ -129,6 +171,11 @@ final class AisleSpeechService: ObservableObject {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.record, mode: .measurement, options: .duckOthers)
         try session.setActive(true, options: .notifyOthersOnDeactivation)
+    }
+
+    private func requestMicrophone() async -> Bool {
+        if AVAudioApplication.shared.recordPermission == .granted { return true }
+        return await AVAudioApplication.requestRecordPermission()
     }
 
     private func requestAuthorisation() async -> Bool {

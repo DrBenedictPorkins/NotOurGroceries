@@ -1030,6 +1030,10 @@ class AmplifyService: ObservableObject {
         let result = try await manageMembership(action: "create", name: name)
         await refreshSessionForNewClaims()
         currentHouseholdId = result.householdId
+        // Once, here. A household starts with a plain supermarket and a small
+        // shop with no aisles; both are then ordinary stores it can rename or
+        // delete, which is only true because nothing puts them back.
+        await StoreService.shared.seedStartingStores(householdId: result.householdId)
         NotificationCenter.default.post(name: .householdChanged, object: nil)
         return result
     }

@@ -85,11 +85,7 @@ struct SplashView: View {
     @State private var tagline = AppIdentity.randomTagline()
     @ObservedObject private var loadingState = AppLoadingState.shared
 
-    private var versionString: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        return "v\(version) (\(build))"
-    }
+    private var versionString: String { AppVersion.full }
 
     private var buildDateString: String {
         guard let execURL = Bundle.main.executableURL,

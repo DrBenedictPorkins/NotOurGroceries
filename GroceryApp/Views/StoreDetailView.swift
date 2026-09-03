@@ -73,7 +73,14 @@ struct StoreDetailView: View {
                     // but both kinds carry the identical seeded sections, so the
                     // branch only decided which buttons appeared, and the other
                     // route to this feature never had it.
-                    aisleManagementSection
+                    // A shop with no aisles or departments has no layout to
+                    // manage, and a screen that only ever says "nothing here" is
+                    // worse than no screen. It comes back on its own the moment
+                    // the store has an aisle — saying where something is on an
+                    // item creates one — so this is not a one-way door.
+                    if !currentStore.aisleLayout.isEmpty {
+                        aisleManagementSection
+                    }
 
     
                     // Delete Section

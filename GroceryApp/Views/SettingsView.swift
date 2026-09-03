@@ -164,13 +164,9 @@ struct SettingsView: View {
 
     // MARK: - App Info
 
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-    }
+    private var appVersion: String { AppVersion.marketing }
 
-    private var appBuild: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-    }
+    private var appBuild: String { AppVersion.build }
 
     private var buildDateString: String {
         guard let url = Bundle.main.executableURL,

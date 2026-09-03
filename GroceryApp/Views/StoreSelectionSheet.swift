@@ -99,7 +99,7 @@ struct StoreSelectionSheet: View {
     private var storeList: some View {
         ScrollView {
             VStack(spacing: 12) {
-                ForEach(viewModel.householdStores) { store in
+                ForEach(viewModel.storesInPickingOrder) { store in
                     StoreRow(store: store, isLoading: isCheckingMappings && selectedStore?.id == store.id) {
                         Task {
                             await handleStoreSelection(store)
@@ -134,11 +134,13 @@ struct StoreSelectionSheet: View {
             unmappedItems = unmapped
             isCheckingMappings = false
 
-            if unmapped.isEmpty {
-                // No unmapped items, go straight to ready to shop
+            // A store with no layout has nowhere to put anything, so there is
+            // nothing to ask the model and no tokens to spend. Shop the list as
+            // it was typed — At Store already heads it "TO GET" when nothing is
+            // mapped.
+            if unmapped.isEmpty || store.aisleLayout.isEmpty {
                 showReadyToShop = true
             } else {
-                // Has unmapped items, show batch mapping first
                 showBatchMapping = true
             }
         }
@@ -211,69 +213,7 @@ private struct StoreRow: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    // Store name
-                    Text(store.name)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    // Loading or Chevron
-                    if isLoading {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                            .tint(DesignSystem.Colors.dillGreen)
-                    } else {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(DesignSystem.Colors.textSecondary)
-                    }
-                }
-
-                HStack(spacing: 12) {
-                    // Chain badge (if set)
-                    if let chain = store.chain, !chain.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "building.2")
-                                .font(.system(size: 11, weight: .medium))
-                            Text(chain)
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .foregroundColor(DesignSystem.Colors.neonPurple)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(DesignSystem.Colors.neonPurple.opacity(0.15))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(DesignSystem.Colors.neonPurple.opacity(0.3), lineWidth: 1)
-                        )
-                    }
-
-                    // Aisle count
-                    HStack(spacing: 4) {
-                        Image(systemName: "list.bullet")
-                            .font(.system(size: 11, weight: .medium))
-                        Text("\(store.aisleLayout.count) sections")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                    .fill(DesignSystem.Colors.glassBackground)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.lg)
-                            .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-                    )
-            )
+            StoreCard(store: store, isLoading: isLoading)
         }
         .buttonStyle(.plain)
     }

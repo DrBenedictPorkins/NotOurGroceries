@@ -436,14 +436,21 @@ struct ItemDetailSheet: View {
                 .padding(.horizontal, DesignSystem.Spacing.xs)
             }
 
-            // AI Inference Button - hide in proposed mode (already AI-generated)
-            // and for stores with no aisles (nothing to infer against).
-            if !isProposedAisleMode {
-                numberStrip
-            }
+            // Shown in review mode too. Correcting a batch is exactly where one
+            // tap per row pays, and the aisles are already on screen.
+            numberStrip
 
             if aisleSpeech.isAvailable {
                 holdToTalkPill
+
+                // Said out loud. A microphone that cannot listen used to set
+                // this reason and show nothing, so holding the pill looked
+                // identical to the feature simply not working.
+                if case .unavailable(let reason) = aisleSpeech.state {
+                    Text(reason)
+                        .font(.system(size: 12))
+                        .foregroundColor(DesignSystem.Colors.neonPink)
+                }
             }
 
             // What it actually heard, when that is not what the field now shows.
@@ -464,7 +471,7 @@ struct ItemDetailSheet: View {
 
             if let outcome = saveOutcome {
                 HStack(spacing: 8) {
-                    Text("Saves to")
+                    Text(isProposedAisleMode ? "Changes to" : "Saves to")
                         .font(.system(size: 13))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
                     Text(outcome.label)
@@ -548,6 +555,13 @@ struct ItemDetailSheet: View {
         undoTarget = .some(currentAisleString)
         aisleText = AisleUtterance.normalise(aisle)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+
+        // Review mode writes nothing here. The correction rides in the pending
+        // result — `onAisleChanged` picks it up off the field — and lands with
+        // Apply & Continue next to the suggestions you left alone. A chip that
+        // wrote straight through would commit part of a batch you had not
+        // agreed to yet, and Cancel would no longer cancel.
+        guard !isProposedAisleMode else { return }
         Task { await assignToAisleByName(aisleText) }
     }
 
@@ -555,9 +569,18 @@ struct ItemDetailSheet: View {
         guard let previous = undoTarget else { return }
         undoTarget = nil
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let restored = (previous?.isEmpty == false)
+            ? AisleNaming.displayName(for: previous!, in: currentStore?.aisleLayout ?? [])
+            : ""
+
+        guard !isProposedAisleMode else {
+            aisleText = restored
+            return
+        }
+
         Task {
-            if let previous, !previous.isEmpty {
-                aisleText = AisleNaming.displayName(for: previous, in: currentStore?.aisleLayout ?? [])
+            if !restored.isEmpty {
+                aisleText = restored
                 await assignToAisleByName(aisleText)
             } else {
                 aisleText = ""
@@ -770,9 +793,10 @@ struct ItemDetailSheet: View {
                 .onEnded { _ in
                     isHoldingToTalk = false
                     waveAnimating = false
-                    aisleSpeech.stop()
-                    let heard = aisleSpeech.transcript.trimmingCharacters(in: .whitespaces)
-                    if !heard.isEmpty { apply(heard) }
+                    Task {
+                        let heard = await aisleSpeech.finish()
+                        if !heard.isEmpty { apply(heard) }
+                    }
                 }
         )
         .accessibilityLabel("Hold to say the aisle")

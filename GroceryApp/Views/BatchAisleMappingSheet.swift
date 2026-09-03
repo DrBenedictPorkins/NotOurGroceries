@@ -203,7 +203,7 @@ struct BatchAisleMappingSheet: View {
                 onComplete()
                 dismiss()
             } label: {
-                Text(itemsWorthAsking.isEmpty ? "Done" : "Skip")
+                Text("Skip")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
             }
@@ -273,9 +273,7 @@ struct BatchAisleMappingSheet: View {
             ScrollView {
                 VStack(spacing: 12) {
                     ForEach(unmappedItems, id: \.id) { item in
-                        if let result = results[item.id] {
-                            resultRow(item: item, result: result)
-                        }
+                        resultRow(item: item, result: result(for: item))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -320,6 +318,21 @@ struct BatchAisleMappingSheet: View {
                 .allowsHitTesting(false)
             )
         }
+    }
+
+    /// What to show for an item, including the ones nothing came back for.
+    ///
+    /// An item the model could not place — or was never asked about, because it
+    /// had failed here before — had no entry in `results` and so rendered no row
+    /// at all. The header said "1 of 4 placed" and then showed one row and no way
+    /// to reach the other three. Those are the rows worth having now that a tap
+    /// places an aisle.
+    private func result(for item: GroceryItem) -> AisleExtractionService.AisleInferenceResult {
+        results[item.id] ?? AisleExtractionService.AisleInferenceResult(
+            suggestedAisle: "Unknown",
+            confidence: 0,
+            reasoning: "Nothing recorded at this store says where this goes."
+        )
     }
 
     // MARK: - Result Row
@@ -484,6 +497,11 @@ private struct BatchMappingResultRow: View {
     let aisleLayout: [StoreAisle]
     let onTap: () -> Void
 
+    private var isUnplaced: Bool {
+        let aisle = result.suggestedAisle.trimmingCharacters(in: .whitespaces)
+        return aisle.isEmpty || aisle.caseInsensitiveCompare("unknown") == .orderedSame
+    }
+
     var body: some View {
         // A Button, not a pile of gestures.
         //
@@ -515,10 +533,14 @@ private struct BatchMappingResultRow: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
 
-                Text(AisleNaming.displayName(for: result.suggestedAisle, in: aisleLayout))
+                // Amber, and "No aisle yet". Green on the word "Unknown" read
+                // as a placement that had gone through.
+                Text(isUnplaced ? "No aisle yet"
+                     : AisleNaming.displayName(for: result.suggestedAisle, in: aisleLayout))
                     .font(.system(size: 16, weight: .bold))
                     .multilineTextAlignment(.trailing)
-                    .foregroundColor(DesignSystem.Colors.dillGreen)
+                    .foregroundColor(isUnplaced ? DesignSystem.Colors.neonAmber
+                                     : DesignSystem.Colors.dillGreen)
             }
 
             // Reasoning
@@ -530,7 +552,7 @@ private struct BatchMappingResultRow: View {
             // Confidence indicator + hint
             HStack(spacing: 4) {
                 // A percentage on "Unknown" is a number measured against nothing.
-                if result.suggestedAisle.caseInsensitiveCompare("unknown") != .orderedSame {
+                if !isUnplaced {
                     Text("\(Int(result.confidence * 100))%")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(result.confidence >= 0.7 ? DesignSystem.Colors.success : DesignSystem.Colors.warning)
@@ -538,7 +560,7 @@ private struct BatchMappingResultRow: View {
 
                 Spacer()
 
-                Text("Tap to edit")
+                Text(isUnplaced ? "Tap to place it" : "Tap to edit")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
             }

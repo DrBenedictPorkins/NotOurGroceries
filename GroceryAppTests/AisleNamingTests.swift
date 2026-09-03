@@ -74,14 +74,14 @@ final class AisleNamingTests: XCTestCase {
     }
 
     func testAnEmptyIdIsNamedNotBlank() {
-        XCTAssertEqual(AisleNaming.displayName(for: "", in: []), "Unsorted")
-        XCTAssertEqual(AisleNaming.displayName(for: "   ", in: []), "Unsorted")
+        XCTAssertEqual(AisleNaming.displayName(for: "", in: []), "No aisle yet")
+        XCTAssertEqual(AisleNaming.displayName(for: "   ", in: []), "No aisle yet")
     }
 
     func testAnAisleWithNeitherNameNorNumberIsNamedNotBlank() {
         let layout = [aisle(id: "a1", name: "")]
 
-        XCTAssertEqual(AisleNaming.displayName(for: "a1", in: layout), "Unsorted")
+        XCTAssertEqual(AisleNaming.displayName(for: "a1", in: layout), "No aisle yet")
     }
 
     // MARK: - Headers stay short
@@ -168,7 +168,7 @@ final class AisleNamingTests: XCTestCase {
     /// Personal Care, Condiments & Sauces and the rest. None of them is a place:
     /// nappies sit in a numbered aisle, and "Baby" is a fact about the product,
     /// not somewhere in the shop. They were added to give inference a bucket for
-    /// things it could not place; the honest bucket is "Not sorted yet", which one
+    /// things it could not place; the honest bucket is "No aisle yet", which one
     /// spoken aisle empties for good.
     func testDepartmentsArePlacesNotProductCategories() {
         let ids = Set(StoreService.namedDepartments.map(\.id))

@@ -8,7 +8,6 @@ struct GroceryItemRow: View {
     @State private var shakeOffset: CGFloat = 0
     @State private var isShaking = false
     @State private var showDetailSheet = false
-    @State private var showDeleteConfirmation = false
 
     // Transition animation states
     @State private var isTransitioning = false
@@ -112,8 +111,19 @@ struct GroceryItemRow: View {
                     // mean here, and it is the only place a mis-dictated item
                     // ("cucumber diapers") can be got rid of once it has settled
                     // into the archive. Still confirms; still no full swipe.
-                    Button(role: .destructive) {
-                        showDeleteConfirmation = true
+                    //
+                    // Red by tint, NOT `role: .destructive`. The role is not
+                    // styling: SwiftUI hands it to UICollectionView as a real
+                    // row deletion and animates the row out, expecting the data
+                    // source to have shrunk by one in the same turn. This button
+                    // only asks a question, so the count never changed, and UIKit
+                    // aborted with "Invalid Number Of Items In Section" —
+                    // confirmed in the crash report from 2026-09-03 17:52. It
+                    // also took the confirmation down with the row it removed,
+                    // which is why the dialog flashed and the item vanished
+                    // without anybody answering it.
+                    Button {
+                        viewModel.itemPendingDeletion = item
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -138,7 +148,7 @@ struct GroceryItemRow: View {
             // the swipe.
             .contextMenu {
                 Button(role: .destructive) {
-                    showDeleteConfirmation = true
+                    viewModel.itemPendingDeletion = item
                 } label: {
                     Label("Delete permanently", systemImage: "trash")
                 }
@@ -177,22 +187,6 @@ struct GroceryItemRow: View {
             .sheet(isPresented: $showDetailSheet) {
                 ItemDetailSheet(item: item)
                     .environmentObject(viewModel)
-            }
-            // Delete is for an item that should not exist — a mis-heard dictation,
-            // a typo. It is not "I don't need this right now"; tapping the row does
-            // that and keeps the item in suggestions. The message says so, because
-            // both gestures make the row disappear and only one is recoverable.
-            .confirmationDialog(
-                "Delete \(item.name)?",
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete", role: .destructive) {
-                    Task { await viewModel.deleteItem(item) }
-                }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("This removes it permanently. To keep it for next time, tap the item instead — it moves to suggestions.")
             }
     }
 

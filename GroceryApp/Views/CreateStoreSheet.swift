@@ -193,6 +193,12 @@ struct CreateStoreSheet: View {
                                 )
                         )
                         .focused($focusedField, equals: .storeName)
+
+                    if nameIsTaken {
+                        Text("You already have a store called that.")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(DesignSystem.Colors.neonPink)
+                    }
                 }
 
                 // Chain Name Field (Optional)
@@ -232,8 +238,12 @@ struct CreateStoreSheet: View {
 
     // MARK: - Helpers
 
+    private var nameIsTaken: Bool {
+        StoreService.shared.nameIsTaken(storeName)
+    }
+
     private var canSave: Bool {
-        !storeName.trimmingCharacters(in: .whitespaces).isEmpty
+        !storeName.trimmingCharacters(in: .whitespaces).isEmpty && !nameIsTaken
     }
 
     private func saveAndAdvance() {

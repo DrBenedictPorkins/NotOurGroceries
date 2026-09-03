@@ -96,7 +96,7 @@ struct StoresView: View {
         ScrollView {
             VStack(spacing: 12) {
                 ForEach(viewModel.householdStores) { store in
-                    NavigationLink(destination: StoreDetailView(store: store)) {
+                    NavigationLink(destination: StoreDetailView(storeId: store.id)) {
                         StoreRowView(store: store)
                     }
                     .buttonStyle(.plain)

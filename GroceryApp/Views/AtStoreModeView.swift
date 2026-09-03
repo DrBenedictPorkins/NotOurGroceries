@@ -232,7 +232,7 @@ struct AtStoreModeView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showAisleManagement) {
             if let store = selectedHouseholdStore {
-                StoreAisleManagementView(store: store)
+                StoreAisleManagementView(storeId: store.id)
                     .environmentObject(viewModel)
             }
         }

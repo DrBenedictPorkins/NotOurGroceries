@@ -7,7 +7,10 @@ struct StoreDetailView: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @StateObject private var storeService = StoreService.shared
 
-    let store: HouseholdStore
+    /// The store's id, not the store. See the note on
+    /// `StoreAisleManagementView.storeId` — the same rebuild that discarded the
+    /// aisle screen discards this one, one level up.
+    let storeId: String
 
     // MARK: - State
 
@@ -19,24 +22,30 @@ struct StoreDetailView: View {
 
     // MARK: - Initialization
 
-    init(store: HouseholdStore) {
-        self.store = store
-        _storeName = State(initialValue: store.name)
+    init(storeId: String) {
+        self.storeId = storeId
+        _storeName = State(initialValue: StoreService.shared.householdStores.first { $0.id == storeId }?.name ?? "")
     }
 
     // MARK: - Computed Properties
 
     /// Get fresh store data from viewModel (updated after extraction completes)
     private var currentStore: HouseholdStore {
-        viewModel.householdStores.first { $0.id == store.id } ?? store
+        viewModel.householdStores.first { $0.id == storeId }
+            ?? HouseholdStore(id: storeId, householdId: "", name: "", chain: nil, address: nil, aisleLayout: [])
     }
 
     private var aisleCount: Int {
         currentStore.aisleLayout.count
     }
 
+    private var nameIsTaken: Bool {
+        StoreService.shared.nameIsTaken(storeName, excludingStoreId: storeId)
+    }
+
     private var canSave: Bool {
         !storeName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !nameIsTaken &&
         hasChanges &&
         !isSaving
     }
@@ -96,7 +105,7 @@ struct StoreDetailView: View {
                 }
             }
         } message: {
-            Text("Are you sure you want to delete \"\(store.name)\"? This will remove all aisle mappings for this store. This action cannot be undone.")
+            Text("Are you sure you want to delete \"\(currentStore.name)\"? This will remove all aisle mappings for this store. This action cannot be undone.")
         }
         .onChange(of: storeName) { _, _ in
             checkForChanges()
@@ -140,6 +149,12 @@ struct StoreDetailView: View {
                                     .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
                             )
                     )
+
+                if nameIsTaken {
+                    Text("You already have a store called that.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.neonPink)
+                }
             }
             .padding(16)
             .background(
@@ -159,7 +174,13 @@ struct StoreDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             sectionHeader(title: "AISLE LAYOUT", icon: "arrow.triangle.branch")
 
-            NavigationLink(destination: StoreAisleManagementView(store: currentStore).environmentObject(viewModel)) {
+            // `store`, not `currentStore`. Adding, deleting or reordering an
+            // aisle republishes `householdStores`, which changed `currentStore`,
+            // which handed the NavigationLink a different destination value —
+            // and SwiftUI popped the screen you were working on. The pushed view
+            // reads the live store from the view model itself, so it only needs
+            // the identity here, and the identity never changes.
+            NavigationLink(destination: StoreAisleManagementView(storeId: storeId).environmentObject(viewModel)) {
                 HStack(spacing: 16) {
                     // Aisle icon
                     ZStack {
@@ -292,7 +313,7 @@ struct StoreDetailView: View {
     }
 
     private func checkForChanges() {
-        hasChanges = storeName != store.name
+        hasChanges = storeName != currentStore.name
     }
 
     private func saveChanges() async {
@@ -304,12 +325,14 @@ struct StoreDetailView: View {
         let trimmedName = storeName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let updatedStore = HouseholdStore(
-            id: store.id,
-            householdId: store.householdId,
+            id: storeId,
+            householdId: currentStore.householdId,
             name: trimmedName,
-            chain: store.chain,
-            address: store.address,
-            aisleLayout: store.aisleLayout
+            chain: currentStore.chain,
+            address: currentStore.address,
+            // The live layout, not the one this screen opened with. Renaming
+            // after adding an aisle used to write the old layout back over it.
+            aisleLayout: currentStore.aisleLayout
         )
 
         do {
@@ -339,10 +362,10 @@ struct StoreDetailView: View {
         defer { isDeleting = false }
 
         do {
-            try await storeService.deleteStore(store.id)
+            try await storeService.deleteStore(storeId)
             await MainActor.run {
                 // Also remove from viewModel's householdStores
-                viewModel.householdStores.removeAll { $0.id == store.id }
+                viewModel.householdStores.removeAll { $0.id == storeId }
                 viewModel.toastMessage = "Store deleted"
                 viewModel.toastType = .success
                 viewModel.showToast = true
@@ -362,6 +385,6 @@ struct StoreDetailView: View {
 // MARK: - Preview
 
 #Preview {
-    StoreDetailView(store: HouseholdStore.preview)
+    StoreDetailView(storeId: HouseholdStore.preview.id)
         .environmentObject(ShoppingListViewModel())
 }

@@ -106,6 +106,25 @@ class StoreService: ObservableObject {
 
     // MARK: - Store CRUD
 
+    /// Is this name already on another store in the household?
+    ///
+    /// Two stores called the same thing are indistinguishable everywhere a
+    /// store appears — the picker, the aisle screen's heading, "Selected …" —
+    /// and each carries its own aisle layout, so picking the wrong one silently
+    /// sends you to the wrong aisles. Compared trimmed and case-insensitively:
+    /// "Stop & Shop" and "stop & shop " are the same shop.
+    ///
+    /// Pass the store's own id when renaming, so a store does not collide with
+    /// itself.
+    func nameIsTaken(_ name: String, excludingStoreId: String? = nil) -> Bool {
+        let candidate = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !candidate.isEmpty else { return false }
+        return householdStores.contains {
+            $0.id != excludingStoreId
+                && $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == candidate
+        }
+    }
+
     /// Create a new store for a household
     func createStore(name: String, chain: String?, householdId: String) async throws -> HouseholdStore {
         let storeId = UUID().uuidString
@@ -358,9 +377,27 @@ class StoreService: ObservableObject {
             return shifted
         }
 
-        updatedStore.aisleLayout.append(
-            StoreAisle(number: number, name: name, displayOrder: slot)
-        )
+        // Typing "Bakery" back in after deleting it restores the department,
+        // not a lookalike. A fresh UUID row would read identically on screen
+        // while losing the description the inference prompt reads and the walk
+        // -order slot `defaultAisleDisplayOrder` keys off `standard-` ids for.
+        // This is what makes deleting a preset undoable without a reset button.
+        let spoken = [number, name].first { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
+        if let template = Self.namedDepartments.first(where: {
+            $0.name.lowercased() == spoken.trimmingCharacters(in: .whitespaces).lowercased()
+        }) {
+            updatedStore.aisleLayout.append(
+                StoreAisle(id: template.id,
+                           number: template.number,
+                           name: template.name,
+                           displayOrder: slot,
+                           description: template.description)
+            )
+        } else {
+            updatedStore.aisleLayout.append(
+                StoreAisle(number: number, name: name, displayOrder: slot)
+            )
+        }
 
         try await updateStore(updatedStore)
         return updatedStore
@@ -388,6 +425,38 @@ class StoreService: ObservableObject {
             .min { $0.0 < $1.0 }
 
         return successor?.1 ?? end
+    }
+
+    /// Correct an aisle's label, keeping its identity.
+    ///
+    /// The id never changes, so every mapping pointing at this aisle keeps
+    /// pointing at it. That is what makes renaming a preset department safe:
+    /// `standard-produce` stays `standard-produce` whether it reads "Produce" or
+    /// "Fruit & Veg", and the description the inference prompt reads is left
+    /// alone.
+    ///
+    /// A bare integer is an aisle number, anything else is a name — the same
+    /// split `AisleUtterance` makes, so a typed correction and a spoken one
+    /// cannot disagree about what an aisle is.
+    func renameAisle(in store: HouseholdStore, aisleId: String, to label: String) async throws -> HouseholdStore {
+        var updatedStore = householdStores.first { $0.id == store.id } ?? store
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return updatedStore }
+
+        let isNumber = Int(trimmed) != nil
+        updatedStore.aisleLayout = updatedStore.aisleLayout.map { aisle in
+            guard aisle.id == aisleId else { return aisle }
+            return StoreAisle(
+                id: aisle.id,
+                number: isNumber ? trimmed : "",
+                name: isNumber ? "" : trimmed,
+                displayOrder: aisle.displayOrder,
+                description: aisle.description
+            )
+        }
+
+        try await updateStore(updatedStore)
+        return updatedStore
     }
 
     /// Remove an aisle from a store's layout

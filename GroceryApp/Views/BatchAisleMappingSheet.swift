@@ -329,7 +329,7 @@ struct BatchAisleMappingSheet: View {
             item: item,
             result: result,
             aisleLayout: store.aisleLayout,
-            onLongPress: {
+            onTap: {
                 selectedItemResult = result
                 selectedItemForDetail = item
             }
@@ -482,7 +482,7 @@ private struct BatchMappingResultRow: View {
     /// Needed to name the aisle. Without it the row printed the raw id, so the
     /// answer to "where is this?" was "standard-household".
     let aisleLayout: [StoreAisle]
-    let onLongPress: () -> Void
+    let onTap: () -> Void
 
     var body: some View {
         // A Button, not a pile of gestures.
@@ -494,16 +494,11 @@ private struct BatchMappingResultRow: View {
         // style below keeps the same squeeze.
         Button(action: {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            onLongPress()
+            onTap()
         }) {
             rowContent
         }
         .buttonStyle(PressableRowStyle())
-        // Long press still works, for anyone who learned it when it was the only way.
-        .onLongPressGesture(minimumDuration: 0.5) {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            onLongPress()
-        }
     }
 
     private var rowContent: some View {

@@ -8,13 +8,24 @@ struct StoreAisleManagementView: View {
     @StateObject private var storeService = StoreService.shared
     @StateObject private var productCache = ProductCache.shared
 
-    let store: HouseholdStore
+    /// The store's id, not the store.
+    ///
+    /// This screen is pushed from a NavigationLink whose destination is rebuilt
+    /// every time `householdStores` changes — and adding, deleting or reordering
+    /// an aisle changes it. Holding the whole `HouseholdStore` made the
+    /// destination a different value on every save, so SwiftUI threw this screen
+    /// away and you landed back on Store Details mid-edit. An id does not change
+    /// when the layout does.
+    let storeId: String
 
     // MARK: - State
     @State private var isCleaning = false
     @State private var showAddAisle = false
     @State private var newAisleText = ""
     @State private var isAddingAisle = false
+    /// The aisle being renamed, and the text of the correction.
+    @State private var renamingAisle: OrderableAisle?
+    @State private var renameText = ""
     /// The unmapped bucket is collapsed by default. On a new store it holds the
     /// entire product history — everything ever bought anywhere — which read as a
     /// backlog to work through. It is not: items get mapped when a list meets a
@@ -32,7 +43,8 @@ struct StoreAisleManagementView: View {
 
     /// Get fresh store data from viewModel (updated after extraction completes)
     private var currentStore: HouseholdStore {
-        viewModel.householdStores.first { $0.id == store.id } ?? store
+        viewModel.householdStores.first { $0.id == storeId }
+            ?? HouseholdStore(id: storeId, householdId: "", name: "", chain: nil, address: nil, aisleLayout: [])
     }
 
     private var orderableAisles: [OrderableAisle] {
@@ -57,7 +69,7 @@ struct StoreAisleManagementView: View {
     }
 
     private var mappings: [ProductAisleMapping] {
-        storeService.productMappings[store.id] ?? []
+        storeService.productMappings[storeId] ?? []
     }
 
     /// All grocery items in the household
@@ -178,6 +190,17 @@ struct StoreAisleManagementView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                .swipeActions(edge: .leading) {
+                    if aisle.id != "Unknown" {
+                        Button {
+                            renameText = aisle.displayName
+                            renamingAisle = aisle
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        .tint(DesignSystem.Colors.dillGreen)
+                    }
+                }
             }
             .onMove(perform: moveAisles)
             .onDelete(perform: deleteAisles)
@@ -274,6 +297,45 @@ struct StoreAisleManagementView: View {
         }
     }
 
+    /// Correct an aisle's label. The aisle keeps its identity, so nothing that
+    /// points at it has to be repaired.
+    private func renameAisle() {
+        guard let aisle = renamingAisle else { return }
+        renamingAisle = nil
+
+        let trimmed = renameText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != aisle.displayName else { return }
+
+        // Two aisles with the same label make voice capture ambiguous —
+        // `AisleNaming.match` matches on name and number, and would have to pick
+        // one of them.
+        if let clash = AisleNaming.match(trimmed, in: currentStore.aisleLayout), clash.id != aisle.id {
+            viewModel.toastMessage = "\(trimmed) is already an aisle here"
+            viewModel.toastType = .error
+            viewModel.showToast = true
+            return
+        }
+
+        Task {
+            do {
+                let updated = try await storeService.renameAisle(in: currentStore, aisleId: aisle.id, to: trimmed)
+                await MainActor.run {
+                    applyStoreUpdate(updated)
+                    viewModel.toastMessage = "Renamed to \(trimmed)"
+                    viewModel.toastType = .success
+                    viewModel.showToast = true
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+            } catch {
+                await MainActor.run {
+                    viewModel.toastMessage = "Couldn't rename that aisle"
+                    viewModel.toastType = .error
+                    viewModel.showToast = true
+                }
+            }
+        }
+    }
+
     private func moveAisles(from source: IndexSet, to destination: Int) {
         var aisleIds = orderableAisles.map { $0.id }
         aisleIds.move(fromOffsets: source, toOffset: destination)
@@ -364,6 +426,16 @@ struct StoreAisleManagementView: View {
         }
         .navigationTitle("Aisle Management")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Rename aisle", isPresented: Binding(
+            get: { renamingAisle != nil },
+            set: { if !$0 { renamingAisle = nil } }
+        )) {
+            TextField("Number or name — 7, A2, Bakery", text: $renameText)
+            Button("Cancel", role: .cancel) { renamingAisle = nil }
+            Button("Save") { renameAisle() }
+        } message: {
+            Text("Items already in this aisle stay in it.")
+        }
         .alert("Add an aisle", isPresented: $showAddAisle) {
             TextField("Number or name — 7, A2, Bakery", text: $newAisleText)
                 .autocorrectionDisabled()
@@ -375,7 +447,7 @@ struct StoreAisleManagementView: View {
         .task {
             // Load mappings if not already loaded
             if mappings.isEmpty {
-                try? await storeService.fetchMappings(storeId: store.id)
+                try? await storeService.fetchMappings(storeId: storeId)
             }
         }
     }
@@ -395,11 +467,11 @@ struct StoreAisleManagementView: View {
                     .tracking(1.2)
                     .foregroundColor(DesignSystem.Colors.textTertiary)
 
-                Text(store.name)
+                Text(currentStore.name)
                     .font(.system(size: 24, weight: .bold))
                     .foregroundStyle(DesignSystem.Colors.accentGradient)
 
-                if let chain = store.chain, !chain.isEmpty {
+                if let chain = currentStore.chain, !chain.isEmpty {
                     Text(chain)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(DesignSystem.Colors.textSecondary)
@@ -459,7 +531,7 @@ struct StoreAisleManagementView: View {
         defer { isCleaning = false }
 
         do {
-            let deletedCount = try await storeService.cleanupInvalidMappings(storeId: store.id)
+            let deletedCount = try await storeService.cleanupInvalidMappings(storeId: storeId)
             await MainActor.run {
                 viewModel.toastMessage = "Cleaned up \(deletedCount) invalid mappings"
                 viewModel.toastType = .success
@@ -487,6 +559,6 @@ struct StoreAisleManagementView: View {
 // MARK: - Preview
 
 #Preview {
-    StoreAisleManagementView(store: HouseholdStore.preview)
+    StoreAisleManagementView(storeId: HouseholdStore.preview.id)
         .environmentObject(ShoppingListViewModel())
 }

@@ -34,7 +34,18 @@ class ShoppingListViewModel: ObservableObject {
     @Published var items: [GroceryItem] = []
     @Published var isAtStoreMode: Bool = false
     @Published var selectedStore: Store?
-    @Published var householdStores: [HouseholdStore] = []
+    /// One list of stores, owned by StoreService.
+    ///
+    /// This used to be a second `@Published` array kept in step by hand. It went
+    /// out of step: `addAisle` re-based on the service's copy while this screen
+    /// read the view model's, so an aisle written from one was invisible to the
+    /// other. That produced aisles silently dropped from a layout and mappings
+    /// left pointing at ids no longer in it, which surfaced as a raw UUID where
+    /// an aisle name belongs.
+    var householdStores: [HouseholdStore] {
+        get { StoreService.shared.householdStores }
+        set { StoreService.shared.householdStores = newValue }
+    }
     @Published var selectedHouseholdStore: HouseholdStore?
     @Published var productAisleMappings: [String: [ProductAisleMapping]] = [:] // storeId -> mappings
     @Published var showToast: Bool = false
@@ -295,7 +306,7 @@ class ShoppingListViewModel: ObservableObject {
 
         // Stores and mappings change rarely, so a longer debounce and their own
         // stream. Both are needed to shop offline.
-        Publishers.CombineLatest($householdStores, $productAisleMappings)
+        Publishers.CombineLatest(StoreService.shared.$householdStores, $productAisleMappings)
             .debounce(for: .seconds(2), scheduler: DispatchQueue.main)
             .sink { [weak self] _, _ in
                 self?.persistShoppingContext()
@@ -2264,8 +2275,9 @@ class ShoppingListViewModel: ObservableObject {
                 store = try await StoreService.shared.addAisle(to: store, number: aisle.number, name: aisle.name)
             }
 
-            // Update local cache
-            householdStores.append(store)
+            // No append here. `householdStores` is StoreService's array now, and
+            // createStore has already put the store in it — appending again
+            // listed the same store twice.
             showToast(message: "Created \(name)")
             logger.info("Created store: \(name) with \(aisles.count) aisles")
             return store

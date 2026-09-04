@@ -2,7 +2,7 @@ import type { AppSyncResolverHandler } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
-import { requireHousehold } from '../requireHousehold';
+import { requireHousehold, callerHouseholdIds } from '../requireHousehold';
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -68,20 +68,37 @@ interface StoreAisle {
 /// yogurt, butter, cheese, eggs..."). Building context only from products
 /// already mapped meant those descriptions were never seen, and a store could
 /// only ever place items into aisles that already had something in them.
-async function fetchStoreAisles(storeId: string): Promise<StoreAisle[]> {
+async function fetchStoreAisles(storeId: string, callerHouseholds: string[]): Promise<StoreAisle[]> {
   try {
     const result = await ddbClient.send(
       new GetCommand({
         TableName: HOUSEHOLD_STORE_TABLE,
         Key: { id: storeId },
-        ProjectionExpression: 'aisleLayout',
+        ProjectionExpression: 'aisleLayout, householdId',
       })
     );
+
+    // `requireHousehold` proves the caller is in *a* household. It says nothing
+    // about *this* store, and `storeId` arrives as an argument — so without this,
+    // a member of one household could read another household's aisle layout, and
+    // the mappings below it, which are a list of what those people buy. Needs the
+    // store's UUID to be worth anything, but "needs a UUID" is not access control.
+    //
+    // The store is fetched here anyway, so the check costs nothing.
+    const owner = result.Item?.householdId;
+    if (owner && !callerHouseholds.includes(owner)) {
+      console.warn('[AUTH] rejected: caller is not in the household owning this store');
+      throw new Error('That store belongs to a different household.');
+    }
+
     const layout = result.Item?.aisleLayout;
     if (!layout) return [];
     const parsed = typeof layout === 'string' ? JSON.parse(layout) : layout;
     return Array.isArray(parsed) ? (parsed as StoreAisle[]) : [];
   } catch (err) {
+    // An ownership rejection is not a read failure and must not be turned into
+    // an empty layout, which would let the request carry on regardless.
+    if (err instanceof Error && err.message.startsWith('That store belongs')) throw err;
     console.error('[INFER] Failed to read store aisle layout', err);
     return [];
   }
@@ -405,7 +422,7 @@ Confidence guidelines:
  * Main handler
  */
 export const handler: AppSyncResolverHandler<Arguments, Response> = async (event) => {
-  requireHousehold(event);
+  const callerHouseholds = requireHousehold(event);
   console.log('[INFER] Received request:', JSON.stringify(event.arguments));
 
   const { storeId, productName, products } = event.arguments;
@@ -431,10 +448,12 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
   try {
     // Fetch existing mappings for context
     console.log(`[INFER] Fetching existing mappings for store ${storeId}`);
-    const [existingMappings, storeAisles] = await Promise.all([
-      fetchExistingMappings(storeId),
-      fetchStoreAisles(storeId),
-    ]);
+    // Deliberately serial. Running these together meant another household's
+    // mappings — a list of what those people buy — were read before the
+    // ownership check on the store could reject. Nothing reached the caller, but
+    // it was read. One extra DynamoDB GET against an LLM call is free.
+    const storeAisles = await fetchStoreAisles(storeId, callerHouseholds);
+    const existingMappings = await fetchExistingMappings(storeId);
 
     // Only genuinely blocked when the store declares no aisles AND nothing has
     // ever been placed in it. A seeded store has seven departments, so this no

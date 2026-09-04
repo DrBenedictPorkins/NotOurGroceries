@@ -35,16 +35,28 @@ const backend = defineBackend({
   adminMcpFunction,
 });
 
-// Password policy: 6 characters, no complexity rules. Cognito's own floor is 6,
-// so this is as permissive as AWS allows. Deliberate — this is a 2-user internal
-// beta and the default policy (8 + upper + lower + number + symbol) was pure
-// friction on a shopping list. Set here because defineAuth doesn't expose it.
+// Password policy. Set here because defineAuth doesn't expose it.
+//
+// Was Cognito's own floor — 6 characters, no character classes — chosen
+// deliberately while this was a two-person beta, on the reasoning that the full
+// default (8 + upper + lower + number + symbol) is friction on a shopping list.
+//
+// Raised 2026-09-03, ahead of anyone outside the household getting an account.
+// The threat was never someone attacking this app; it is a person reusing a
+// password that already sits in a breach corpus, and six characters of anything
+// is comfortably inside a stuffing list. Eight with letters and a number is the
+// ordinary bar and costs an existing user nothing — Cognito validates on set, so
+// passwords already in use keep working and only a new or changed one has to
+// meet it.
+//
+// Symbols stay optional on purpose. Requiring them pushes people towards writing
+// the password down far more reliably than it adds entropy.
 backend.auth.resources.cfnResources.cfnUserPool.policies = {
   passwordPolicy: {
-    minimumLength: 6,
+    minimumLength: 8,
     requireUppercase: false,
-    requireLowercase: false,
-    requireNumbers: false,
+    requireLowercase: true,
+    requireNumbers: true,
     requireSymbols: false,
     temporaryPasswordValidityDays: 7,
   },

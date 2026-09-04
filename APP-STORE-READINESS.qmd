@@ -41,13 +41,13 @@ These are rejections, not preferences.
 | Item | Status | Notes |
 |---|---|---|
 | In-app account deletion (5.1.1(v)) | ✅ | Built and verified 2026-08-31 against production: Cognito user gone, `User` row gone, household and its 245 items untouched, no orphaned group. The shared-household branch — detach, group removal, remaining count — is still untested |
-| Account deletion documented publicly | 🟡 | `website/account-deletion.md` drafted, not hosted. Hosting is now trivial — the bucket and CDN exist, see *Website* |
+| Account deletion documented publicly | ✅ | Live at <https://got-dill.com/account-deletion>. Source `docs/account-deletion.html`; the in-app path it describes (Settings → Danger Zone → Delete my account) was checked against `SettingsView` |
 | Privacy policy URL | ✅ | **Live at <https://got-dill.com/privacy>**, linked in-app under Create Account and in Settings (`AppIdentity.privacyPolicyURL`). Source is `docs/privacy.html`, written 2026-09-03 against verified behaviour. Not lawyer-reviewed, and says so on the page. `website/privacy-policy.md` was the older draft and was deleted 2026-09-03; `docs/privacy.html` is the single source |
 | Privacy nutrition labels | ⬜ | Must declare email, audio, photos, and the Anthropic/OpenAI processing. Wrong answers here are a rejection |
 | Demo account for review (2.1) | ⬜ | Reviewers need a working account **and** a household with data in it. A fresh account sees an empty app |
 | Age rating questionnaire | ⬜ | |
-| Export compliance declaration | ❓ | HTTPS-only usually qualifies for the exemption; needs confirming, not assuming |
-| Support URL | ⬜ | `website/support.md` drafted, not hosted. Same one-command deploy as the privacy page |
+| Export compliance declaration | ✅ | Verified 2026-09-03: `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO` in both Debug and Release. Accurate — the app uses standard HTTPS/TLS and no custom cryptography |
+| Support URL | ✅ | Live at <https://got-dill.com/support>. Source `docs/support.html`. Support address is mike@byteclub.com — swap it if a got-dill.com mailbox ever exists |
 
 ---
 
@@ -63,9 +63,9 @@ Not Apple's rules — ours. See `world-release-blockers` in session memory.
 | AppSync request logging | ✅ | ERROR level, bodies excluded, 14-day retention; verified by generating denials |
 | S3 enumeration closed | ✅ | `list` withheld; deployed policy confirmed |
 | S3 per-household scoping | ⬜ | Unchanged. Anyone holding a key can still read or delete that file. Lambda broker is the fix, ~a day. See `s3-scoping-plan` |
-| `inferProductAisle` store ownership | ⬜ | Found 2026-09-03. `requireHousehold` proves the caller is in *a* household; the handler then uses `storeId` unchecked, so a member of one household can read another's layout and mappings given the UUID. Three lines — the handler already fetches the store |
-| `joinHousehold` rate limiting | 🚫 | Still deferred, and **less urgent than this file used to claim**. With 8-character single-use 10-minute codes, guessing is not the concern; burning Lambda invocations is. Also: error messages still distinguish invalid / used / expired, which confirms a hit — collapse them |
-| Password floor above 6 chars | ⬜ | Confirmed by CLI 2026-09-03: minimum 6, no character classes, MFA off, self-signup open. A Cognito config change |
+| `inferProductAisle` store ownership | ✅ | Fixed 2026-09-03. The store read now projects `householdId` and rejects unless it is one of the caller's Cognito groups. The mappings read was also made serial after it — running them together meant another household's mappings were read before the check could reject, even though nothing reached the caller |
+| `joinHousehold` rate limiting | 🚫 | Still deferred, and **less urgent than this file used to claim**. With 8-character single-use 10-minute codes, guessing is not the concern; burning Lambda invocations is, and a WAF rate rule is the answer to that, not a counter. The error-message half is done: invalid / expired / already-used now return one identical refusal, so a guesser is no longer told when they found a real code |
+| Password floor above 6 chars | 🟡 | Raised to 8 with lowercase + number in `backend.ts` on 2026-09-03; **not yet deployed**. Symbols deliberately not required. Existing passwords keep working — Cognito validates on set. Verify against the pool after the Amplify job runs |
 | Signup gating | ⬜ | Much less urgent now — a junk account costs a Cognito row and nothing else |
 
 ---
@@ -128,9 +128,9 @@ Drafted 2026-08-31, parked. See `website/README.md` for the full placeholder lis
 | Item | Status |
 |---|---|
 | Privacy policy | ✅ live, single source at `docs/privacy.html` |
-| Terms of service | 🟡 drafted |
-| Support page | 🟡 drafted |
-| Account deletion page | 🟡 drafted |
+| Terms of service | 🚫 blocked | Needs `[LEGAL ENTITY]` and `[JURISDICTION]`, which are decisions, not text. Not an Apple requirement for a free app with no purchases — only the privacy policy is |
+| Support page | ✅ live |
+| Account deletion page | ✅ live |
 | Domain | ✅ `got-dill.com`, registered 2026-09-03, GoDaddy, 1 yr + Full Domain Protection, renews 2027-09 at \$37.98. DNS delegated to Route 53 zone `Z0678500J7Q7Z5FMLMYC` |
 | Hosting | ✅ S3 `got-dill-com-site` (private, OAC-only) behind CloudFront `E12UV51UT41FNP`, ACM cert for apex + www, HTTP→HTTPS, TLS 1.2+. ~\$0.50/mo. To update: `aws s3 cp` then invalidate |
 

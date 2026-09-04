@@ -187,7 +187,9 @@ async function consumeInviteCode(householdId: string, usedCode: string): Promise
     }));
   } catch (error: unknown) {
     if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
-      throw new Error('This invite code has already been used. Please request a new one from a household member.');
+      throw new Error(
+        "That invite code doesn't work. Ask a household member for a new one — codes are single-use and last ten minutes."
+      );
     }
     throw error;
   }
@@ -263,16 +265,27 @@ export const handler: Handler = async (event) => {
       throw new Error('User identity not found');
     }
 
-    // Find household by invite code
+    // One message for every way a code can fail to admit you.
+    //
+    // "Invalid invite code" versus "this code has expired" versus "already used"
+    // tells whoever is typing that they found a real code, which is the only
+    // expensive part of guessing one — and confirms that a household exists at
+    // all. The three cases are indistinguishable to a person who mistyped, and
+    // the remedy is identical: ask for another one.
+    //
+    // "You are already a member" below is deliberately kept. That is your own
+    // household and no secret, and saying anything vaguer would be baffling.
+    const CODE_REFUSED =
+      "That invite code doesn't work. Ask a household member for a new one — codes are single-use and last ten minutes.";
+
     const household = await findHouseholdByInviteCode(inviteCode);
     if (!household) {
-      throw new Error('Invalid invite code');
+      throw new Error(CODE_REFUSED);
     }
 
-    // Check if invite code is expired
     const expiresAt = new Date(household.inviteCodeExpiresAt);
     if (expiresAt < new Date()) {
-      throw new Error('This invite code has expired. Please request a new one from a household member.');
+      throw new Error(CODE_REFUSED);
     }
 
     // Get user's current household (if any)

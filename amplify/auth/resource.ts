@@ -23,4 +23,6 @@ export const auth = defineAuth({
     //   logoutUrls: ['http://localhost:3000/', 'myapp://'],
     // },
   },
+  // Password policy is not expressible here; it is set on the underlying
+  // Cognito construct in `backend.ts`.
 });

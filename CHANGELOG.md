@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Aisles
+- **Say where something is, standing in front of it.** Open an item, hold the pill, say "aisle twelve" or "international" — it lands on that item and the shop remembers. Recognised on your phone, so it works deep inside a store with no signal
+- Or tap it. The aisle numbers are on screen now; the ones this shop already knows are green. One tap saves, with Undo next to it — no Save button, and the sheet stays open so you can carry on
+- **Aisle scanning is gone.** Photographing the directory board made layouts worse, not better: the two shops it had been used on had 38 and 39 sections against 18 for the ones it hadn't, overlapping and about one in seven junk. Saying where one thing is beats guessing at forty
+- **Seven departments, and only seven** — Produce, Bakery, Deli, Seafood, Meat & Poultry, Dairy & Eggs, Frozen. Eleven others had crept in — Snacks, Baby, Pantry, Canned Goods — and none of them is a place you can walk to. "Condiments & Sauces" is *in* aisle 5; it is not a sign you walk towards
+- An item with no known aisle now says **"No aisle yet"** and stays there until somebody says otherwise. The app no longer guesses, and no longer offers to guess again at something it has already failed
+- What it does suggest comes from what has actually been recorded at that shop — taco seasoning in aisle 4 is what puts cinnamon there next time
+- Swipe an aisle right to rename it. Items in it stay in it
+- Delete a department you do not have, and type its name back in later to get the real one back
+- Numbered aisles sit in numeric order — 4 goes between 3 and 5, not after 10
+- Map Aisles now lists the items it could not place, with the numbers right there to place them
+- Fix: **aisle management closed itself** every time you added, deleted or reordered an aisle, dropping you back on the store page mid-edit
+- Fix: correcting an item to a numbered aisle was accepted on screen and then silently discarded when you pressed Apply
+- Fix: renaming a store wrote back the aisle layout the screen had opened with, quietly undoing every aisle added since
+
+### Your shops
+- **Every household now has a Deli/Bodega.** Some shops have nowhere to walk to — a fridge, a counter, shelves. It has no aisles, so there is no mapping step, no aisle screen, and the list is one plain "TO GET". Strip any shop's departments and you get the same thing
+- Two shops can no longer share a name. They are indistinguishable everywhere a shop appears, and each carries its own aisles, so picking the wrong one sends you to the wrong place
+- A shop with no layout says so, rather than reporting "0 sections" like something half set up
+- Fix: creating a shop listed it twice
+
+### Your list
+- Fix: **the app crashed** when deleting an item from suggestions
+- Fix: the delete confirmation appeared and vanished on its own, and the item looked deleted when it never was. Nothing was ever lost
+- Fix: saving an aisle by voice closed the whole item screen out from under you
+
+### Your household
+- **Invite by QR.** The square is under the code on the invite screen; the join screen scans it. Most invites happen in the same room, and a scan cannot mishear a B for a D
+- Invite codes are longer and live ten minutes instead of thirty. Nobody waits half an hour to join a shopping list, and any member can make a new one in a tap
+- Fix: the shared invite message claimed the code lasted 24 hours. It had not for a long time
+
+### Privacy
+- **There is a privacy policy**, at got-dill.com/privacy, linked before you create an account and in Settings. It says plainly what is stored, who in your household can see it, and the two things that leave your phone — dictated audio and list text. Aisle speech is recognised on the phone and never sent anywhere
+
+### Elsewhere
+- Fix: **hold-to-talk captured nothing.** Letting go cancelled the recogniser before it had delivered the words, which on a one-word answer was all of them. The microphone permission was also never actually requested
+- Every screen does one job again: the mid-trip store switcher is gone, and aisle management no longer lists items
+
+
 ## [1.7.0] - 2026-08-31
 
 ### Your list

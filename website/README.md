@@ -8,7 +8,7 @@ it goes live.
 
 | File | What it is |
 |---|---|
-| `privacy-policy.md` | What the app collects, the three processors (AWS, Anthropic, OpenAI), and what stays on the device. Required by the App Store. |
+| ~~`privacy-policy.md`~~ | **Superseded 2026-09-03 and deleted.** The live policy is `docs/privacy.html`, published at <https://got-dill.com/privacy>. Edit that; do not re-add a second copy here. |
 | `terms-of-service.md` | Terms of use — accounts, shared households, user content, disclaimers. |
 | `support.md` | Support contact plus a short FAQ. App Store review requires a working support URL. |
 | `account-deletion.md` | Public description of in-app account deletion. Apple requires this to be documented publicly as well as offered in the app. |

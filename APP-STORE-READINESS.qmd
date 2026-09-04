@@ -7,7 +7,7 @@ format:
     toc-depth: 2
 ---
 
-Status as of **2026-08-31**. This tracks the path from a two-person TestFlight
+Status as of **2026-09-03**. This tracks the path from a two-person TestFlight
 beta to something a stranger can install. Update the status column as things
 move; do not delete rows, so the history of what was decided stays readable.
 
@@ -41,13 +41,13 @@ These are rejections, not preferences.
 | Item | Status | Notes |
 |---|---|---|
 | In-app account deletion (5.1.1(v)) | ✅ | Built and verified 2026-08-31 against production: Cognito user gone, `User` row gone, household and its 245 items untouched, no orphaned group. The shared-household branch — detach, group removal, remaining count — is still untested |
-| Account deletion documented publicly | 🟡 | `website/account-deletion.md` drafted, not hosted |
-| Privacy policy URL | 🟡 | `website/privacy-policy.md` drafted, not hosted, has placeholders |
+| Account deletion documented publicly | 🟡 | `website/account-deletion.md` drafted, not hosted. Hosting is now trivial — the bucket and CDN exist, see *Website* |
+| Privacy policy URL | ✅ | **Live at <https://got-dill.com/privacy>**, linked in-app under Create Account and in Settings (`AppIdentity.privacyPolicyURL`). Source is `docs/privacy.html`, written 2026-09-03 against verified behaviour. Not lawyer-reviewed, and says so on the page. `website/privacy-policy.md` was the older draft and was deleted 2026-09-03; `docs/privacy.html` is the single source |
 | Privacy nutrition labels | ⬜ | Must declare email, audio, photos, and the Anthropic/OpenAI processing. Wrong answers here are a rejection |
 | Demo account for review (2.1) | ⬜ | Reviewers need a working account **and** a household with data in it. A fresh account sees an empty app |
 | Age rating questionnaire | ⬜ | |
 | Export compliance declaration | ❓ | HTTPS-only usually qualifies for the exemption; needs confirming, not assuming |
-| Support URL | ⬜ | `website/support.md` drafted, not hosted |
+| Support URL | ⬜ | `website/support.md` drafted, not hosted. Same one-command deploy as the privacy page |
 
 ---
 
@@ -58,13 +58,14 @@ Not Apple's rules — ours. See `world-release-blockers` in session memory.
 | Item | Status | Notes |
 |---|---|---|
 | Per-household authorization | ✅ | Verified 2026-08-30 with a real outsider account: reads and writes both denied |
-| Invite codes single-use, 30 min | ✅ | Verified against production |
+| Invite codes single-use, 10 min, 8 chars | ✅ | Tightened 2026-09-03 and deployed (Amplify job on `71cafb1`). Was 30 min / 6 chars. `regenerateInviteCodeFunction` was still generating with `Math.random()` — the live "Generate New Code" path — now `randomInt` from node:crypto. QR scanning added for in-person invites |
 | Household required for every AI call | ✅ | Reject and allow paths both verified |
 | AppSync request logging | ✅ | ERROR level, bodies excluded, 14-day retention; verified by generating denials |
 | S3 enumeration closed | ✅ | `list` withheld; deployed policy confirmed |
-| S3 per-household scoping | ⬜ | Anyone holding a key can still read or delete that file. Lambda broker is the fix, ~a day. See `s3-scoping-plan` |
-| `joinHousehold` rate limiting | 🚫 | Deliberately deferred. Needs a decision: lock after N failures, throttle, or both |
-| Password floor above 6 chars | ⬜ | Cognito is at its own minimum with no complexity rules |
+| S3 per-household scoping | ⬜ | Unchanged. Anyone holding a key can still read or delete that file. Lambda broker is the fix, ~a day. See `s3-scoping-plan` |
+| `inferProductAisle` store ownership | ⬜ | Found 2026-09-03. `requireHousehold` proves the caller is in *a* household; the handler then uses `storeId` unchecked, so a member of one household can read another's layout and mappings given the UUID. Three lines — the handler already fetches the store |
+| `joinHousehold` rate limiting | 🚫 | Still deferred, and **less urgent than this file used to claim**. With 8-character single-use 10-minute codes, guessing is not the concern; burning Lambda invocations is. Also: error messages still distinguish invalid / used / expired, which confirms a hit — collapse them |
+| Password floor above 6 chars | ⬜ | Confirmed by CLI 2026-09-03: minimum 6, no character classes, MFA off, self-signup open. A Cognito config change |
 | Signup gating | ⬜ | Much less urgent now — a junk account costs a Cognito row and nothing else |
 
 ---
@@ -126,12 +127,12 @@ Drafted 2026-08-31, parked. See `website/README.md` for the full placeholder lis
 
 | Item | Status |
 |---|---|
-| Privacy policy | 🟡 drafted |
+| Privacy policy | ✅ live, single source at `docs/privacy.html` |
 | Terms of service | 🟡 drafted |
 | Support page | 🟡 drafted |
 | Account deletion page | 🟡 drafted |
-| Domain | ⬜ to be purchased or reused |
-| Hosting | ⬜ S3 + CloudFront, or Amplify |
+| Domain | ✅ `got-dill.com`, registered 2026-09-03, GoDaddy, 1 yr + Full Domain Protection, renews 2027-09 at \$37.98. DNS delegated to Route 53 zone `Z0678500J7Q7Z5FMLMYC` |
+| Hosting | ✅ S3 `got-dill-com-site` (private, OAC-only) behind CloudFront `E12UV51UT41FNP`, ACM cert for apex + www, HTTP→HTTPS, TLS 1.2+. ~\$0.50/mo. To update: `aws s3 cp` then invalidate |
 
 **Open questions carried from the drafts:** effective date, support email, legal
 entity, jurisdiction, retention period after deletion (including AWS PITR
@@ -157,8 +158,8 @@ windows), and whether a lawyer reviews before public release.
 | `scripts/release.sh` | ✅ | Tags `vX.Y.Z`, bumps `main` to the next minor |
 | TestFlight CI on tag push | ✅ | `.github/workflows/testflight.yml`, stamps a datetime build number |
 | 90-day expiry job | ✅ | Scheduled rebuild so TestFlight builds do not lapse |
-| CHANGELOG up to date | ⬜ | `[Unreleased]` empty with 27 commits since v1.6.0 |
-| TestFlight build current | ⬜ | Stale at v1.6.0, several schema changes behind and broken against the current backend |
+| CHANGELOG up to date | ✅ | `[Unreleased]` written 2026-09-03 covering all 15 commits since v1.7.0. Ready for `./scripts/release.sh` whenever 1.8.0 is cut |
+| TestFlight build current | 🟡 | v1.7.0 shipped 2026-08-31 and is current *with itself*, but 15 commits behind `main`. `main` carries 1.8.0, unreleased. Both phones run local builds well ahead of TestFlight |
 
 ---
 

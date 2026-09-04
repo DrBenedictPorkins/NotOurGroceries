@@ -7,7 +7,6 @@ struct GroceryItemRow: View {
     @State private var isPressed = false
     @State private var shakeOffset: CGFloat = 0
     @State private var isShaking = false
-    @State private var showDetailSheet = false
 
     // Transition animation states
     @State private var isTransitioning = false
@@ -184,10 +183,6 @@ struct GroceryItemRow: View {
                     animateToActive()
                 }
             }
-            .sheet(isPresented: $showDetailSheet) {
-                ItemDetailSheet(item: item)
-                    .environmentObject(viewModel)
-            }
     }
 
     // MARK: - Row Content
@@ -248,7 +243,7 @@ struct GroceryItemRow: View {
 
             // Detail sheet button
             Button {
-                showDetailSheet = true
+                viewModel.itemShowingDetail = item
             } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 13, weight: .medium))

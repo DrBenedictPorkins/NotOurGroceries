@@ -62,6 +62,14 @@ struct ContentView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: isAtStoreMode)
+        // Presented here, above every list that shows a row. Owned by the row,
+        // this sheet was torn down whenever the list rebuilt underneath it —
+        // which is what saying an aisle out loud does, because the write
+        // republishes the stores.
+        .sheet(item: $viewModel.itemShowingDetail) { item in
+            ItemDetailSheet(item: item)
+                .environmentObject(viewModel)
+        }
         // Deleting an item is confirmed here, above every list that shows one.
         // Owned by a row, this dialog was presented while the swipe collapsed and
         // the row was rebuilt underneath it — it flashed and its Delete fired on

@@ -48,6 +48,16 @@ class ShoppingListViewModel: ObservableObject {
     }
     @Published var selectedHouseholdStore: HouseholdStore?
     @Published var productAisleMappings: [String: [ProductAisleMapping]] = [:] // storeId -> mappings
+    /// The item whose detail sheet is open.
+    ///
+    /// Owned here rather than by `GroceryItemRow` for the same reason as
+    /// `itemPendingDeletion` below: the row lives in a List that animates and
+    /// rebuilds its rows, and a sheet presented from the row's own `@State`
+    /// goes with the row. Saying an aisle out loud writes a mapping, which
+    /// republishes the stores, which rebuilds the list — and the sheet you were
+    /// standing in vanished mid-edit.
+    @Published var itemShowingDetail: GroceryItem?
+
     /// The item a delete has been asked for, waiting on confirmation.
     ///
     /// Lives here rather than in `GroceryItemRow` because the row is inside a

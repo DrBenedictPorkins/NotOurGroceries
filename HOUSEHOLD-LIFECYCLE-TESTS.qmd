@@ -1,0 +1,334 @@
+---
+title: "Household Lifecycle — Test Runbook"
+subtitle: "The six paths that have never been run, in an order that survives itself"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+---
+
+Written 2026-09-04. Work top to bottom — **the order is load-bearing.** Each
+task leaves the state the next one needs, and the tasks that destroy a household
+come last. Running them out of order means rebuilding the fixture.
+
+Tick the Result column as you go. Record what actually happened, including
+"as expected" — an untouched column a week later is indistinguishable from a
+test that was skipped.
+
+---
+
+## Stop. Read this first.
+
+**There is one environment and it holds one live household.**
+
+| | |
+|---|---|
+| **PROTECT — never target** | `TooFat&TooCurious` |
+| Its id | `5065fb0a-3861-4232-ac38-24a3dfa501b0` |
+| Its owner | `e448f408-a001-70ad-d17c-2a8350e0f505` (mike.akram@gmail.com) |
+| Also protect | `polina.tsaliev@gmail.com` — the second live account |
+
+Every task below deletes something. Before any destructive step, confirm the
+household id you are acting on is **not** the one above. The app does not ask
+twice; these tests are the first time several of these paths run at all.
+
+Sign the test accounts in on the **Simulator**, and keep your iPhone signed in
+to the real account — that way a mistap cannot reach the live household from the
+device most likely to be picked up out of habit.
+
+---
+
+## Do you need a third device?
+
+**No.** You need three *accounts*, not three devices, and those are different
+things.
+
+Only one task needs two clients acting at literally the same moment — the invite
+race in **T3** — and Simulator plus your iPhone already covers that. Everywhere
+else, signing out and back in on the same device is exactly equivalent, because
+the server cannot tell the difference and the server is what is under test.
+
+If you want three concurrent sessions anyway, **boot a second Simulator** rather
+than finding a third phone: macOS runs multiple simulators side by side, so
+Simulator ×2 + iPhone gives three live clients for free.
+
+**Accounts** — Gmail plus-addressing, all landing in your normal inbox:
+
+| Alias | Role in the run |
+|---|---|
+| `mike.akram+t1@gmail.com` | **A** — creates the household, owner |
+| `mike.akram+t2@gmail.com` | **B** — joins, outlives the owner |
+| `mike.akram+t3@gmail.com` | **C** — joins, gets removed, rejoins, deletes |
+
+Passwords must now be 8+ characters with a lowercase letter and a number.
+
+---
+
+## T0 — Build the fixture
+
+Nothing is being tested here. This is the household everything else consumes.
+
+| # | Step |
+|---|---|
+| 1 | Sign up **A** on Simulator. Create household — name it `LIFECYCLE-TEST` so it is unmistakable in any table scan |
+| 2 | Add a store with a real aisle layout, and put **at least 6 items** on the list — a few `ACTIVE`, a few moved to suggestions |
+| 3 | Complete one shopping session, so there are `Commit` rows and trip history |
+| 4 | Invite **B**, join on iPhone. Invite **C**, join on Simulator (sign A out first, or use the second Simulator) |
+| 5 | Have **each** of the three add at least one item, so every member owns some data |
+
+**Record before you break anything** — you will compare against this at the end:
+
+```bash
+H=<LIFECYCLE-TEST household id>
+AWS_PROFILE=mine aws dynamodb query --region us-east-1 \
+  --table-name "GroceryItem-vdsfrt2plzgwfdae2ucpxtwzh4-NONE" \
+  --index-name groceryItemsByHouseholdIdAndStatus \
+  --key-condition-expression "householdId = :h" \
+  --expression-attribute-values "{\":h\":{\"S\":\"$H\"}}" --select COUNT
+```
+
+| Baseline | Value |
+|---|---|
+| Household id | |
+| Item count | |
+| Commit count | |
+| Store count | |
+| Members (3 expected) | |
+
+---
+
+## T1 — Owner removes a member
+
+**Path:** `remove`. Owner-only. **Never run before.**
+
+| # | Step | Expect |
+|---|---|---|
+| 1 | As **A**, remove **C** | Succeeds |
+| 2 | As **C**, without signing out, pull to refresh | **Access denied immediately** — not when the token expires |
+| 3 | As **C**, force-quit and reopen | Sees no household |
+| 4 | As **A**, check the list | C's items are **still there** |
+| 5 | Try the same removal as **B** | Refused — not the owner |
+
+```bash
+# C must be gone from the group, and the group must still hold A and B
+AWS_PROFILE=mine aws cognito-idp list-users-in-group \
+  --user-pool-id us-east-1_OIBNTn0XB --group-name "$H" --region us-east-1 \
+  --query 'Users[].Username'
+```
+
+| Check | Pass | Result |
+|---|---|---|
+| C loses access without re-auth | | |
+| C's items survive | | |
+| C out of the Cognito group, A and B still in | | |
+| Non-owner cannot remove | | |
+
+::: {.callout-note}
+Step 2 is the real test. Group removal revokes the claim, but a token already
+issued still carries the old groups until it refreshes. If C can still read for
+minutes afterwards, that is a finding, not a flake — note how long.
+:::
+
+---
+
+## T2 — Member leaves and rejoins
+
+**Path:** colour reassignment and group re-grant. **Never run before.**
+
+| # | Step | Expect |
+|---|---|---|
+| 1 | As **A**, generate a new invite code | Old one is dead |
+| 2 | **C** rejoins with it | In, with a colour |
+| 3 | Note every member's colour | Three distinct |
+| 4 | As **C**, leave the household | Household intact, A and B unaffected |
+| 5 | As **B**, add an item while C is away | Succeeds |
+| 6 | Generate another code; **C** rejoins again | **C's colour does not collide** with A's or B's |
+
+| Check | Pass | Result |
+|---|---|---|
+| Rejoin restores group membership | | |
+| Colour is distinct from both remaining members | | |
+| C's earlier items still attributed to C | | |
+
+---
+
+## T3 — Two people race one invite code
+
+**Path:** `consumeInviteCode`'s conditional write. **The only task needing two
+devices at once.**
+
+Needs a fourth account (`+t4`) since C is already in. Sign up **D** first, then
+sign C out to a fresh install state so both are sitting on the join screen.
+
+| # | Step |
+|---|---|
+| 1 | As **A**, generate a code. Do **not** let anyone use it |
+| 2 | Get **C** on one device and **D** on the other, both with the code typed in, join button unpressed |
+| 3 | Press both **as close to simultaneously as you can manage** |
+
+| Check | Pass | Result |
+|---|---|---|
+| **Exactly one** gets in | | |
+| The loser sees the single generic refusal — not a different message revealing the code was real | | |
+| Member count is 3, never 4 | | |
+
+::: {.callout-tip}
+Hard to hit by hand. Three or four attempts with a fresh code each time is
+reasonable; if it never races, say so rather than marking it passed. A
+near-miss still proves single-use.
+:::
+
+---
+
+## T4 — Member deletes their account, others remain
+
+**Path:** `deleteAccount` with a **populated** household. Never run — the only
+prior verification was an account with no household at all, which is the least
+interesting branch.
+
+Use whichever of C or D is currently in.
+
+| # | Step | Expect |
+|---|---|---|
+| 1 | Note their item count and the household total | |
+| 2 | Settings → Danger Zone → Delete my account | Completes |
+| 3 | As **A**, refresh | Their **items remain**; member count drops by one |
+| 4 | Try to sign in as the deleted account | Rejected — user gone |
+
+```bash
+AWS_PROFILE=mine aws cognito-idp list-users --user-pool-id us-east-1_OIBNTn0XB \
+  --region us-east-1 --query 'Users[].Attributes[?Name==`email`].Value' --output text
+# household must still exist, with its items
+AWS_PROFILE=mine aws dynamodb get-item --region us-east-1 \
+  --table-name "Household-vdsfrt2plzgwfdae2ucpxtwzh4-NONE" \
+  --key "{\"id\":{\"S\":\"$H\"}}" --query 'Item.id.S'
+```
+
+| Check | Pass | Result |
+|---|---|---|
+| Cognito user gone | | |
+| `User` row gone | | |
+| Household **still exists** | | |
+| Item count unchanged from baseline | | |
+| Out of the Cognito group | | |
+| Log shows `account.deleted` with `householdDeleted: false` | | |
+
+::: {.callout-important}
+This is the branch that shares `deleteHouseholdData` with `leave`. If the
+household disappears here, stop the run and say so — that is the catastrophic
+case the new guard exists to prevent.
+:::
+
+---
+
+## T5 — Owner leaves, others remain
+
+**Path:** the ownerless household. Never run.
+
+| # | Step | Expect |
+|---|---|---|
+| 1 | As **A** (owner), leave the household | Succeeds |
+| 2 | As **B**, refresh | Household works normally — list, stores, shopping all fine |
+| 3 | As **B**, try to remove anybody | Refused. By design: no owner, so nobody can be removed |
+| 4 | As **B**, add an item and complete a session | Works |
+
+| Check | Pass | Result |
+|---|---|---|
+| Household survives its owner leaving | | |
+| Remaining member has full normal use | | |
+| Removal is refused, not crashed | | |
+| A's items stay behind | | |
+
+---
+
+## T6 — Last member deletes their account
+
+**Path:** the full `deleteHouseholdData` cascade via `deleteAccount`, plus the
+new `householdGroupIsEmpty` guard. **The most destructive code in the app, on
+the branch that has never run.**
+
+**B is now alone.** Confirm that before proceeding.
+
+| # | Step | Expect |
+|---|---|---|
+| 1 | Re-record the item / commit / store counts | Non-zero — the point is watching them go |
+| 2 | As **B**, Settings → Danger Zone → Delete my account | Completes |
+
+```bash
+for T in GroceryItem Commit HouseholdStore; do
+  echo -n "$T: "
+  AWS_PROFILE=mine aws dynamodb scan --region us-east-1 \
+    --table-name "$T-vdsfrt2plzgwfdae2ucpxtwzh4-NONE" \
+    --filter-expression "householdId = :h" \
+    --expression-attribute-values "{\":h\":{\"S\":\"$H\"}}" --select COUNT \
+    --query 'Count' --output text
+done
+AWS_PROFILE=mine aws dynamodb get-item --region us-east-1 \
+  --table-name "Household-vdsfrt2plzgwfdae2ucpxtwzh4-NONE" \
+  --key "{\"id\":{\"S\":\"$H\"}}"
+AWS_PROFILE=mine aws cognito-idp get-group --user-pool-id us-east-1_OIBNTn0XB \
+  --group-name "$H" --region us-east-1
+```
+
+| Check | Pass | Result |
+|---|---|---|
+| `GroceryItem` count → 0 | | |
+| `Commit` count → 0 | | |
+| `HouseholdStore` count → 0 | | |
+| Household row gone | | |
+| Cognito group gone (`ResourceNotFoundException`) | | |
+| Cognito user gone | | |
+| Log shows `account.deleted` with `householdDeleted: true` | | |
+| **No** `household.deleteRefused` in the logs | | |
+| `TooFat&TooCurious` untouched | | |
+
+::: {.callout-note}
+`ProductAisleMapping` is **expected** to survive — it hangs off `storeId`, not
+`householdId`, so the cascade cannot reach it. It is inert without its store.
+Documented behaviour, not a failure.
+:::
+
+---
+
+## The guard, tested deliberately
+
+`householdGroupIsEmpty` refuses to delete unless the member-count index **and**
+the Cognito group both say the household is empty. T6 proves the happy path —
+both agree, deletion proceeds. This proves it actually blocks.
+
+| # | Step |
+|---|---|
+| 1 | Build a throwaway household with two members, E and F |
+| 2 | Remove **E's** `User` row directly in DynamoDB, leaving them in the Cognito group — simulating the index having lost a member it should still show |
+| 3 | As **F**, delete your account |
+
+| Check | Pass | Result |
+|---|---|---|
+| Household is **not** deleted | | |
+| Log shows `household.deleteRefused` with `reason: cognito_group_still_populated` | | |
+
+Then confirm the IAM half, which `tsc` cannot see:
+
+| Check | Pass | Result |
+|---|---|---|
+| No `household.deleteRefused` with `reason: group_check_failed` anywhere in T6 | | |
+
+A `group_check_failed` means the `cognito-idp:ListUsersInGroup` grant did not
+deploy. The guard fails closed, so the symptom is households surviving that
+should have been deleted — safe, but wrong, and invisible without this check.
+
+---
+
+## Afterwards
+
+```bash
+AWS_PROFILE=mine aws cognito-idp list-users --user-pool-id us-east-1_OIBNTn0XB \
+  --region us-east-1 --query 'Users[].Attributes[?Name==`email`].Value' --output text
+```
+
+Only `mike.akram@gmail.com` and `polina.tsaliev@gmail.com` should remain. Delete
+any `+t*` account still standing, and confirm `TooFat&TooCurious` still has its
+items.
+
+Fold anything that failed into `APP-STORE-READINESS.qmd` as a row, not a note in
+this file — this one gets stale the moment the run ends.

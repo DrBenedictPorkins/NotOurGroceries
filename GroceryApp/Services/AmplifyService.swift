@@ -464,6 +464,31 @@ class AmplifyService: ObservableObject {
         }
     }
 
+    /// The message the server actually sent, rather than Amplify's wrapper.
+    ///
+    /// A thrown `GraphQLResponseError` describes itself as "The operation
+    /// couldn't be completed. (Amplify.GraphQLResponseError<Amplify.JSONValue>
+    /// error 0.)", which is what the join screen was showing people. The useful
+    /// text — "That invite code doesn't work..." — is inside the errors array
+    /// the whole time. Handlers are written to be read by a user, so surface
+    /// what they said and keep the wrapper for the log.
+    func serverMessage(from error: GraphQLResponseError<JSONValue>, fallback: String) -> String {
+        let messages: [String]
+        switch error {
+        case .error(let errors), .partial(_, let errors):
+            messages = errors.map { $0.message }
+        case .unknown(let msg, _, _):
+            messages = [msg]
+        case .transformationError:
+            messages = []
+        }
+        let joined = messages
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return joined.isEmpty ? fallback : joined
+    }
+
     /// Checks if a GraphQLResponseError is auth-related.
     func isAuthError(_ error: GraphQLResponseError<JSONValue>) -> Bool {
         let message: String
@@ -983,7 +1008,10 @@ class AmplifyService: ObservableObject {
 
             throw AmplifyError.unknown("Failed to join household")
         case .failure(let error):
-            throw error
+            throw AmplifyError.unknown(serverMessage(
+                from: error,
+                fallback: "Couldn't join that household. Check the code and try again."
+            ))
         }
     }
 

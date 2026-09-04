@@ -198,6 +198,19 @@ windows), and whether a lawyer reviews before public release.
 
 ---
 
+## Side issues
+
+Cosmetic or wording findings parked during testing. None blocks a workflow; fix
+when the relevant file is already open.
+
+| Found | Issue |
+|---|---|
+| 2026-09-04 | `NSCameraUsageDescription` says the camera is "so you can attach a photo to an item on your list". It is also the prompt shown when scanning an invite QR, so the reason given is wrong on that path |
+| 2026-09-04 | `InviteQRScanner` shows a black rectangle with no message when there is no camera (Simulator) or permission is denied. No fallback hint pointing at the typed code |
+| 2026-09-04 | `TooFat&TooCurious` still holds a 6-character invite code from before the 8-character change. Rotates to 8 on the next join or regenerate |
+
+---
+
 ## Legal
 
 | Item | Status | Notes |

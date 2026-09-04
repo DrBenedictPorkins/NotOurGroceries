@@ -87,13 +87,31 @@ AWS_PROFILE=mine aws dynamodb query --region us-east-1 \
   --expression-attribute-values "{\":h\":{\"S\":\"$H\"}}" --select COUNT
 ```
 
+**Baseline captured 2026-09-04 16:2x UTC.** Household is `TestHousehold`, not
+`LIFECYCLE-TEST` — named before this file existed.
+
 | Baseline | Value |
 |---|---|
-| Household id | |
-| Item count | |
-| Commit count | |
-| Store count | |
-| Members (3 expected) | |
+| Household id | `4d60fbaf-66be-417d-891e-c6dc80268f1e` |
+| Members | **5** — Head (owner, sky), T1 (purple), T2 (yellow), T3 (green), T4 (cyan) |
+| GroceryItem | **16** — 13 ACTIVE, 3 SUGGESTION |
+| Commit | **24** |
+| HouseholdStore | **2** — My Store (7 departments + International + aisle 4), Deli/Bodega (empty) |
+| ProductAisleMapping | **16** |
+| Shopping state | IDLE, one completed session |
+
+**Items by contributor** — this is what T4 must leave untouched:
+
+| Member | Items |
+|---|---|
+| Head | 11 |
+| T1 | 2 |
+| T2 | 2 |
+| T4 | 1 |
+| T3 | 0 — owns nothing, so use T3 for the *removal* test, not the delete-account one |
+
+**Devices:** Head [SIM-A iPhone 17 Pro], T1 [SIM-B iPhone 17], T2 [SIM-C iPhone 17e],
+T3 and T4 [YOUR PHONE "Not Fone"].
 
 ---
 

@@ -17,6 +17,7 @@ import {
   CreateGroupCommand,
   DeleteGroupCommand,
   ListUsersInGroupCommand,
+  AdminUserGlobalSignOutCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Schema } from '../resource';
@@ -122,6 +123,36 @@ async function addToHouseholdGroup(userId: string, householdId: string): Promise
     Username: userId,
     GroupName: householdId,
   }));
+}
+
+/**
+ * Cut the removed member's sessions loose.
+ *
+ * Removing somebody from the Cognito group clears their claim for *future*
+ * tokens, but AppSync authorises each request from the `cognito:groups` claim
+ * inside the token it was given — and access tokens live an hour by default.
+ * Observed 2026-09-04: T4 was removed, vanished from the member list, and went
+ * on moving items between the list and suggestions.
+ *
+ * This invalidates their refresh tokens, so the hour cannot be renewed into a
+ * second one and they must sign in again — at which point the group is gone.
+ * It does **not** revoke an access token already issued; nothing does. The
+ * remaining window is bounded by `accessTokenValidity`, cut to 15 minutes in
+ * `backend.ts` for exactly this reason.
+ *
+ * Best effort, like the group removal above: the DynamoDB change is what the
+ * app reads, and failing here must not leave the caller believing the removal
+ * failed entirely.
+ */
+async function revokeSessions(userId: string): Promise<void> {
+  try {
+    await cognito.send(new AdminUserGlobalSignOutCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: userId,
+    }));
+  } catch (error) {
+    logFailure('household.sessionRevokeFailed', error, { userId });
+  }
 }
 
 async function deleteHouseholdGroup(householdId: string): Promise<void> {
@@ -487,6 +518,7 @@ export const handler: Handler = async (event) => {
 
     await detachUser(memberId);
     await removeFromHouseholdGroup(memberId, householdId);
+    await revokeSessions(memberId);
     logEvent('household.memberRemoved', { householdId, userId: memberId, byUserId: callerId });
 
     return { householdId, householdDeleted: false, remainingMembers: await countMembers(householdId) };

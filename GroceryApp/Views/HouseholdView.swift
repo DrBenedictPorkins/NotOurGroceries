@@ -185,6 +185,35 @@ struct HouseholdView: View {
 
     // MARK: - Members Section
 
+    /// The colour this member is known by everywhere else in the app.
+    private func memberColor(_ member: AmplifyService.HouseholdMember) -> Color {
+        ProfileColor(rawValue: member.profileColor ?? "")?.color ?? DesignSystem.Colors.dillGreen
+    }
+
+    /// Owner first, then everyone else by join date.
+    ///
+    /// The list arrived in whatever order the query returned, which put the
+    /// owner in the middle and moved people around between refreshes. The owner
+    /// is the only member with a power nobody else has — removing people — so
+    /// they are worth finding at a glance, and a stable order beneath them
+    /// means the list stops rearranging itself while you read it.
+    ///
+    /// Falls back to display name when a join date is missing: members who
+    /// predate `joinedAt` would otherwise all sort equal and shuffle.
+    private func orderedMembers(
+        _ members: [AmplifyService.HouseholdMember]
+    ) -> [AmplifyService.HouseholdMember] {
+        let ownerId = householdDetails?.ownerId
+        return members.sorted { a, b in
+            if (a.id == ownerId) != (b.id == ownerId) { return a.id == ownerId }
+            switch (a.joinedAt, b.joinedAt) {
+            case let (x?, y?) where x != y: return x < y
+            default:
+                return a.displayName.localizedCaseInsensitiveCompare(b.displayName) == .orderedAscending
+            }
+        }
+    }
+
     private func membersSection(_ members: [AmplifyService.HouseholdMember]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             // Section header
@@ -201,10 +230,10 @@ struct HouseholdView: View {
 
             // Members list
             VStack(spacing: 0) {
-                ForEach(members) { member in
+                ForEach(orderedMembers(members)) { member in
                     memberRow(member)
 
-                    if member.id != members.last?.id {
+                    if member.id != orderedMembers(members).last?.id {
                         Divider()
                             .background(Color.white.opacity(0.1))
                     }
@@ -221,15 +250,19 @@ struct HouseholdView: View {
         return HStack(spacing: 12) {
             // Avatar
             ZStack {
+                // Everybody's own colour, not just yours. This drew one accent
+                // gradient for the signed-in member and the same grey disc for
+                // everyone else, so a household of five looked like one person
+                // and four placeholders — while `profileColor` was set on all
+                // of them and already colouring their initials on the list.
                 Circle()
                     .fill(
-                        isCurrentUser
-                            ? DesignSystem.Colors.accentGradient
-                            : LinearGradient(
-                                colors: [Color.white.opacity(0.2), Color.white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                        LinearGradient(
+                            colors: [memberColor(member).opacity(0.95),
+                                     memberColor(member).opacity(0.55)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
                     .frame(width: 40, height: 40)
 
@@ -249,6 +282,21 @@ struct HouseholdView: View {
                         Text("(you)")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(DesignSystem.Colors.dillGreen)
+                    }
+
+                    if member.id == householdDetails?.ownerId {
+                        Text("OWNER")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(0.6)
+                            .foregroundColor(DesignSystem.Colors.neonPurple)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule().fill(DesignSystem.Colors.neonPurple.opacity(0.15))
+                            )
+                            .overlay(
+                                Capsule().stroke(DesignSystem.Colors.neonPurple.opacity(0.35), lineWidth: 1)
+                            )
                     }
                 }
 

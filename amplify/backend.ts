@@ -14,6 +14,7 @@ import {
 } from './data/resource';
 import { storage } from './storage/resource';
 import { Function, CfnFunction } from 'aws-cdk-lib/aws-lambda';
+import { CfnUserPoolClient } from 'aws-cdk-lib/aws-cognito';
 import { PolicyStatement, Role, ServicePrincipal, ManagedPolicy } from 'aws-cdk-lib/aws-iam';
 import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
 
@@ -215,6 +216,10 @@ householdMembershipLambda.addToRolePolicy(new PolicyStatement({
     // this grant the check throws, and it deliberately fails closed — the
     // household survives rather than being wiped on an unverified count.
     'cognito-idp:ListUsersInGroup',
+    // Removing somebody must actually stop them writing. Without this the
+    // group claim is cleared for future tokens only, and the one they hold
+    // keeps working until it expires.
+    'cognito-idp:AdminUserGlobalSignOut',
   ],
   resources: [backend.auth.resources.userPool.userPoolArn],
 }));
@@ -364,3 +369,33 @@ structuredLogging.forEach((fn) => {
     systemLogLevel: 'WARN',
   };
 });
+
+
+/**
+ * How long a token keeps working after the claim behind it is gone.
+ *
+ * AppSync authorises every request from the `cognito:groups` claim inside the
+ * presented access token, so removing a member from their household group does
+ * nothing to a token already issued. At the Cognito default of 60 minutes that
+ * meant a removed member carried on editing the list for an hour — observed on
+ * 2026-09-04, and the one power a household owner has.
+ *
+ * Fifteen minutes is the compromise. Nothing revokes an access token mid-life,
+ * so this window is the whole of the exposure; shortening it further starts to
+ * bite in a shop with bad signal, where a refresh may not land promptly.
+ * Refreshes are free and Amplify does them without asking, so the only cost is
+ * a few more of them. The removal path also calls AdminUserGlobalSignOut, which
+ * kills the refresh tokens so this window cannot be renewed into another one.
+ */
+const userPoolClient = backend.auth.resources.userPoolClient.node
+  .defaultChild as CfnUserPoolClient;
+userPoolClient.accessTokenValidity = 15;
+userPoolClient.idTokenValidity = 15;
+// Restated, not changed. Setting tokenValidityUnits without it risks the
+// existing 365 days being reinterpreted against a different unit.
+userPoolClient.refreshTokenValidity = 365;
+userPoolClient.tokenValidityUnits = {
+  accessToken: 'minutes',
+  idToken: 'minutes',
+  refreshToken: 'days',
+};

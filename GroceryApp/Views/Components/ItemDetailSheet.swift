@@ -658,7 +658,14 @@ struct ItemDetailSheet: View {
             // write and the only one that is always present.
             try await StoreService.shared.assignProductToAisle(
                 productId: item.productId,
-                normalizedName: item.productId == nil ? item.normalizedName : nil,
+                // Always, not only when there is no productId. Lookup falls back
+                // from id to name, so sending one looked sufficient — but the
+                // inference prompt reads `normalizedName || productId`, so a
+                // mapping without the name taught the model
+                // "Aisle 4: f9ad8b60-4cb7-41f2-81ae-915ae46933ef". The one
+                // signal worth more than any guess, written where nothing can
+                // read it, and paid for in tokens on every later call.
+                normalizedName: item.normalizedName,
                 storeId: store.id,
                 aisleId: aisle.id,
                 // Somebody opened this item and said where it is. That is worth

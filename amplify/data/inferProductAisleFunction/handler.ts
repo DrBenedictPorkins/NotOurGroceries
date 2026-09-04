@@ -244,7 +244,12 @@ function buildMappingContext(mappings: ExistingMapping[]): string {
 
   for (const mapping of mappings) {
     const aisle = mapping.aisleId;
-    const name = mapping.normalizedName || mapping.productId || 'unknown';
+    // Deliberately not falling back to productId. A UUID teaches the model
+    // nothing about what lives in an aisle, and it costs input tokens on every
+    // call to say so. Rows written before the client sent normalizedName are
+    // skipped rather than shown as hex.
+    const name = mapping.normalizedName?.trim();
+    if (!name) continue;
 
     if (!aisleGroups[aisle]) {
       aisleGroups[aisle] = [];

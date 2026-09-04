@@ -1,3 +1,4 @@
+import { logEvent, logWarning, logFailure } from '../telemetry';
 import {
   DynamoDBClient,
   GetItemCommand,
@@ -43,7 +44,7 @@ async function removeFromHouseholdGroup(userId: string, householdId: string): Pr
       GroupName: householdId,
     }));
   } catch (error) {
-    console.error(`Could not remove ${userId} from group ${householdId}:`, error);
+    logFailure('household.groupRemoveFailed', error, { householdId, userId });
   }
 }
 
@@ -99,7 +100,7 @@ async function generateUniqueInviteCode(): Promise<string> {
       Select: 'COUNT',
     }));
     if (!existing.Count) return code;
-    console.warn(`Invite code collision on ${code}, retrying`);
+    logWarning('invite.codeCollision', {});
   }
   throw new Error('Could not generate a unique invite code');
 }
@@ -129,7 +130,7 @@ async function deleteHouseholdGroup(householdId: string): Promise<void> {
       GroupName: householdId,
     }));
   } catch (error) {
-    console.error(`Could not delete group ${householdId}:`, error);
+    logFailure('household.groupDeleteFailed', error, { householdId });
   }
 }
 
@@ -263,7 +264,7 @@ async function deleteHouseholdData(householdId: string): Promise<void> {
 
         lastKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
       } catch (error) {
-        console.error(`Could not clear ${table} for household ${householdId}:`, error);
+        logFailure('household.tableClearFailed', error, { householdId, table });
         lastKey = undefined;
       }
     } while (lastKey);
@@ -345,7 +346,7 @@ export const handler: Handler = async (event) => {
       }),
     }));
 
-    console.log(`User ${callerId} created household ${newId}`);
+    logEvent('household.created', { householdId: newId, userId: callerId });
     return {
       householdId: newId,
       householdDeleted: false,
@@ -390,7 +391,11 @@ export const handler: Handler = async (event) => {
       Username: callerId,
     }));
 
-    console.log(`Account ${callerId} deleted (household ${ownHouseholdId ?? 'none'}, deleted=${householdDeleted})`);
+    logEvent('account.deleted', {
+      userId: callerId,
+      householdId: ownHouseholdId ?? null,
+      householdDeleted,
+    });
     return { householdId: ownHouseholdId ?? '', householdDeleted, remainingMembers: remaining };
   }
 
@@ -422,7 +427,7 @@ export const handler: Handler = async (event) => {
 
     await detachUser(memberId);
     await removeFromHouseholdGroup(memberId, householdId);
-    console.log(`Owner ${callerId} removed ${memberId} from household ${householdId}`);
+    logEvent('household.memberRemoved', { householdId, userId: memberId, byUserId: callerId });
 
     return { householdId, householdDeleted: false, remainingMembers: await countMembers(householdId) };
   }
@@ -435,7 +440,7 @@ export const handler: Handler = async (event) => {
     if (remaining === 0) {
       await deleteHouseholdData(householdId);
       await deleteHouseholdGroup(householdId);
-      console.log(`Household ${householdId} emptied and deleted`);
+      logEvent('household.deleted', { householdId, reason: 'last_member_left' });
       return { householdId, householdDeleted: true, remainingMembers: 0 };
     }
 
@@ -443,7 +448,7 @@ export const handler: Handler = async (event) => {
     // be removed from, which is fine — the remaining members can leave too, and
     // one of them can make a new one. Promoting somebody automatically would be
     // the app deciding whose household it is.
-    console.log(`User ${callerId} left household ${householdId}, ${remaining} remaining`);
+    logEvent('household.left', { householdId, userId: callerId, remainingMembers: remaining });
     return { householdId, householdDeleted: false, remainingMembers: remaining };
   }
 

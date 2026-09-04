@@ -13,7 +13,7 @@ import {
   adminMcpFunction,
 } from './data/resource';
 import { storage } from './storage/resource';
-import { Function } from 'aws-cdk-lib/aws-lambda';
+import { Function, CfnFunction } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement, Role, ServicePrincipal, ManagedPolicy } from 'aws-cdk-lib/aws-iam';
 import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
 
@@ -320,3 +320,41 @@ adminMcpLambda.addToRolePolicy(new PolicyStatement({
   actions: ['dynamodb:Query', 'dynamodb:Scan'],
   resources: allTables.map(table => `${table.tableArn}/index/*`),
 }));
+
+
+/**
+ * Structured logging for the functions whose output we actually query.
+ *
+ * Lambda's default text format prefixes every line with a timestamp, a request
+ * id and a level, which means a JSON payload arrives as a string inside a
+ * string and Logs Insights cannot see the fields. Switching the format to JSON
+ * makes `console.log(object)` land as real structure, so a question becomes one
+ * line instead of a regex:
+ *
+ *   filter message.event = "ai.infer"
+ *   | stats sum(message.tokens.output) as out, count(*) as calls by bin(1d)
+ *
+ * `systemLogLevel: WARN` drops the START/END/REPORT chatter we never read.
+ * REPORT lines carry billed duration, but that is in CloudWatch metrics already.
+ *
+ * Not applied to the aisle-OCR family (`extractAisleMappings`,
+ * `generateFullMappings`, `matchProductsToAisles`) on purpose — that feature is
+ * being removed, and converting its logging would be work spent on code with a
+ * deletion date.
+ */
+const structuredLogging = [
+  backend.parseIngredientsFunction,
+  backend.inferProductAisleFunction,
+  backend.transcribeAudioFunction,
+  backend.joinHouseholdFunction,
+  backend.householdMembershipFunction,
+];
+
+structuredLogging.forEach((fn) => {
+  const cfnFunction = (fn.resources.lambda as Function).node.defaultChild as CfnFunction;
+  cfnFunction.loggingConfig = {
+    logFormat: 'JSON',
+    applicationLogLevel: 'INFO',
+    systemLogLevel: 'WARN',
+  };
+});

@@ -1,6 +1,7 @@
 import { SSMClient, GetParametersCommand } from '@aws-sdk/client-ssm';
 import type { Schema } from '../resource';
 import { requireHousehold } from '../requireHousehold';
+import { logEvent, logWarning, logFailure } from '../telemetry';
 
 type Handler = Schema['transcribeAudio']['functionHandler'];
 
@@ -51,7 +52,9 @@ export function stripHallucinatedTail(text: string): string {
     if (!hit) break;
 
     const trimmed = out.slice(0, out.length - hit.length).trimEnd().replace(/[.,!?]+$/, '').trimEnd();
-    console.log('[TRANSCRIBE] stripped tail', JSON.stringify({ phrase: hit }));
+    // The matched phrase is model boilerplate, not speech, so it is safe to
+    // name — it is how we tell which hallucination is still getting through.
+    logWarning('ai.transcribe.tailStripped', { phrase: hit });
     out = trimmed;
   }
 
@@ -79,18 +82,18 @@ export const handler: Handler = async (event) => {
   const { audioData } = event.arguments;
 
   if (!audioData || audioData.length === 0) {
-    console.log('[TRANSCRIBE] empty audio, returning empty string');
+    logEvent('ai.transcribe', { outcome: 'empty_audio', bytes: 0, chars: 0, ms: 0 });
     return '';
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    console.error('[TRANSCRIBE] missing OPENAI_API_KEY');
+    logFailure('ai.transcribe', new Error('missing OPENAI_API_KEY'), { outcome: 'unconfigured' });
     throw new Error('Transcription service is not configured.');
   }
 
   const buffer = Buffer.from(audioData, 'base64');
-  console.log('[TRANSCRIBE] request', JSON.stringify({ bytes: buffer.byteLength }));
+
 
   // Multipart body assembly (no SDK dependency)
   const boundary = `----nog-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -126,17 +129,18 @@ export const handler: Handler = async (event) => {
 
   if (!response.ok) {
     const errText = await response.text();
-    console.error('[TRANSCRIBE] whisper error', response.status, errText);
+    logFailure('ai.transcribe', new Error(`Whisper API error: ${response.status}`), {
+      outcome: 'upstream_error', status: response.status, bytes: buffer.byteLength, ms: elapsedMs,
+    });
     throw new Error(`Whisper API error: ${response.status}`);
   }
 
   const raw = (await response.text()).trim();
   const transcript = stripHallucinatedTail(raw);
-  console.log('[TRANSCRIBE] success', JSON.stringify({
-    elapsedMs,
-    chars: transcript.length,
-    strippedChars: raw.length - transcript.length,
-  }));
+  logEvent('ai.transcribe', {
+    outcome: 'ok', model: MODEL, bytes: buffer.byteLength,
+    chars: transcript.length, strippedChars: raw.length - transcript.length, ms: elapsedMs,
+  });
 
   return transcript;
 };

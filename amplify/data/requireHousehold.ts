@@ -1,3 +1,5 @@
+import { logWarning } from './telemetry';
+
 /**
  * A household is the unit this app operates on. Everything a person can do —
  * a list, a store, a parse, a transcription — happens inside one.
@@ -63,7 +65,7 @@ export function callerHouseholdIds(event: unknown): string[] {
 export function requireHousehold(event: unknown): string[] {
   const households = callerHouseholdIds(event);
   if (households.length === 0) {
-    console.warn('[AUTH] rejected: caller is not in a household');
+    logWarning('auth.rejected', { reason: 'no_household' });
     throw new Error('You need to create or join a household first.');
   }
   return households;

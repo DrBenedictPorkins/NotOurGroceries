@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireHousehold, callerHouseholdIds } from '../requireHousehold';
+import { logEvent, logWarning, logFailure, tokenUsage } from '../telemetry';
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
@@ -87,7 +88,7 @@ async function fetchStoreAisles(storeId: string, callerHouseholds: string[]): Pr
     // The store is fetched here anyway, so the check costs nothing.
     const owner = result.Item?.householdId;
     if (owner && !callerHouseholds.includes(owner)) {
-      console.warn('[AUTH] rejected: caller is not in the household owning this store');
+      logWarning('auth.rejected', { reason: 'store_not_in_caller_household' });
       throw new Error('That store belongs to a different household.');
     }
 
@@ -99,7 +100,7 @@ async function fetchStoreAisles(storeId: string, callerHouseholds: string[]): Pr
     // An ownership rejection is not a read failure and must not be turned into
     // an empty layout, which would let the request carry on regardless.
     if (err instanceof Error && err.message.startsWith('That store belongs')) throw err;
-    console.error('[INFER] Failed to read store aisle layout', err);
+    logFailure('ai.infer.storeReadFailed', err);
     return [];
   }
 }
@@ -277,7 +278,7 @@ async function inferAisle(
   productName: string,
   aisleContext: string,
   anthropic: Anthropic
-): Promise<{ aisle: string; confidence: number; reasoning: string }> {
+): Promise<{ aisle: string; confidence: number; reasoning: string; usage: Anthropic.Usage }> {
   const prompt = `You are helping a shopper find where a product is located in a grocery store.
 
 STORE AISLE LAYOUT (based on existing product mappings):
@@ -327,7 +328,6 @@ Confidence guidelines:
   // Parse JSON response
   const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    console.error('No JSON found in response:', textContent.text);
     throw new Error('Invalid response format from Claude');
   }
 
@@ -339,13 +339,14 @@ Confidence guidelines:
   if (aisleMatch) {
     const originalAisle = aisleValue;
     aisleValue = aisleMatch[1].trim();
-    console.log(`[INFER] [CLEANUP] Stripped "Aisle" prefix: "${originalAisle}" -> "${aisleValue}"`);
+    logWarning('ai.infer.aislePrefixStripped', { chars: originalAisle.length });
   }
 
   return {
     aisle: aisleValue,
     confidence: typeof result.confidence === 'number' ? result.confidence : 0.5,
     reasoning: result.reasoning || 'No reasoning provided',
+    usage: response.usage,
   };
 }
 
@@ -356,7 +357,10 @@ async function inferAisleBatch(
   products: Array<{ productName: string; normalizedName: string; productId?: string }>,
   aisleContext: string,
   anthropic: Anthropic
-): Promise<Array<{ productName: string; aisle: string; confidence: number; reasoning: string }>> {
+): Promise<{
+  results: Array<{ productName: string; aisle: string; confidence: number; reasoning: string }>;
+  usage: Anthropic.Usage;
+}> {
   // Build numbered list of products
   const productList = products.map((p, i) => `${i + 1}. "${p.productName}"`).join('\n');
 
@@ -403,7 +407,7 @@ Confidence guidelines:
   const results = JSON.parse(jsonMatch[0]);
 
   // Post-process to clean up aisle values (same as single mode)
-  return results.map((r: any) => {
+  const cleaned = results.map((r: any) => {
     let aisleValue = r.aisle || 'Unknown';
     const aisleMatch = aisleValue.match(/^aisle\s+(.+)$/i);
     if (aisleMatch) {
@@ -416,6 +420,8 @@ Confidence guidelines:
       reasoning: r.reasoning || 'No reasoning provided',
     };
   });
+
+  return { results: cleaned, usage: response.usage };
 }
 
 /**
@@ -423,7 +429,7 @@ Confidence guidelines:
  */
 export const handler: AppSyncResolverHandler<Arguments, Response> = async (event) => {
   const callerHouseholds = requireHousehold(event);
-  console.log('[INFER] Received request:', JSON.stringify(event.arguments));
+  const startedAt = Date.now();
 
   const { storeId, productName, products } = event.arguments;
 
@@ -447,7 +453,7 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
 
   try {
     // Fetch existing mappings for context
-    console.log(`[INFER] Fetching existing mappings for store ${storeId}`);
+
     // Deliberately serial. Running these together meant another household's
     // mappings — a list of what those people buy — were read before the
     // ownership check on the store could reject. Nothing reached the caller, but
@@ -465,11 +471,20 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
       };
     }
 
-    console.log(`[INFER] ${storeAisles.length} declared aisles, ${existingMappings.length} existing mappings`);
+
 
     // Build context for LLM
     const aisleContext = buildAisleContext(existingMappings, storeAisles);
-    console.log(`[INFER] Built aisle context (${aisleContext.length} chars)`);
+
+    // The shape of every inference, content excluded. `contextChars` is here
+    // because it is the input cost driver: a store with a rich layout builds a
+    // longer prompt, and that is the difference between a cheap household and
+    // an expensive one.
+    const shape = {
+      aisleCount: storeAisles.length,
+      mappingCount: existingMappings.length,
+      contextChars: aisleContext.length,
+    };
 
     // Initialize Anthropic client
     const anthropic = new Anthropic({
@@ -478,13 +493,17 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
 
     // Check if batch mode
     if (isBatchMode) {
-      console.log(`[INFER] Batch mode: ${products!.length} products`);
-
-      const batchResults = await inferAisleBatch(
+      const { results: batchResults, usage } = await inferAisleBatch(
         products!,
         aisleContext,
         anthropic
       );
+
+      logEvent('ai.infer', {
+        ...shape, ...tokenUsage(usage), mode: 'batch', model: MODEL,
+        productCount: products!.length, resultCount: batchResults.length,
+        outcome: 'ok', ms: Date.now() - startedAt,
+      });
 
       // Map results to include normalizedName and productId from input
       const resultsWithIds = batchResults.map((r) => {
@@ -507,10 +526,13 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
     }
 
     // Single mode (existing behavior)
-    console.log(`[INFER] Calling Claude to infer aisle for "${productName}"`);
     const result = await inferAisle(productName!, aisleContext, anthropic);
 
-    console.log(`[INFER] Result: aisle=${result.aisle}, confidence=${result.confidence}`);
+    logEvent('ai.infer', {
+      ...shape, ...tokenUsage(result.usage), mode: 'single', model: MODEL,
+      productCount: 1, confidence: result.confidence,
+      outcome: 'ok', ms: Date.now() - startedAt,
+    });
 
     return {
       success: true,
@@ -520,7 +542,11 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
       reasoning: result.reasoning,
     };
   } catch (error: any) {
-    console.error('[INFER] Error:', error);
+    logFailure('ai.infer', error, {
+      mode: isBatchMode ? 'batch' : 'single',
+      productCount: isBatchMode ? products!.length : 1,
+      ms: Date.now() - startedAt,
+    });
     return {
       success: false,
       error: error.message || 'Unknown error occurred',

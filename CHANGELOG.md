@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Privacy
 - **There is a privacy policy**, at got-dill.com/privacy, linked before you create an account and in Settings. It says plainly what is stored, who in your household can see it, and the two things that leave your phone — dictated audio and list text. Aisle speech is recognised on the phone and never sent anywhere
+- **Server logs no longer record what is on your list.** They had been writing the parsed list, the product name sent for an aisle guess, and the whole sign-in event. Now they record that a request happened, which household it belonged to, how large it was, how long it took and whether it failed — and nothing about the contents
+- Logs are kept for 90 days instead of forever
 
 ### Elsewhere
 - Fix: **hold-to-talk captured nothing.** Letting go cancelled the recogniser before it had delivered the words, which on a one-word answer was all of them. The microphone permission was also never actually requested

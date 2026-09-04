@@ -1,3 +1,4 @@
+import { logEvent, logWarning, logFailure } from '../telemetry';
 import { DynamoDBClient, QueryCommand, UpdateItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import {
@@ -39,7 +40,7 @@ async function addToHouseholdGroup(userId: string, householdId: string): Promise
   } catch (error) {
     const name = (error as { name?: string }).name;
     if (name !== 'GroupExistsException') {
-      console.error(`Could not create group ${householdId}:`, error);
+      logFailure('household.groupCreateFailed', error, { householdId });
     }
   }
 
@@ -59,7 +60,7 @@ async function removeFromHouseholdGroup(userId: string, householdId: string): Pr
       GroupName: householdId,
     }));
   } catch (error) {
-    console.error(`Could not remove ${userId} from group ${householdId}:`, error);
+    logFailure('household.groupRemoveFailed', error, { householdId, userId });
   }
 }
 
@@ -148,7 +149,7 @@ async function generateUniqueInviteCode(): Promise<string> {
       Select: 'COUNT',
     }));
     if (!existing.Count) return code;
-    console.warn(`Invite code collision on ${code}, retrying`);
+    logWarning('invite.codeCollision', { attempt });
   }
   throw new Error('Could not generate a unique invite code');
 }
@@ -244,8 +245,9 @@ async function updateUserHousehold(userId: string, householdId: string, colour: 
 }
 
 export const handler: Handler = async (event) => {
-  console.log('joinHousehold Lambda invoked');
-  console.log('Event:', JSON.stringify(event, null, 2));
+  // The whole event used to be dumped here, identity claims included. Nothing
+  // read it, and it is the single richest thing in these logs.
+  const startedAt = Date.now();
 
   try {
     const { inviteCode } = event.arguments;
@@ -310,7 +312,11 @@ export const handler: Handler = async (event) => {
       await removeFromHouseholdGroup(userId, previousHouseholdId);
     }
 
-    console.log(`User ${userId} joined household ${household.id}`);
+    logEvent('household.joined', {
+      householdId: household.id, userId,
+      switchedFrom: previousHouseholdId ?? null,
+      ms: Date.now() - startedAt,
+    });
 
     return {
       householdId: household.id,
@@ -318,7 +324,7 @@ export const handler: Handler = async (event) => {
       previousHouseholdId: previousHouseholdId || undefined,
     };
   } catch (error) {
-    console.error('Error joining household:', error);
+    logFailure('household.joined', error, { ms: Date.now() - startedAt });
     throw error;
   }
 };

@@ -7,12 +7,40 @@ format:
     toc-depth: 2
 ---
 
-Status as of **2026-09-03**. This tracks the path from a two-person TestFlight
+Status as of **2026-09-04**. This tracks the path from a two-person TestFlight
 beta to something a stranger can install. Update the status column as things
 move; do not delete rows, so the history of what was decided stays readable.
 
 **Legend** — ✅ done and verified · 🟡 done but unverified · ⬜ not started ·
 ❓ unknown, needs a look · 🚫 blocked on a decision
+
+---
+
+## What to do next, in order
+
+Re-ranked 2026-09-04. The ordering principle: **one item has a two-week lead
+time and everything else is work you can do the day you decide to.** That one
+goes first regardless of how it ranks on urgency.
+
+| # | Item | Why here | Size |
+|---|---|---|---|
+| 1 | ~~Instrument the AI calls~~ **done 2026-09-04, undeployed** | `amplify/data/telemetry.ts` + five handlers converted to structured JSON events; `logFormat: JSON` set in `backend.ts`. Token usage now emitted on both `inferProductAisle` paths. The clock starts when this deploys, not when it was written | ✅ |
+| 2 | **Persist a trip** — a row written when a session ends | The meter unit does not exist as data. Needed whatever the price turns out to be | ~half a day |
+| 3 | **Cut 1.8.0 to TestFlight** | 16 commits of fixes are sitting on `main` and neither phone's build is what testers would get. Testers cannot test what has not shipped | minutes |
+| 4 | **Household lifecycle testing** | The only outstanding item that can *destroy data*. `deleteHouseholdData` has never been run through account deletion with a shared household. Everything else on this list costs money or time; this one costs somebody's list | a session, needs throwaway accounts |
+| 5 | **Decide: TestFlight, unlisted, or public** | Determines whether rows 6–8 are required at all. It is a decision, not work | — |
+| 6 | Privacy nutrition labels, age rating, demo account | Only if past TestFlight. Wrong labels are a rejection | a session |
+| 7 | Screenshots, description, keywords | Only if a public listing | a session |
+| 8 | Legal entity | Blocks the ToS and the seller name. A decision, not work | — |
+| 9 | **Claude → Bedrock** (see *Moving the AI inside AWS*) | Not now, but standing near the top: it deletes `ANTHROPIC_API_KEY` entirely and it touches the same seven call sites as the Haiku move, so the two want to be one edit | ~half a day |
+| 10 | S3 per-household scoping | Real, but the payoff for exploiting it is somebody's grocery photo | ~a day |
+| 11 | `joinHousehold` rate limiting, signup gating | Deferred on proportionality. Fold in when the file is already open | — |
+
+Moving `inferProductAisle` to Haiku is not on this list because it should be
+*measured* before it is moved — that is what item 1 is for. When it is moved, do
+it as part of item 9: both changes rewrite the same model-id lines in the same
+seven handlers, and doing them separately means reviewing that blast radius
+twice.
 
 ---
 
@@ -42,6 +70,8 @@ These are rejections, not preferences.
 |---|---|---|
 | In-app account deletion (5.1.1(v)) | ✅ | Built and verified 2026-08-31 against production: Cognito user gone, `User` row gone, household and its 245 items untouched, no orphaned group. The shared-household branch — detach, group removal, remaining count — is still untested |
 | Account deletion documented publicly | ✅ | Live at <https://got-dill.com/account-deletion>. Source `docs/account-deletion.html`; the in-app path it describes (Settings → Danger Zone → Delete my account) was checked against `SettingsView` |
+| Privacy policy amendment for logging | 🚫 | **Deferred deliberately 2026-09-04.** The published policy says server logs "do not record the contents of your list"; that was false — `[PARSE] result`, `[PARSE] claude raw response`, `[INFER] Received request` and `joinHousehold`'s full-event dump all wrote user content, verified in production CloudWatch. The structured-logging pass fixes it **going forward**. Not amending the text yet because the logged fields are still expanding; a policy written now gets rewritten. **Two things must both land before this is closed:** the retention decision below (which clears the historical backlog), and a final field list |
+| Log retention | ✅ | **90 days, applied 2026-09-04** to all 17 `/aws/lambda/amplify-d2rsreno8nimo5-ma-*` groups (was `None` on every one; ~1.75 MB total). Verified 17/17. CloudWatch purges anything older asynchronously, which clears the grocery-list contents dating to May. Tighten if volume grows |
 | Privacy policy URL | ✅ | **Live at <https://got-dill.com/privacy>**, linked in-app under Create Account and in Settings (`AppIdentity.privacyPolicyURL`). Source is `docs/privacy.html`, written 2026-09-03 against verified behaviour. Not lawyer-reviewed, and says so on the page. `website/privacy-policy.md` was the older draft and was deleted 2026-09-03; `docs/privacy.html` is the single source |
 | Privacy nutrition labels | ⬜ | Must declare email, audio, photos, and the Anthropic/OpenAI processing. Wrong answers here are a rejection |
 | Demo account for review (2.1) | ⬜ | Reviewers need a working account **and** a household with data in it. A fresh account sees an empty app |
@@ -64,8 +94,8 @@ Not Apple's rules — ours. See `world-release-blockers` in session memory.
 | S3 enumeration closed | ✅ | `list` withheld; deployed policy confirmed |
 | S3 per-household scoping | ⬜ | Unchanged. Anyone holding a key can still read or delete that file. Lambda broker is the fix, ~a day. See `s3-scoping-plan` |
 | `inferProductAisle` store ownership | ✅ | Fixed 2026-09-03. The store read now projects `householdId` and rejects unless it is one of the caller's Cognito groups. The mappings read was also made serial after it — running them together meant another household's mappings were read before the check could reject, even though nothing reached the caller |
-| `joinHousehold` rate limiting | 🚫 | Still deferred, and **less urgent than this file used to claim**. With 8-character single-use 10-minute codes, guessing is not the concern; burning Lambda invocations is, and a WAF rate rule is the answer to that, not a counter. The error-message half is done: invalid / expired / already-used now return one identical refusal, so a guesser is no longer told when they found a real code |
-| Password floor above 6 chars | 🟡 | Raised to 8 with lowercase + number in `backend.ts` on 2026-09-03; **not yet deployed**. Symbols deliberately not required. Existing passwords keep working — Cognito validates on set. Verify against the pool after the Amplify job runs |
+| `joinHousehold` rate limiting | 🚫 | Still deferred, and **less urgent than this file used to claim**. With 8-character single-use 10-minute codes, guessing is not the concern; burning Lambda invocations is, and a WAF rate rule is the answer to that, not a counter. The error-message half is done: invalid / expired / already-used now return one identical refusal, so a guesser is no longer told when they found a real code. Verified in the deployed bundle 2026-09-04 — one identical refusal at all three call sites |
+| Password floor above 6 chars | ✅ | Raised to 8 with lowercase + number in `backend.ts`, deployed and **verified against the live pool 2026-09-04**: `MinimumLength: 8, RequireLowercase: true, RequireNumbers: true, RequireUppercase: false, RequireSymbols: false`. Existing passwords keep working — Cognito validates on set |
 | Signup gating | ⬜ | Much less urgent now — a junk account costs a Cognito row and nothing else |
 
 ---
@@ -180,8 +210,9 @@ transcription.
 |---|---|
 | Effort | ~half a day. `@anthropic-ai/bedrock-sdk` keeps the same message shape, so the seven sites are largely an import and a model id |
 | Wins | `ANTHROPIC_API_KEY` disappears entirely — Bedrock authenticates with IAM, so there is no long-lived secret in SSM to leak or rotate. One vendor, one bill, same region |
-| Check first | That `claude-haiku-4-5` and `claude-sonnet-4-6` are both available on Bedrock. New models land there later than the direct API |
-| Watch | Bedrock per-token pricing differs. Prompt caching exists with different mechanics — currently moot at our volume, but do not assume it carries over unexamined |
+| Check first | Both `claude-haiku-4-5` and `claude-sonnet-4-6` appear in the Bedrock model catalogue as of 2026-09-04. That is the catalogue, not your account — confirm they are enabled for `mine` in us-east-1 before planning around it |
+| Watch | Bedrock per-token pricing differs, and the difference is the cross-region inference profile. Direct `claude-haiku-4-5` is \$1.00/\$5.00 per Mtok; plain `anthropic.claude-haiku-4-5` on Bedrock matches it, but `us.anthropic.claude-haiku-4-5` — the profile a us-east-1 Lambda would normally use — is \$1.10/\$5.50, a **10% premium**. Same 10% on Sonnet. At the volumes in *Monetization* that is cents, but it is a real markup and it goes the wrong way |
+| Watch | Prompt caching exists with different mechanics. `parseIngredients` is the one function where this matters — its cache is currently doing most of the work (44k cache-write against 4.5k uncached over 30 days). Do not assume the caching carries over unexamined |
 
 ### Whisper → somewhere in AWS: the harder half
 
@@ -210,15 +241,84 @@ needs both, and transcription is the half with quality risk attached.
 
 ### Suggested order
 
-1. Move Claude to Bedrock. Real security win, low risk, independent of everything else.
+1. Move Claude to Bedrock. Real security win, low risk, independent of everything
+   else. **Do it in the same pass as the `inferProductAisle` model change** — both
+   rewrite the model id in the same seven handlers, so one edit and one review
+   instead of two. That ordering makes item 1 of the ranked list a prerequisite:
+   measure first, then move the model and the vendor together.
 2. Evaluate Amazon Transcribe against real dictation separately, with the
    hallucination behaviour as the thing to measure. Only then decide whether the
    single-processor story is worth the change.
 
+---
+
+## Monetization: what the meter costs
+
+Measured 2026-09-04 from CloudWatch over the preceding 30 days, one household,
+two people. This is the math that was the standing prerequisite.
+
+### Volume
+
+| Function | Model | Invocations / 30 d |
+|---|---|---|
+| `inferProductAisle` | `claude-sonnet-4-6` | **49** |
+| `parseIngredients` | `claude-haiku-4-5` | 29 |
+| `transcribeAudio` | `gpt-4o-mini-transcribe` | 21 |
+
+### Cost, and how firmly it is known
+
+`parseIngredients` logs input tokens, so its input cost is exact: over the 14
+parses that logged usage — 44,018 cache-write, 17,158 cache-read, 4,469 uncached
+— **\$0.061**. Output is not logged; its ceiling is `max_tokens` 1024 per call.
+
+| | Known | Ceiling |
+|---|---|---|
+| `parseIngredients`, 29 calls | \$0.13 | **\$0.28** |
+| `inferProductAisle`, 49 calls | *nothing logged* | **\$6.02** |
+| `transcribeAudio`, 21 calls | *only bytes and characters* | pennies |
+| AWS, whole account | \$3.19 | — |
+
+The \$6.02 is `max_tokens` 8192 × 49 × Sonnet output — a true ceiling nobody
+will reach, not a forecast. A plausible middle (3k in, 1k out) is **\$1.18**.
+The honest statement is that one household costs somewhere between \$1 and \$6
+a month in Claude, and the width of that range is entirely one function's
+missing log line.
+
+### The two findings that matter more than the range
+
+**1. The expensive call is on the expensive model.** `inferProductAisle` is the
+most-called AI function and the only one on Sonnet, with the largest
+`max_tokens` of the three. It is aisle-guessing — short, structured, repetitive
+output against a fixed store layout. The same plausible middle on
+`claude-haiku-4-5` is **\$0.39 instead of \$1.18**. Moving it is a bigger lever
+on the bill than any price point, and it should be measured before it is priced.
+
+**2. A shopping trip is not recorded anywhere.** The chosen meter unit does not
+exist as data. `Household` carries `shoppingStatus`, `activeShopperId`,
+`shoppingStoreId` and `shoppingStartedAt` — all *current-state* fields,
+overwritten by the next trip. `CommitAction` has eight values and none of them
+is starting or finishing a session. So a completed trip leaves no row, there is
+no history to count, and "two trips a month" cannot be enforced or even reported
+until trips are persisted.
+
+### What unblocks pricing
+
+1. **Log `response.usage`** in `inferProductAisleFunction` and add output tokens
+   to `parseIngredients`. Three lines each. A fortnight later the range above
+   collapses to a number.
+2. **Persist a trip.** A row written when a session ends, carrying householdId,
+   store, item count and duration. Needed for the meter regardless of price, and
+   it is what makes cost-per-trip reportable rather than inferred.
+3. **Then decide.** With a real cost per trip and a real trips-per-month
+   distribution, the free cap and the \$0.99 top-up stop being guesses.
+
+Read the Anthropic and OpenAI billing dashboards in the meantime — that gives
+today's actual spend immediately, though not the per-call breakdown that tells
+you which function to move.
+
 ## What is deliberately not being built
 
 - **Monetization.** Direction agreed — no feature gating, volume metered on
-  trips, roughly \$0.99 to finish the month. Blocked on cost-per-household, which
-  needs the Anthropic and OpenAI usage figures. AWS is \$3.19/month for the whole
-  account, so those two numbers are the entire equation.
+  trips. **No longer blocked on unit cost**; see *Monetization: what the meter
+  costs* above. It is now blocked on two build items named there.
 - **Ads.** Rejected. Sessions are seconds long and it is a shared family utility.

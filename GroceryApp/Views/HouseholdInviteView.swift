@@ -100,9 +100,20 @@ struct HouseholdInviteView: View {
                 .foregroundColor(DesignSystem.Colors.textSecondary)
 
             Text(details.inviteCode)
-                .font(.system(size: 36, weight: .bold, design: .monospaced))
+                .font(.system(size: 32, weight: .bold, design: .monospaced))
                 .foregroundStyle(DesignSystem.Colors.accentGradient)
-                .kerning(6)
+                .kerning(4)
+
+            // Most invites happen with both people in the room. Reading it out
+            // still works and stays above; this is the path that cannot mishear
+            // a B for a D.
+            if details.inviteCodeExpiresAt.map({ $0 > Date() }) ?? true {
+                InviteQRCode(code: details.inviteCode)
+
+                Text("Point the other phone at this")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
 
             if let expiresAt = details.inviteCodeExpiresAt {
                 if expiresAt > Date() {
@@ -297,7 +308,7 @@ struct HouseholdInviteView: View {
 
         Use this invite code: \(details.inviteCode)
 
-        The code expires in 24 hours.
+        It works once, and expires in 10 minutes.
         """
     }
 

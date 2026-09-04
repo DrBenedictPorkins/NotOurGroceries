@@ -523,7 +523,10 @@ class AmplifyService: ObservableObject {
     @available(*, deprecated, message: "Use createHouseholdRemotely — this creates no group and no owner")
     func createHousehold(name: String) async throws -> String {
         let inviteCode = generateInviteCode()
-        let expiresAt = Self.formatAWSDateTime(Date().addingTimeInterval(30 * 60))
+        // Ten minutes, matching the Lambdas that own this everywhere else —
+        // `householdMembershipFunction` and `regenerateInviteCodeFunction`. See
+        // the note there for why.
+        let expiresAt = Self.formatAWSDateTime(Date().addingTimeInterval(10 * 60))
 
         let document = """
         mutation CreateHousehold($input: CreateHouseholdInput!) {

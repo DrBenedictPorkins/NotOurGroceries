@@ -135,7 +135,11 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 async function generateUniqueInviteCode(): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
+    // Eight, not six. A code is read aloud and typed by hand, so length is
+    // friction — but 32^6 is 1.07e9 and 32^8 is 1.1e12, a thousandfold, for two
+    // more characters and about a second of typing. Still shorter than a guest
+    // Wi-Fi password.
+    const code = Array.from({ length: 8 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
     const existing = await client.send(new QueryCommand({
       TableName: HOUSEHOLD_TABLE_NAME,
       IndexName: 'householdsByInviteCode',

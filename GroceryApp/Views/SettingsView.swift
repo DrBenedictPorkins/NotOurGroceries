@@ -196,6 +196,20 @@ struct SettingsView: View {
                 settingsRow(title: "Version", value: appVersion)
                 settingsRow(title: "Build", value: appBuild)
                 settingsRow(title: "Built", value: buildDateString)
+
+                // Reachable after signup too, not only on the screen where it
+                // was accepted.
+                Link(destination: AppIdentity.privacyPolicyURL) {
+                    HStack {
+                        Text("Privacy Policy")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                        Spacer()
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(DesignSystem.Colors.dillGreen)
+                    }
+                }
             }
         }
         .padding(20)

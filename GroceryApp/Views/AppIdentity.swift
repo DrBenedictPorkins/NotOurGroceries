@@ -13,6 +13,14 @@ enum AppIdentity {
     /// herbs. Bundle identifiers, file paths and table names never see it.
     static let name = "Got Dill?"
 
+    /// Where the privacy policy is published.
+    ///
+    /// App Store review requires a reachable policy URL for any app that creates
+    /// accounts, and it has to load over HTTPS without signing in. The page
+    /// itself is `docs/privacy.html` in this repo; this constant is the only
+    /// place the address appears, so moving it is a one-line change.
+    static let privacyPolicyURL = URL(string: "https://got-dill.com/privacy")!
+
     /// The name for use *inside* a sentence, where a trailing "?" would read as
     /// the end of the sentence ("open the Got Dill? app"). Same rule newspapers
     /// use for Yahoo! — carry the punctuation when the name stands alone or

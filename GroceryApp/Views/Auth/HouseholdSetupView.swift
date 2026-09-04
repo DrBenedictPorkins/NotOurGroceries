@@ -4,6 +4,7 @@ struct HouseholdSetupView: View {
     @EnvironmentObject var amplifyService: AmplifyService
     @State private var householdName = ""
     @State private var inviteCode = ""
+    @State private var showScanner = false
     @State private var isCreating = true
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -34,6 +35,9 @@ struct HouseholdSetupView: View {
         }
         .onAppear {
             setDefaultHouseholdName()
+        }
+        .sheet(isPresented: $showScanner) {
+            scannerSheet
         }
     }
 
@@ -193,11 +197,26 @@ struct HouseholdSetupView: View {
                 .multilineTextAlignment(.center)
 
             CustomTextField(
-                placeholder: "Invite Code (e.g., ABC123)",
+                placeholder: "Invite Code",
                 text: $inviteCode,
                 icon: "ticket",
                 autocapitalization: .characters
             )
+
+            // The code is eight characters read off someone else's screen.
+            // Scanning it is both faster and the only way that cannot mistake a
+            // B for a D. Typing stays, for a code sent by text.
+            Button {
+                showScanner = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Scan their code instead")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundColor(DesignSystem.Colors.neonPurple)
+            }
         }
     }
 
@@ -213,6 +232,24 @@ struct HouseholdSetupView: View {
     }
 
     // MARK: - Actions
+
+    private var scannerSheet: some View {
+        NavigationView {
+            InviteQRScanner { scanned in
+                inviteCode = scanned
+                showScanner = false
+                joinHousehold()
+            }
+            .ignoresSafeArea()
+            .navigationTitle("Scan invite")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { showScanner = false }
+                }
+            }
+        }
+    }
 
     private func createHousehold() {
         guard !householdName.isEmpty else {

@@ -131,6 +131,17 @@ struct AuthGateView: View {
                     .multilineTextAlignment(.center)
             }
 
+            // Before the account is made, not buried in Settings afterwards.
+            if isSignUp {
+                Link(destination: AppIdentity.privacyPolicyURL) {
+                    Text("By creating an account you accept our Privacy Policy.")
+                        .font(.system(size: 12))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .underline()
+                        .multilineTextAlignment(.center)
+                }
+            }
+
             // Submit button
             Button(action: isSignUp ? signUp : signIn) {
                 HStack {

@@ -394,7 +394,7 @@ struct HouseholdView: View {
                 .multilineTextAlignment(.center)
 
             CustomTextField(
-                placeholder: "Invite Code (e.g., ABC123)",
+                placeholder: "Invite Code",
                 text: $inviteCode,
                 icon: "ticket",
                 autocapitalization: .characters
@@ -556,7 +556,7 @@ struct JoinHouseholdSheet: View {
                         .padding(.horizontal, 20)
 
                     CustomTextField(
-                        placeholder: "Invite Code (e.g., ABC123)",
+                        placeholder: "Invite Code",
                         text: $inviteCode,
                         icon: "ticket",
                         autocapitalization: .characters

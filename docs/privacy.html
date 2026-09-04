@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Got Dill? — Privacy Policy</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #5a5f5a;
+    --rule: #e2e5e0;
+    --ground: #fbfbf9;
+    --accent: #3f7d3f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8eae6;
+      --muted: #a0a6a0;
+      --rule: #2f332f;
+      --ground: #141614;
+      --accent: #8fd18f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 3rem 1.25rem 5rem;
+    background: var(--ground);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 40rem; margin: 0 auto; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .35rem; text-wrap: balance; }
+  h2 {
+    font-size: 1.05rem; margin: 2.5rem 0 .6rem; padding-top: 1.25rem;
+    border-top: 1px solid var(--rule); text-wrap: balance;
+  }
+  .updated { color: var(--muted); font-size: .875rem; margin: 0 0 2rem; }
+  .lede { font-size: 1.05rem; color: var(--ink); }
+  ul { padding-left: 1.15rem; }
+  li { margin: .4rem 0; }
+  a { color: var(--accent); }
+  strong { font-weight: 650; }
+  .note {
+    margin-top: 3rem; padding: 1rem 1.15rem; border-left: 3px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 7%, transparent);
+    font-size: .9rem; color: var(--muted);
+  }
+  footer { margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--rule);
+           color: var(--muted); font-size: .875rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Got Dill? — Privacy Policy</h1>
+<p class="updated">Last updated 3 September 2026</p>
+
+<p class="lede">Got Dill? is a shared grocery list for a household. This policy
+says what it stores, who else can see it, and what leaves your phone. There is no
+advertising in this app, no analytics or tracking software of any kind, and
+nothing here is sold or shared for marketing.</p>
+
+<h2>What is stored</h2>
+<ul>
+  <li><strong>Your account</strong> — email address and the display name you
+      choose. Sign-in is handled by Amazon Cognito; your password is held by
+      Cognito and is never visible to us.</li>
+  <li><strong>Your household</strong> — its name, its members, and the invite
+      codes used to join it.</li>
+  <li><strong>Your lists</strong> — item names, notes, which shop they belong to,
+      who added or crossed off each item, and when.</li>
+  <li><strong>Your shops</strong> — the store names, aisles and departments you
+      set up, and which items you have said are in which aisle.</li>
+  <li><strong>Photos</strong> you attach to an item.</li>
+  <li><strong>Trip history</strong> — a record of shopping trips and what was
+      bought, used to suggest items next time.</li>
+</ul>
+<p>This is held in Amazon Web Services in the United States (region us-east-1).</p>
+
+<h2>Who can see it</h2>
+<p>Everyone in your household can see, edit and delete everything in it. That is
+the purpose of the app — a shared list only works if it is shared. Items you add
+carry your name so other members can see who added what.</p>
+<p>People outside your household cannot see any of it. Access is enforced at the
+server, not just hidden in the app.</p>
+
+<h2>What leaves your phone, and to whom</h2>
+<ul>
+  <li><strong>Dictating a list</strong> sends that audio recording to OpenAI to
+      be turned into text. See the
+      <a href="https://openai.com/policies/privacy-policy">OpenAI privacy policy</a>.</li>
+  <li><strong>Parsing a list, and working out which aisle something is in</strong>,
+      sends the text — and, if you photograph a written list, that photo — to
+      Anthropic. See the
+      <a href="https://www.anthropic.com/legal/privacy">Anthropic privacy policy</a>.</li>
+  <li><strong>Saying which aisle you are standing in</strong> is recognised
+      entirely on your phone and is never sent anywhere.</li>
+</ul>
+<p>Nothing is sent to either company unless you use the feature that needs it.</p>
+
+<h2>Logs</h2>
+<p>Server logs record that a request happened, how large it was, and whether it
+failed. They do not record the contents of your list, your notes, your photos or
+your recordings.</p>
+
+<h2>Deleting your data</h2>
+<p>You can delete your account from inside the app, in Settings. This removes
+your sign-in and your membership of the household. Items you added stay with the
+household, because other members may still need them — unless you were the last
+member, in which case the household and everything in it is deleted with you.</p>
+
+<h2>Children</h2>
+<p>Got Dill? is not directed at children under 13, and accounts are not knowingly
+created for them.</p>
+
+<h2>Changes</h2>
+<p>If this policy changes, the date at the top changes with it.</p>
+
+<h2>Contact</h2>
+<p>Questions about any of this: <a href="mailto:mike@byteclub.com">mike@byteclub.com</a>.</p>
+
+<div class="note">
+<strong>Draft.</strong> This describes what the app does today, accurately, but it
+has not been reviewed by a lawyer. Have it checked before the App Store listing
+goes live, and make sure it matches the privacy questionnaire in App Store
+Connect — in particular the disclosure that recordings go to OpenAI and list text
+goes to Anthropic.
+</div>
+
+<footer>Got Dill?</footer>
+
+</main>
+</body>
+</html>

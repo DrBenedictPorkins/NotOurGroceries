@@ -44,6 +44,7 @@
 		AA0000000000000000000032 /* SearchBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000032 /* SearchBar.swift */; };
 		AA0000000000000000000033 /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000033 /* ToastView.swift */; };
 		AA0000000000000000000912 /* StoreCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000912 /* StoreCard.swift */; };
+		AA0000000000000000000914 /* InviteQRCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000914 /* InviteQRCode.swift */; };
 		AA0000000000000000000034 /* ShoppingListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000034 /* ShoppingListView.swift */; };
 		A1B2C3D4E5F601234567890B /* BulkImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */; };
 		AA0000000000000000000035 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000035 /* SettingsView.swift */; };
@@ -147,6 +148,7 @@
 		BB0000000000000000000032 /* SearchBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchBar.swift; sourceTree = "<group>"; };
 		BB0000000000000000000033 /* ToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000912 /* StoreCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreCard.swift; sourceTree = "<group>"; };
+		BB0000000000000000000914 /* InviteQRCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteQRCode.swift; sourceTree = "<group>"; };
 		BB0000000000000000000034 /* ShoppingListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShoppingListView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F601234567890A /* BulkImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkImportSheet.swift; sourceTree = "<group>"; };
 		BB0000000000000000000035 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -364,6 +366,7 @@
 				BB0000000000000000000087 /* StatusSubtitleView.swift */,
 				BB0000000000000000000033 /* ToastView.swift */,
 				BB0000000000000000000912 /* StoreCard.swift */,
+				BB0000000000000000000914 /* InviteQRCode.swift */,
 				BB0000000000000000000059 /* UserIdentityGradient.swift */,
 				BB0000000000000000000060 /* UserColorBadge.swift */,
 				02C91CEFFA5AF53A106CA602 /* ShoppingCompletedSheet.swift */,
@@ -550,6 +553,7 @@
 				AA0000000000000000000089 /* StoreDetailView.swift in Sources */,
 				AA0000000000000000000033 /* ToastView.swift in Sources */,
 				AA0000000000000000000912 /* StoreCard.swift in Sources */,
+				AA0000000000000000000914 /* InviteQRCode.swift in Sources */,
 				AA0000000000000000000057 /* MarqueeText.swift in Sources */,
 				AA0000000000000000000034 /* ShoppingListView.swift in Sources */,
 				A1B2C3D4E5F601234567890B /* BulkImportSheet.swift in Sources */,

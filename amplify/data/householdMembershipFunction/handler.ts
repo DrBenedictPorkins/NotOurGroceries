@@ -56,13 +56,18 @@ async function removeFromHouseholdGroup(userId: string, householdId: string): Pr
  * strangers out of somebody's household.
  */
 /**
- * An invite code lives 30 minutes and admits one person.
+ * An invite code lives 10 minutes and admits one person.
  *
  * Short because the code is now handed over deliberately — you generate it with
  * the person in front of you, or you text it and they act on it. A code that
  * outlives that conversation is just a spare key left in a group chat.
  */
-const INVITE_CODE_TTL_MS = 30 * 60 * 1000;
+// Ten minutes. An invite is sent while both people are looking at their
+// phones — in the same room, or on a text that gets answered now. Half an hour
+// was a guess, and nobody waits half an hour to join a shopping list. Any
+// member can press Generate New Code, so the cost of expiring early is one tap,
+// while the cost of a long window is a live code sitting in a message thread.
+const INVITE_CODE_TTL_MS = 10 * 60 * 1000;
 
 /**
  * Profile colours, mirroring `ProfileColor` in UserIdentityGradient.swift.
@@ -77,7 +82,11 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 async function generateUniqueInviteCode(): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const code = Array.from({ length: 6 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
+    // Eight, not six. A code is read aloud and typed by hand, so length is
+    // friction — but 32^6 is 1.07e9 and 32^8 is 1.1e12, a thousandfold, for two
+    // more characters and about a second of typing. Still shorter than a guest
+    // Wi-Fi password.
+    const code = Array.from({ length: 8 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
 
     // 32^6 is about a billion, so a collision is unlikely — but nothing checked
     // before, and a duplicate silently sends joiners to whichever row DynamoDB

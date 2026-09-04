@@ -567,6 +567,18 @@ class ShoppingListViewModel: ObservableObject {
     func refreshAllData() async {
         logger.info("Refreshing all data...")
 
+        // Are we still in this household at all?
+        //
+        // Removal is a Lambda writing straight to DynamoDB, so no AppSync
+        // mutation fires and no subscription can carry the news — and the
+        // token keeps its group claim for up to fifteen minutes, so queries
+        // go on succeeding too. Nothing pushes this; it has to be asked.
+        // Pull-to-refresh and returning to the app both come through here.
+        if case .some(.none) = await AmplifyService.shared.refreshHouseholdMembership() {
+            handleRemovedFromHousehold()
+            return
+        }
+
         // Parallel fetch
         async let itemsTask: () = loadShoppingList(forceRefresh: true)
         async let storesTask: () = loadStores(forceRefresh: true)
@@ -1721,6 +1733,23 @@ class ShoppingListViewModel: ObservableObject {
             .store(in: &subscriptionCancellables)
 
         logger.info("Subscriptions set up for household: \(householdId)")
+    }
+
+    /// The owner removed us, or the household went away.
+    ///
+    /// Drops to the no-household state rather than leaving somebody reading and
+    /// editing a list they are no longer part of. Writes would still be
+    /// accepted for a few minutes — the token outlives the claim — so this is
+    /// about not misleading people, not about stopping them.
+    func handleRemovedFromHousehold() {
+        logger.info("Removed from household — clearing local state")
+        teardownSubscriptions()
+        items = []
+        householdStores = []
+        shoppingStatus = .idle
+        AmplifyService.shared.currentHouseholdId = nil
+        errorMessage = "You're no longer in this household."
+        NotificationCenter.default.post(name: .householdChanged, object: nil)
     }
 
     func teardownSubscriptions() {

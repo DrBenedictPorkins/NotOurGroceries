@@ -134,12 +134,26 @@ AWS_PROFILE=mine aws cognito-idp list-users-in-group \
   --query 'Users[].Username'
 ```
 
-| Check | Pass | Result |
-|---|---|---|
-| C loses access without re-auth | | |
-| C's items survive | | |
-| C out of the Cognito group, A and B still in | | |
-| Non-owner cannot remove | | |
+**Run 2026-09-04 with T4** (not T3 — T3 owned no items, so "items survive"
+would have proved nothing).
+
+| Check | Result |
+|---|---|
+| Removed member loses access without re-auth | ❌ **FAILED** — T4 went on moving items between list and suggestions; writes landed (13/3 → 11/5) |
+| Their items survive | ✅ |
+| Out of the Cognito group, others still in | ✅ |
+| `householdId` / `householdGroup` cleared | ✅ |
+| Gone from the member list | ✅ |
+| Non-owner cannot remove | not yet run |
+
+**Cause:** AppSync authorises each request from the `cognito:groups` claim in
+the token presented, so clearing the group affects only future tokens.
+`accessTokenValidity` was unset — the Cognito default of 60 minutes.
+
+**Fixed in `6d710a1`**, needs a redeploy before retest: `AdminUserGlobalSignOut`
+on removal kills the refresh tokens, and access/id tokens are cut to 15 minutes.
+Nothing revokes an access token mid-life, so 15 minutes is the residual window
+by design, not an oversight.
 
 ::: {.callout-note}
 Step 2 is the real test. Group removal revokes the claim, but a token already

@@ -27,7 +27,9 @@ struct HouseholdInviteView: View {
                             loadingView
                         } else if let details = householdDetails {
                             inviteCodeSection(details: details)
-                            shareSection(details: details)
+                            if isCodeLive(details) {
+                                shareSection(details: details)
+                            }
                         } else {
                             errorView
                         }
@@ -93,38 +95,57 @@ struct HouseholdInviteView: View {
 
     // MARK: - Invite Code Section
 
+    /// Is there anything here worth showing somebody?
+    ///
+    /// A code rotates and expires the moment it admits somebody, so the usual
+    /// state of this screen between invites is a dead string. Nil means the
+    /// field was never set, which only happens on rows written before expiry
+    /// existed; treat those as live rather than hiding the code from them.
+    private func isCodeLive(_ details: AmplifyService.HouseholdDetails) -> Bool {
+        details.inviteCodeExpiresAt.map { $0 > Date() } ?? true
+    }
+
     private func inviteCodeSection(details: AmplifyService.HouseholdDetails) -> some View {
         VStack(spacing: 16) {
-            Text("Your Invite Code")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.textSecondary)
+            // An expired code is not a code. Showing eight dead characters, a
+            // QR nothing will accept and a Copy button beside them invites
+            // somebody to read it out and wonder why it does not work — the
+            // exact confusion this screen exists to prevent. When there is
+            // nothing to give away, the screen offers the one useful action.
+            if isCodeLive(details) {
+                Text("Your Invite Code")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
 
-            Text(details.inviteCode)
-                .font(.system(size: 32, weight: .bold, design: .monospaced))
-                .foregroundStyle(DesignSystem.Colors.accentGradient)
-                .kerning(4)
+                Text(details.inviteCode)
+                    .font(.system(size: 32, weight: .bold, design: .monospaced))
+                    .foregroundStyle(DesignSystem.Colors.accentGradient)
+                    .kerning(4)
 
-            // Most invites happen with both people in the room. Reading it out
-            // still works and stays above; this is the path that cannot mishear
-            // a B for a D.
-            if details.inviteCodeExpiresAt.map({ $0 > Date() }) ?? true {
+                // Most invites happen with both people in the room. Reading it
+                // out still works and stays above; this is the path that cannot
+                // mishear a B for a D.
                 InviteQRCode(code: details.inviteCode)
 
                 Text("Point the other phone at this")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textTertiary)
-            }
 
-            if let expiresAt = details.inviteCodeExpiresAt {
-                if expiresAt > Date() {
+                if let expiresAt = details.inviteCodeExpiresAt {
                     Text("Expires \(expiresAt, style: .relative)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(DesignSystem.Colors.textTertiary)
-                } else {
-                    Text("Code expired - regenerate below")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(DesignSystem.Colors.neonPink)
                 }
+            } else {
+                Text("Invite someone")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Text("Codes work once and last ten minutes, so there isn't one waiting. Make a fresh one when the other person is with you.")
+                    .font(.system(size: 13))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
             }
 
             Button(action: regenerateCode) {

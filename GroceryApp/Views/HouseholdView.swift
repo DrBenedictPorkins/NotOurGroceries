@@ -15,6 +15,11 @@ struct HouseholdView: View {
     /// Who the owner is about to remove. Nil when no removal is pending.
     @State private var memberToRemove: AmplifyService.HouseholdMember?
     @State private var householdDetails: AmplifyService.HouseholdDetails?
+    /// Set while the leave request is in flight. Leaving cascades on the server
+    /// — detach, group revoke, and a full delete if you were the last one — and
+    /// none of it is undoable. A second tap, or wandering to another tab
+    /// mid-flight, has nothing good to do.
+    @State private var isLeaving = false
 
     var body: some View {
         ZStack {
@@ -44,6 +49,36 @@ struct HouseholdView: View {
             }
         }
         .navigationBarHidden(true)
+        .overlay {
+            if isLeaving {
+                ZStack {
+                    // Swallows every tap underneath, which is the point: the
+                    // request is not cancellable and the result changes which
+                    // screen the app is even on.
+                    Color.black.opacity(0.55)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture {}
+
+                    VStack(spacing: 14) {
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(DesignSystem.Colors.dillGreen)
+                        Text("Leaving household\u{2026}")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(DesignSystem.Colors.cardBackground)
+                    )
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isLeaving)
+        .interactiveDismissDisabled(isLeaving)
         .sheet(isPresented: $showInviteSheet) {
             HouseholdInviteView()
         }
@@ -55,6 +90,7 @@ struct HouseholdView: View {
             Button("Leave", role: .destructive) {
                 leaveHousehold()
             }
+            .disabled(isLeaving)
         } message: {
             Text(leaveWarning)
         }
@@ -180,10 +216,41 @@ struct HouseholdView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(DesignSystem.Colors.neonPink)
             }
+            .disabled(isLeaving)
         }
     }
 
     // MARK: - Members Section
+
+    /// When they joined, at the precision that tells you something.
+    ///
+    /// A household is usually set up in one sitting, so a bare date renders
+    /// every member identically and the line says nothing. Today and yesterday
+    /// get the time as well, this year drops the year, older keeps it. The date
+    /// never disappears — "Joined 11:19 AM" is not a date at all.
+    private func joinedLabel(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter()
+
+        if calendar.isDateInToday(date) {
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            return "today at \(formatter.string(from: date))"
+        }
+
+        if calendar.isDateInYesterday(date) {
+            formatter.dateStyle = .none
+            formatter.timeStyle = .short
+            return "yesterday at \(formatter.string(from: date))"
+        }
+
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
+            formatter.setLocalizedDateFormatFromTemplate("d MMM")
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("d MMM yyyy")
+        }
+        return formatter.string(from: date)
+    }
 
     /// The colour this member is known by everywhere else in the app.
     private func memberColor(_ member: AmplifyService.HouseholdMember) -> Color {
@@ -300,19 +367,20 @@ struct HouseholdView: View {
                     }
                 }
 
-                Text(member.email)
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                // Was the email address. In a household you already know who
+                // T1 is — the name and the colour identify people, and the
+                // address only ever settled a tie between two members with the
+                // same display name, which is a rename problem. It also wrapped
+                // onto a second line on every row and made the list twice as
+                // tall as it needed to be.
+                if let joinedAt = member.joinedAt {
+                    Text("Joined \(joinedLabel(joinedAt))")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
             }
 
             Spacer()
-
-            // Joined date
-            if let joinedAt = member.joinedAt {
-                Text(joinedAt, style: .date)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textSecondary.opacity(0.7))
-            }
 
             // Only the creator sees this, and never on their own row. Behind a
             // long press rather than a visible button: it is rare, it is not
@@ -553,7 +621,10 @@ struct HouseholdView: View {
     }
 
     private func leaveHousehold() {
+        guard !isLeaving else { return }
+        isLeaving = true
         Task {
+            defer { isLeaving = false }
             do {
                 // Goes through the Lambda now: the old path wrote an empty
                 // string into a GSI key and left the household standing with

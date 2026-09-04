@@ -18,17 +18,42 @@ class UserCache: ObservableObject {
 
     @Published private(set) var users: [String: CachedUser] = [:]
     private var isFetching = false
+    /// Ids already asked about, so a cache miss in a view body asks once rather
+    /// than on every redraw.
+    private var requestedLookups: Set<String> = []
 
     private init() {}
 
     /// Get display name for a user ID - returns fallback if not cached
+    ///
+    /// A miss used to be permanent until something else refreshed the whole
+    /// cache. It filled on launch and on a full refresh, so anybody who joined
+    /// after that — including a member who left and came back — had their items
+    /// attributed to "User" on everybody else's phone until they happened to
+    /// pull to refresh. Now a miss asks, once, and the row corrects itself when
+    /// the answer lands.
     func displayName(for userId: String) -> String {
         if let user = users[userId] {
             return user.displayName
         }
-        // Return a safe fallback instead of crashing
-        // This can happen during sign out or if user data hasn't loaded yet
+        resolveLater(userId)
         return "User"
+    }
+
+    /// Ask about an id we do not know, at most once, off the render pass.
+    ///
+    /// Called from view bodies, so it must not fetch inline and must not ask
+    /// again on every redraw — a list of twenty unknown rows would otherwise
+    /// issue twenty queries per frame.
+    private func resolveLater(_ userId: String) {
+        guard !userId.isEmpty, !requestedLookups.contains(userId) else { return }
+        requestedLookups.insert(userId)
+        Task { @MainActor in
+            await fetchUser(userId)
+            // Let it be asked again later if the answer never arrived; a member
+            // who joins after a failed lookup should not stay "User" forever.
+            if !hasUser(userId) { requestedLookups.remove(userId) }
+        }
     }
 
     /// Get avatar URL for a user ID

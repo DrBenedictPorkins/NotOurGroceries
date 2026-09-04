@@ -295,11 +295,22 @@ class AmplifyService: ObservableObject {
                         await repairStoredEmail(for: user.userId)
                     }
 
-                    // Set householdId if present
-                    if case .string(let householdId) = userData["householdId"] {
+                    // The row came back, so whatever it says about householdId
+                    // is the truth — including saying nothing.
+                    //
+                    // This used to fall back to the cached id when the field was
+                    // absent, which is right when the *query* failed and wrong
+                    // when it succeeded. A member removed from their household
+                    // signed in, had the household they had just been removed
+                    // from restored from UserDefaults, watched the old list
+                    // appear for a moment while every query came back
+                    // Unauthorized, and was then signed out by handleAuthError.
+                    // They could not get in at all.
+                    if case .string(let householdId) = userData["householdId"], !householdId.isEmpty {
                         self.currentHouseholdId = householdId
                     } else {
-                        loadLocalHouseholdId()
+                        self.currentHouseholdId = nil
+                        forgetLocalHouseholdId()
                     }
                 } else if case .object(let root) = json,
                           case .null = root["getUser"] {
@@ -417,6 +428,17 @@ class AmplifyService: ObservableObject {
         }
     }
 
+    /// Drop the cached household, both copies.
+    ///
+    /// `currentHouseholdId = nil` clears the plain key through its didSet, but
+    /// the user-scoped cache is deliberately built to survive sign-out, so it
+    /// would otherwise hand the same stale id back on the next launch.
+    func forgetLocalHouseholdId() {
+        UserDefaults.standard.removeObject(forKey: "currentHouseholdId")
+        UserDefaults.standard.removeObject(forKey: "cachedHouseholdId")
+        UserDefaults.standard.removeObject(forKey: "cachedUserId")
+    }
+
     private func loadLocalHouseholdId() {
         // Primary: simple stored value (set whenever currentHouseholdId is set)
         if let storedHouseholdId = UserDefaults.standard.string(forKey: "currentHouseholdId") {
@@ -434,6 +456,36 @@ class AmplifyService: ObservableObject {
         }
     }
 
+    /// Ask the server whether this account is still in a household.
+    ///
+    /// Returns nil if the question could not be answered — offline, or the
+    /// query failed — so callers can tell "no household" from "don't know" and
+    /// leave the app alone in the second case.
+    @discardableResult
+    func refreshHouseholdMembership() async -> String?? {
+        guard let user = currentUser else { return nil }
+
+        let document = """
+        query GetUser($id: ID!) { getUser(id: $id) { id householdId } }
+        """
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: ["id": user.userId],
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+
+        guard let response = try? await Amplify.API.query(request: request),
+              case .success(let json) = response,
+              case .object(let root) = json,
+              case .object(let userData) = root["getUser"] else { return nil }
+
+        if case .string(let householdId) = userData["householdId"], !householdId.isEmpty {
+            return .some(householdId)
+        }
+        return .some(nil)
+    }
+
     // MARK: - Auth Error Handling
 
     /// Checks if an error is auth-related (expired/invalid tokens) and forces sign-out if so.
@@ -446,10 +498,31 @@ class AmplifyService: ObservableObject {
     }
 
     func handleAuthError(_ error: Error) {
-        if isAuthError(error) {
-            print("Auth error detected, forcing sign-out: \(String(describing: error))")
-            Task { @MainActor in
-                try? await signOut()
+        guard isAuthError(error) else { return }
+        Task { @MainActor in
+            // "Unauthorized" has two very different causes, and signing out was
+            // the right answer to only one of them. A bad or expired token means
+            // sign out. Being removed from your household means every
+            // household-scoped query fails while your sign-in is perfectly
+            // valid — and signing out on that made the app impossible to get
+            // back into, because the next sign-in restored the same stale
+            // household and failed the same way.
+            //
+            // The user's own row answers it: `allow.owner()` still lets them
+            // read it with no household at all.
+            switch await self.refreshHouseholdMembership() {
+            case .some(.none):
+                print("Auth error, and this account is in no household — dropping to setup")
+                self.currentHouseholdId = nil
+                self.forgetLocalHouseholdId()
+                NotificationCenter.default.post(name: .householdChanged, object: nil)
+            case .some(.some):
+                print("Auth error with a live household — forcing sign-out")
+                try? await self.signOut()
+            case .none:
+                // Could not ask. Offline, most likely. Leave them alone rather
+                // than signing somebody out because the café wifi dropped.
+                print("Auth error, membership unknown — leaving session alone")
             }
         }
     }

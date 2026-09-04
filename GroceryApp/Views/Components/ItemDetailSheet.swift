@@ -720,8 +720,14 @@ struct ItemDetailSheet: View {
     private var numberStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                // One state, not two. Chips used to also mark the aisles this
+                // shop already knew, and that green was read as "this item is in
+                // aisle 4" every single time. It never earned the confusion:
+                // tapping 7 creates aisle 7 just as happily, so knowing the shop
+                // has heard of it changes nothing you can do — and it is no help
+                // at all with the only question on screen, which is where this
+                // item actually is.
                 ForEach(stripNumbers, id: \.self) { n in
-                    let known = AisleUtterance.findExisting("\(n)", in: currentStore?.aisleLayout ?? []) != nil
                     let selected = AisleUtterance.normalise(aisleText) == "\(n)"
                     Button {
                         apply("\(n)")
@@ -731,18 +737,14 @@ struct ItemDetailSheet: View {
                             .monospacedDigit()
                             .frame(width: 58, height: 58)
                             .foregroundColor(selected ? DesignSystem.Colors.background
-                                             : known ? DesignSystem.Colors.dillGreen
                                              : DesignSystem.Colors.textSecondary)
                             .background(
                                 RoundedRectangle(cornerRadius: 14)
                                     .fill(selected ? DesignSystem.Colors.dillGreen
-                                          : known ? DesignSystem.Colors.dillGreen.opacity(0.10)
                                           : DesignSystem.Colors.glassBackground)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 14)
-                                            .stroke(known && !selected
-                                                    ? DesignSystem.Colors.dillGreen.opacity(0.55)
-                                                    : DesignSystem.Colors.glassBorder, lineWidth: 1)
+                                            .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
                                     )
                             )
                     }

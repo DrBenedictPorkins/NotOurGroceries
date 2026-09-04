@@ -144,7 +144,7 @@ struct StoreAisleManagementView: View {
     /// two identical headers.
     private var itemsGroupedByAisle: [String: [DisplayItem]] {
         Dictionary(grouping: allDisplayItems) { item in
-            item.aisle == "Unknown"
+            AisleNaming.isUnplaced(item.aisle)
                 ? "Unknown"
                 : AisleNaming.displayName(for: item.aisle, in: currentStore.aisleLayout)
         }

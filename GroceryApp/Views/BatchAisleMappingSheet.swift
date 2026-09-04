@@ -46,8 +46,7 @@ struct BatchAisleMappingSheet: View {
     private func rememberUnplaced(_ results: [String: AisleExtractionService.AisleInferenceResult]) {
         let unplaced = unmappedItems.filter { item in
             guard let r = results[item.id] else { return true }
-            let aisle = r.suggestedAisle.trimmingCharacters(in: .whitespaces)
-            return aisle.isEmpty || aisle.caseInsensitiveCompare("unknown") == .orderedSame
+            return AisleNaming.isUnplaced(r.suggestedAisle)
         }.map { $0.normalizedName.lowercased() }
 
         let existing = Set(UserDefaults.standard.stringArray(forKey: "batchUnplaced.\(store.id)") ?? [])
@@ -240,8 +239,7 @@ struct BatchAisleMappingSheet: View {
     /// lines below read Unknown.
     private var placedCount: Int {
         results.values.filter { result in
-            let aisle = result.suggestedAisle.trimmingCharacters(in: .whitespaces)
-            return !aisle.isEmpty && aisle.caseInsensitiveCompare("unknown") != .orderedSame
+            return !AisleNaming.isUnplaced(result.suggestedAisle)
         }.count
     }
 
@@ -498,8 +496,7 @@ private struct BatchMappingResultRow: View {
     let onTap: () -> Void
 
     private var isUnplaced: Bool {
-        let aisle = result.suggestedAisle.trimmingCharacters(in: .whitespaces)
-        return aisle.isEmpty || aisle.caseInsensitiveCompare("unknown") == .orderedSame
+        AisleNaming.isUnplaced(result.suggestedAisle)
     }
 
     var body: some View {

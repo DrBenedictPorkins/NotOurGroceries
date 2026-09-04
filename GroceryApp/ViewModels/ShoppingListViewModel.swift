@@ -2449,6 +2449,15 @@ class ShoppingListViewModel: ObservableObject {
             mutation UpdateHousehold($input: UpdateHouseholdInput!) {
                 updateHousehold(input: $input) {
                     id
+                    # Required, though nothing on screen reads it. Household is
+                    # guarded by groupDefinedIn('groupName'), and AppSync decides
+                    # whether a subscriber may receive a mutation by evaluating
+                    # that rule against the payload the mutation returned. Leave
+                    # groupName out and the payload has nothing to authorise
+                    # against, so every other member is silently skipped — the
+                    # shopper sees At Store because of a local update, and
+                    # everybody else sees nothing at all.
+                    groupName
                     shoppingStatus
                     activeShopperId
                     shoppingStoreId
@@ -2620,6 +2629,9 @@ class ShoppingListViewModel: ObservableObject {
             mutation UpdateHousehold($input: UpdateHouseholdInput!) {
                 updateHousehold(input: $input) {
                     id
+                    # See the note on entering At Store: groupName must be in the
+                    # selection set or no other member is told.
+                    groupName
                     shoppingStatus
                     activeShopperId
                     shoppingStoreId
@@ -2716,6 +2728,9 @@ class ShoppingListViewModel: ObservableObject {
             mutation UpdateHousehold($input: UpdateHouseholdInput!) {
                 updateHousehold(input: $input) {
                     id
+                    # See the note on entering At Store: groupName must be in the
+                    # selection set or no other member is told.
+                    groupName
                     shoppingStatus
                     activeShopperId
                     shoppingStoreId

@@ -17,9 +17,22 @@ import Foundation
 enum AisleNaming {
 
     /// Human-readable name for an aisle id, in title case.
+    /// Words that mean "nowhere", in every spelling they arrive in.
+    ///
+    /// The inference prompt tells the model to answer null when nothing fits,
+    /// and it does — but `aisle` is typed as a string, so what comes back is
+    /// the literal text "null". Left alone it reads as a real placement and
+    /// the review screen prints it in green beside the item.
+    private static let unplacedWords: Set<String> = ["", "null", "none", "unknown", "undefined", "n/a"]
+
+    /// Is this id a placement at all?
+    static func isUnplaced(_ aisleId: String) -> Bool {
+        unplacedWords.contains(aisleId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+    }
+
     static func displayName(for aisleId: String, in layout: [StoreAisle]) -> String {
         let id = aisleId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !id.isEmpty else { return "No aisle yet" }
+        guard !isUnplaced(id) else { return "No aisle yet" }
 
         if let aisle = match(id, in: layout) {
             return label(for: aisle)

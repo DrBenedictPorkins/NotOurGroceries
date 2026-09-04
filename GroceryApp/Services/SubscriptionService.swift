@@ -339,6 +339,11 @@ class SubscriptionService: ObservableObject {
             subscription OnUpdateHousehold($id: ID!) {
                 onUpdateHousehold(filter: { id: { eq: $id } }) {
                     id
+                    # Must match the mutation's selection set. AppSync authorises
+                    # delivery by evaluating groupDefinedIn('groupName') against
+                    # the mutation payload, so if either side omits it the update
+                    # is dropped for everyone but the person who made it.
+                    groupName
                     shoppingStatus
                     activeShopperId
                     shoppingStoreId

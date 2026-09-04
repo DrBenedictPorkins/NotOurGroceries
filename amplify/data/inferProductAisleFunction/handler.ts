@@ -192,6 +192,14 @@ function canonicalAisleId(value: string, aisles: StoreAisle[] = []): string {
   if (!trimmed) return trimmed;
   const key = trimmed.toLowerCase();
 
+  // "Use null if nothing fits" is the right answer and the model gives it — but
+  // the schema types `aisle` as a string, so it arrives as the four characters
+  // n-u-l-l rather than a JSON null, sails through `r.aisle || 'Unknown'`, and
+  // the review screen prints "null" next to Flour in confident green. An
+  // unplaced item is unplaced; say so with an empty id, which every caller
+  // already treats as "No aisle yet".
+  if (key === 'null' || key === 'none' || key === 'undefined' || key === 'n/a') return '';
+
   const declared = aisles.find(
     (a) =>
       a.id?.toLowerCase() === key ||

@@ -125,6 +125,34 @@ destructive, and there is one environment.
 | Member leaves and rejoins | Colour reassignment, group re-grant | They do not collide with a colour someone took while they were away |
 | Two people join on one code, racing | `consumeInviteCode` conditional write | Exactly one gets in; the other is told the code was used |
 
+### The specific hazard, found 2026-09-04
+
+`deleteHouseholdData` fires when `countMembers(householdId) === 0`, and
+`countMembers` queries the **`usersByHouseholdId` GSI**. DynamoDB global
+secondary indexes support only eventually consistent reads — `ConsistentRead` is
+not available on a GSI at all — and the count runs immediately after
+`detachUser` writes to the base table.
+
+Two ways that can be wrong, with very different consequences:
+
+| Stale direction | Result | Severity |
+|---|---|---|
+| Index still shows the departing member | Count is 1, nothing is deleted | Orphaned household and Cognito group. Untidy, recoverable |
+| Index has not yet caught up with **another** member's join | Count is 0 while a real member exists | **`deleteHouseholdData` wipes a live household** — every item, commit and store, for somebody still using the app |
+
+The second is rare — GSI propagation is normally sub-second, so it needs a join
+and a departure inside the same instant — but the blast radius is total and
+there is no undo beyond PITR. Rare-and-total is the worst risk shape there is,
+and it is invisible in a two-person household where nobody joins and leaves at
+once.
+
+**Candidate fix, not yet built:** cross-check against the Cognito group before
+deleting. `ListUsersInGroup` reads the actual authorization boundary rather than
+an eventually consistent projection of it, the handler already holds the IAM
+permissions for group management, and it fails in the safe direction — if the
+group still lists anybody, do not delete. Worth testing the race first to
+confirm it is reachable.
+
 ### Why it matters more than it looks
 
 `deleteHouseholdData` is the most destructive code in the app and it is reached
@@ -300,6 +328,60 @@ overwritten by the next trip. `CommitAction` has eight values and none of them
 is starting or finishing a session. So a completed trip leaves no row, there is
 no history to count, and "two trips a month" cannot be enforced or even reported
 until trips are persisted.
+
+### Cognito costs, and whether to implement auth differently
+
+Checked 2026-09-04 against the live pool.
+
+| | |
+|---|---|
+| Pool | `us-east-1_OIBNTn0XB`, created **2026-01-15** |
+| Tier | **Essentials** — the default for pools created after Nov 2024 |
+| Users | 2 |
+| MFA | Off |
+
+**At any scale this app will see soon, Cognito is free.** The free tier is
+10,000 monthly active users, it does not expire with the 12-month AWS free
+tier, and it applies to both Lite and Essentials. Ten thousand MAU is roughly
+five thousand households. Cognito is not a monetization input until then, and
+should not be treated as one.
+
+**The date matters.** Pools created before **2024-11-22** get a **50,000** MAU free
+tier — five times as generous. Ours was created 2026-01-15, well after that
+cutoff, so we are on the 10,000 tier. That is not recoverable by changing settings; it is a property of
+when the pool was made, and the pool cannot be migrated without re-creating
+every account. Worth knowing so it is never mistaken for a misconfiguration.
+
+**Past the free tier, the one real lever is the tier itself:**
+
+| Tier | First paid MAU | Notes |
+|---|---|---|
+| Lite | \$0.0055 | Volume-scaled down to \$0.0025 |
+| **Essentials (ours)** | \$0.015 | Default for new pools. Scales down to \$0.0025 |
+| Plus | \$0.02 | No free tier at all |
+
+Essentials is roughly **3x Lite** at the first paid band. At 20,000 MAU that is
+about \$150/month on Essentials against roughly \$55 on Lite. Both are
+irrelevant today and neither is worth acting on now.
+
+**Before ever switching to Lite, check what we actually use.** The app needs
+email/password sign-in, groups (the whole authorization model is Cognito
+groups), and the admin APIs the membership Lambda calls. MFA is off and
+advanced threat protection is a Plus feature we do not use. Whether every one
+of those is available on Lite has **not** been verified — do that before
+planning around the saving, not after.
+
+**Alternative implementations, and why none is worth it yet:**
+
+- **Self-hosted auth.** Trades a bill that is \$0 today for password storage,
+  reset flows, token issuance and the security surface of all three. The
+  crossover point is far past where this app is, and the risk is permanent.
+- **Sign in with Apple only.** Removes password handling and is a genuine
+  simplification, but it does not remove Cognito — it changes what feeds it —
+  and it excludes anyone not on Apple hardware, which is a real limit for a
+  *shared household* app where the other member picks their own phone.
+- **Staying put.** The correct answer for now. Revisit at ~5,000 MAU, which is
+  also roughly when the AI bill stops being cents.
 
 ### What unblocks pricing
 

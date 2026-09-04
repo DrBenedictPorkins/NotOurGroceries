@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix: saving an aisle by voice closed the whole item screen out from under you
 
 ### Your household
+- A household is now only destroyed when two separate checks agree it is empty. The member count is read from an index that can lag by a moment, and on its own it could in principle wipe a household somebody had just joined
 - **Invite by QR.** The square is under the code on the invite screen; the join screen scans it. Most invites happen in the same room, and a scan cannot mishear a B for a D
 - Invite codes are longer and live ten minutes instead of thirty. Nobody waits half an hour to join a shopping list, and any member can make a new one in a tap
 - Fix: the shared invite message claimed the code lasted 24 hours. It had not for a long time

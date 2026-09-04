@@ -209,6 +209,12 @@ householdMembershipLambda.addToRolePolicy(new PolicyStatement({
     // guideline 5.1.1(v) requires an app that creates accounts to let people
     // delete them from inside the app.
     'cognito-idp:AdminDeleteUser',
+    // The second opinion before the cascade runs. countMembers reads an
+    // eventually consistent GSI; this reads the authorization boundary itself,
+    // so a household is only destroyed when both agree it is empty. Without
+    // this grant the check throws, and it deliberately fails closed — the
+    // household survives rather than being wiped on an unverified count.
+    'cognito-idp:ListUsersInGroup',
   ],
   resources: [backend.auth.resources.userPool.userPoolArn],
 }));

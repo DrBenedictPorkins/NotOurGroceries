@@ -16,6 +16,7 @@ import {
   AdminDeleteUserCommand,
   CreateGroupCommand,
   DeleteGroupCommand,
+  ListUsersInGroupCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Schema } from '../resource';
@@ -224,6 +225,65 @@ async function countMembers(householdId: string): Promise<number> {
 }
 
 /**
+ * Is this household safe to destroy?
+ *
+ * `countMembers` reads the `usersByHouseholdId` **GSI**, and DynamoDB global
+ * secondary indexes are eventually consistent — `ConsistentRead` is not offered
+ * on a GSI at all. The count runs immediately after `detachUser` writes to the
+ * base table, so it can be stale in two directions with wildly different costs:
+ *
+ * - Stale showing the *departing* member: count is 1, nothing is deleted. An
+ *   orphaned household. Untidy, and recoverable by hand.
+ * - Stale missing *another* member who just joined: count is 0 while somebody
+ *   real is still using the household, and the cascade wipes every item, commit
+ *   and store they have. Recoverable only from PITR.
+ *
+ * The second needs a join and a departure inside the same instant, which is why
+ * it has never been seen in a two-person household where nobody does both. It
+ * is rare and total, which is the worst shape a bug can have.
+ *
+ * So the index gets a second opinion from the Cognito group, which is the actual
+ * authorization boundary rather than an eventually consistent projection of one.
+ * This guard can only ever *prevent* a delete, never cause one — every uncertain
+ * answer, including a Cognito failure, returns false and leaves the data alone.
+ *
+ * `Limit: 2` is enough to be sure. Usernames are unique, so if two rows come
+ * back at least one of them is not the person leaving, and one is all it takes
+ * to refuse.
+ *
+ * Called only once the index has already said zero, so it is the second of two
+ * agreeing opinions rather than a replacement for the first.
+ */
+async function householdGroupIsEmpty(householdId: string, departingUserId: string): Promise<boolean> {
+  try {
+    const group = await cognito.send(new ListUsersInGroupCommand({
+      UserPoolId: USER_POOL_ID,
+      GroupName: householdId,
+      Limit: 2,
+    }));
+
+    // The departing member may still be listed: removeFromHouseholdGroup is
+    // best-effort and logs its failures rather than throwing.
+    const others = (group.Users ?? []).filter((u) => u.Username !== departingUserId);
+    if (others.length > 0) {
+      logWarning('household.deleteRefused', {
+        householdId,
+        reason: 'cognito_group_still_populated',
+        othersFound: others.length,
+      });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    // A missing group means nobody is in it, which is the one error that agrees
+    // with deleting. Anything else is uncertainty, and uncertainty keeps the data.
+    if ((error as { name?: string }).name === 'ResourceNotFoundException') return true;
+    logFailure('household.deleteRefused', error, { householdId, reason: 'group_check_failed' });
+    return false;
+  }
+}
+
+/**
  * Delete everything belonging to a household, then the household itself.
  *
  * Paginated and batched, because a household with a long history has thousands
@@ -368,7 +428,7 @@ export const handler: Handler = async (event) => {
       await removeFromHouseholdGroup(callerId, ownHouseholdId);
 
       remaining = await countMembers(ownHouseholdId);
-      if (remaining === 0) {
+      if (remaining === 0 && await householdGroupIsEmpty(ownHouseholdId, callerId)) {
         // Last one out takes the household with them, exactly as leaving does.
         await deleteHouseholdData(ownHouseholdId);
         await deleteHouseholdGroup(ownHouseholdId);
@@ -437,7 +497,7 @@ export const handler: Handler = async (event) => {
     await removeFromHouseholdGroup(callerId, householdId);
 
     const remaining = await countMembers(householdId);
-    if (remaining === 0) {
+    if (remaining === 0 && await householdGroupIsEmpty(householdId, callerId)) {
       await deleteHouseholdData(householdId);
       await deleteHouseholdGroup(householdId);
       logEvent('household.deleted', { householdId, reason: 'last_member_left' });

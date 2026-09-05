@@ -18,6 +18,8 @@
     "@aws-amplify/backend": "^1.19.0",
     "@aws-amplify/backend-cli": "^1.8.1",
     "@aws-sdk/client-cognito-identity-provider": "^3.1121.0",
+    "@aws-sdk/client-s3": "^3.1127.0",
+    "@aws-sdk/s3-request-presigner": "^3.1127.0",
     "@types/jest": "^29.5.14",
     "aws-cdk-lib": "^2.216.0",
     "constructs": "^10.4.4",
@@ -31,7 +33,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@aws-sdk/client-dynamodb": "^3.966.0",
-    "@aws-sdk/client-s3": "^3.966.0",
     "@aws-sdk/client-ses": "^3.962.0",
     "@aws-sdk/lib-dynamodb": "^3.966.0",
     "@aws-sdk/util-dynamodb": "^3.966.0",

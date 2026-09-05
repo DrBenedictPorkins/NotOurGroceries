@@ -16,6 +16,7 @@
 		AA0000000000000000000906 /* ShareText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000906 /* ShareText.swift */; };
 		AA0000000000000000000907 /* TrackRecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000907 /* TrackRecordView.swift */; };
 		AA0000000000000000000908 /* AisleNaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000908 /* AisleNaming.swift */; };
+		AA0000000000000000000931 /* ItemImageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000931 /* ItemImageService.swift */; };
 		AA0000000000000000000909 /* AisleUtterance.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000909 /* AisleUtterance.swift */; };
 		AA0000000000000000000913 /* AppVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000913 /* AppVersion.swift */; };
 		AA0000000000000000000911 /* AisleSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000911 /* AisleSpeechService.swift */; };
@@ -119,6 +120,7 @@
 		BB0000000000000000000906 /* ShareText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareText.swift; sourceTree = "<group>"; };
 		BB0000000000000000000907 /* TrackRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackRecordView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000908 /* AisleNaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleNaming.swift; sourceTree = "<group>"; };
+		BB0000000000000000000931 /* ItemImageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemImageService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000909 /* AisleUtterance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleUtterance.swift; sourceTree = "<group>"; };
 		BB0000000000000000000913 /* AppVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVersion.swift; sourceTree = "<group>"; };
 		BB0000000000000000000911 /* AisleSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AisleSpeechService.swift; sourceTree = "<group>"; };
@@ -296,6 +298,7 @@
 				BB0000000000000000000905 /* TripStats.swift */,
 				BB0000000000000000000906 /* ShareText.swift */,
 				BB0000000000000000000908 /* AisleNaming.swift */,
+				BB0000000000000000000931 /* ItemImageService.swift */,
 				BB0000000000000000000909 /* AisleUtterance.swift */,
 				BB0000000000000000000913 /* AppVersion.swift */,
 				BB0000000000000000000911 /* AisleSpeechService.swift */,
@@ -537,6 +540,7 @@
 				AA0000000000000000000906 /* ShareText.swift in Sources */,
 				AA0000000000000000000907 /* TrackRecordView.swift in Sources */,
 				AA0000000000000000000908 /* AisleNaming.swift in Sources */,
+				AA0000000000000000000931 /* ItemImageService.swift in Sources */,
 				AA0000000000000000000909 /* AisleUtterance.swift in Sources */,
 				AA0000000000000000000913 /* AppVersion.swift in Sources */,
 				AA0000000000000000000911 /* AisleSpeechService.swift in Sources */,

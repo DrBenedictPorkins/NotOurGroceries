@@ -11,6 +11,7 @@ import {
   parseIngredientsFunction,
   transcribeAudioFunction,
   adminMcpFunction,
+  itemImageFunction,
 } from './data/resource';
 import { storage } from './storage/resource';
 import { Function, CfnFunction } from 'aws-cdk-lib/aws-lambda';
@@ -34,6 +35,7 @@ const backend = defineBackend({
   parseIngredientsFunction,
   transcribeAudioFunction,
   adminMcpFunction,
+  itemImageFunction,
 });
 
 // Password policy. Set here because defineAuth doesn't expose it.
@@ -404,3 +406,27 @@ userPoolClient.tokenValidityUnits = {
   idToken: 'minutes',
   refreshToken: 'days',
 };
+
+
+// ========================================
+// ITEM IMAGE BROKER
+// ========================================
+
+/**
+ * The client holds no S3 permissions at all now; this function is the only way
+ * an item photo is read, written or deleted, and it checks the household id in
+ * the key against the caller's Cognito groups first.
+ */
+const itemImageLambda = backend.itemImageFunction.resources.lambda as Function;
+const imageBucket = backend.storage.resources.bucket;
+
+addEnvVars(itemImageLambda, {
+  IMAGE_BUCKET_NAME: imageBucket.bucketName,
+});
+
+// Scoped to the one prefix the app uses, so a bug here cannot reach anything
+// else that ever lands in this bucket.
+itemImageLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+  resources: [`${imageBucket.bucketArn}/item-images/*`],
+}));

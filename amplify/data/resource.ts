@@ -20,6 +20,12 @@ export const commitStreamHandler = defineFunction({
 });
 
 // Search products with fuzzy matching
+export const itemImageFunction = defineFunction({
+  name: 'itemImageFunction',
+  entry: './itemImageFunction/handler.ts',
+  timeoutSeconds: 30,
+});
+
 export const searchProductsFunction = defineFunction({
   name: 'searchProductsFunction',
   entry: './searchProductsFunction/handler.ts',
@@ -402,6 +408,27 @@ const schema = a.schema({
   // ========================================
 
   // Search products with fuzzy matching
+  /// Signed access to an item photo, checked against the caller's household.
+  ///
+  /// The bucket grants the client nothing; every read, write and delete comes
+  /// through here so the household id in the key can be compared with the
+  /// caller's Cognito groups. See `itemImageFunction/handler.ts`.
+  itemImage: a
+    .mutation()
+    .arguments({
+      action: a.string().required(),
+      s3Key: a.string(),
+      itemId: a.string(),
+      householdId: a.id(),
+    })
+    .returns(a.customType({
+      url: a.string(),
+      s3Key: a.string().required(),
+      expiresIn: a.integer().required(),
+    }))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(itemImageFunction)),
+
   searchProducts: a
     .query()
     .arguments({

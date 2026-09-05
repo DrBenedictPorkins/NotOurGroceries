@@ -3013,20 +3013,19 @@ class ShoppingListViewModel: ObservableObject {
             throw NSError(domain: "ImageError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Not signed in"])
         }
 
-        let imageId = UUID().uuidString
-        let s3Key = "item-images/\(item.householdId)_\(item.id)_\(imageId).jpg"
+        logger.info("Uploading image, \(imageData.count) bytes")
 
-        logger.info("Uploading image with key: \(s3Key)")
-        logger.info("Image data size: \(imageData.count) bytes")
-
-        // Upload to S3
-        let uploadTask = Amplify.Storage.uploadData(
-            path: .fromString(s3Key),
+        // The server picks the key and signs the upload. The client used to
+        // build the key itself and write straight to the bucket, which is only
+        // safe if the bucket trusts every signed-in account — it did.
+        let s3Key = try await ItemImageService.upload(
             data: imageData,
-            options: .init(contentType: "image/jpeg")
+            itemId: item.id,
+            householdId: item.householdId
         )
-
-        _ = try await uploadTask.value
+        let imageId = s3Key
+            .split(separator: "_").last
+            .map { String($0).replacingOccurrences(of: ".jpg", with: "") } ?? UUID().uuidString
 
         // Create ItemImage metadata
         let newImage = ItemImage(
@@ -3057,8 +3056,9 @@ class ShoppingListViewModel: ObservableObject {
             throw NSError(domain: "ImageError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Image not found"])
         }
 
-        // Delete from S3
-        try await Amplify.Storage.remove(path: .fromString(imageToDelete.s3Key))
+        // Deleted by the server after it checks the key belongs to this
+        // household — not by a signed DELETE handed to the client.
+        try await ItemImageService.delete(s3Key: imageToDelete.s3Key)
 
         // Update item with filtered images array
         let updatedImages = item.images.filter { $0.id != imageId }
@@ -3074,11 +3074,9 @@ class ShoppingListViewModel: ObservableObject {
         logger.info("Deleted image from item: \(item.name)")
     }
 
-    /// Download an image from S3
+    /// Download an image, via a short-lived signed URL from the server.
     func downloadItemImage(s3Key: String) async throws -> Data {
-        let downloadTask = Amplify.Storage.downloadData(path: .fromString(s3Key))
-        let data = try await downloadTask.value
-        return data
+        try await ItemImageService.download(s3Key: s3Key)
     }
 
     /// Helper to update the images field in the backend

@@ -1007,14 +1007,22 @@ struct ItemDetailSheet: View {
         .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
     }
 
+    /// One photo: the image, then a caption strip beneath it.
+    ///
+    /// The strip used to sit *on* the image behind a dark gradient, which works
+    /// on a dark photo and disappears on a bright one — a 12pt trash icon over a
+    /// picture of a lemon is not a control anybody can find. Below the image it
+    /// has its own ground and is legible whatever was photographed.
+    ///
+    /// It is also outside the tap-to-enlarge button now. A delete button nested
+    /// inside another button is a coin toss about which one gets the tap.
     private func photoRow(_ itemImage: ItemImage) -> some View {
-        Button {
-            if let image = loadedImages[itemImage.id] {
-                selectedFullScreenImage = (image: image, metadata: itemImage)
-            }
-        } label: {
-            ZStack(alignment: .bottom) {
-                // Image or placeholder
+        VStack(spacing: 0) {
+            Button {
+                if let image = loadedImages[itemImage.id] {
+                    selectedFullScreenImage = (image: image, metadata: itemImage)
+                }
+            } label: {
                 if let image = loadedImages[itemImage.id] {
                     Image(uiImage: image)
                         .resizable()
@@ -1022,75 +1030,64 @@ struct ItemDetailSheet: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 200)
                         .clipped()
-                        .cornerRadius(DesignSystem.CornerRadius.md)
                 } else {
                     Rectangle()
                         .fill(Color.white.opacity(0.05))
                         .frame(maxWidth: .infinity)
                         .frame(height: 200)
-                        .cornerRadius(DesignSystem.CornerRadius.md)
                         .overlay(
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.textTertiary))
                         )
                 }
-
-                // Metadata overlay at bottom
-                HStack(spacing: DesignSystem.Spacing.sm) {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(DesignSystem.Colors.dillGreen)
-
-                    Text(UserCache.shared.displayName(for: itemImage.uploadedBy))
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textPrimary)
-
-                    Text("-")
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-
-                    Text(relativeDate(itemImage.uploadedAt))
-                        .font(DesignSystem.Typography.caption)
-                        .foregroundColor(DesignSystem.Colors.textSecondary)
-
-                    Spacer()
-
-                    Button {
-                        imageToDelete = itemImage
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 12))
-                            .foregroundColor(DesignSystem.Colors.error)
-                            .frame(width: 28, height: 28)
-                            .background(
-                                Circle()
-                                    .fill(DesignSystem.Colors.error.opacity(0.2))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal, DesignSystem.Spacing.sm)
-                .padding(.vertical, DesignSystem.Spacing.xs)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(0.7),
-                            Color.black.opacity(0.3),
-                            Color.clear
-                        ],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    )
-                )
-                .clipShape(RoundedCorner(radius: DesignSystem.CornerRadius.md, corners: [.bottomLeft, .bottomRight]))
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
-                    .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+            .buttonStyle(.plain)
+
+            HStack(spacing: DesignSystem.Spacing.sm) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
+
+                Text(UserCache.shared.displayName(for: itemImage.uploadedBy))
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+
+                Text("\u{00B7}")
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+
+                Text(relativeDate(itemImage.uploadedAt))
+                    .font(DesignSystem.Typography.caption)
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+
+                Spacer()
+
+                Button {
+                    imageToDelete = itemImage
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.error)
+                        .frame(width: 34, height: 34)
+                        .background(
+                            Circle().fill(DesignSystem.Colors.error.opacity(0.15))
+                        )
+                        .overlay(
+                            Circle().stroke(DesignSystem.Colors.error.opacity(0.35), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, DesignSystem.Spacing.sm)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(DesignSystem.Colors.glassBackground)
         }
-        .buttonStyle(.plain)
+        .clipShape(RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md))
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.md)
+                .stroke(DesignSystem.Colors.glassBorder, lineWidth: 1)
+        )
     }
 
     // MARK: - Photo Helper Methods

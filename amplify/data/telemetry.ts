@@ -19,7 +19,7 @@
  * 1. **Names are `noun.verb`, past tense, and never change.** A renamed event
  *    silently truncates every historical query that used it.
  * 2. **No user content, ever.** Item names, notes, transcripts and photos are
- *    the user's, and `docs/privacy.html` promises the logs do not hold them.
+ *    the user's, and `site/privacy.html` promises the logs do not hold them.
  *    Log the shape of the thing — how many, how long, how much — never the
  *    thing. `count`, `chars` and `bytes` answer the questions we actually have.
  */

@@ -4,6 +4,18 @@ import Foundation
 ///
 /// Kept in one place so the name can be played with freely without hunting
 /// through views — and so a future rename is a single edit rather than a grep.
+///
+/// That claim was aspirational until 2026-09-05, when five other files still
+/// spelled the name out: the QR handoff's rejection message, both of
+/// `AisleSpeechService`'s permission strings, and both `ShareText` headers. They
+/// all read `name` now, so changing the line below really does rename the app
+/// everywhere in Swift.
+///
+/// Three things it does *not* reach, and a rename has to touch them by hand:
+/// the two `INFOPLIST_KEY_CFBundleDisplayName` entries in the project file, the
+/// App Store listing, and `taglines` below — the jokes are puns on this exact
+/// name and none of them survive it. See the trademark note in the project's
+/// session memory for why a fast rename is worth keeping cheap.
 enum AppIdentity {
 
     /// The name. Matches CFBundleDisplayName and the App Store listing.
@@ -17,7 +29,7 @@ enum AppIdentity {
     ///
     /// App Store review requires a reachable policy URL for any app that creates
     /// accounts, and it has to load over HTTPS without signing in. The page
-    /// itself is `docs/privacy.html` in this repo; this constant is the only
+    /// itself is `site/privacy.html` in this repo; this constant is the only
     /// place the address appears, so moving it is a one-line change.
     static let privacyPolicyURL = URL(string: "https://got-dill.com/privacy")!
 

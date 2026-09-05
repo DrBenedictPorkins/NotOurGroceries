@@ -84,6 +84,10 @@
 		AA0000000000000000000089 /* StoreDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000089 /* StoreDetailView.swift */; };
 		AA0000000000000000000090 /* SpeechDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000090 /* SpeechDictationService.swift */; };
 		AA0000000000000000000098 /* AllowanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000098 /* AllowanceService.swift */; };
+		AA00000000000000000000A6 /* ResendThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A6 /* ResendThrottle.swift */; };
+		AA00000000000000000000A5 /* SignOutWarningModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A5 /* SignOutWarningModal.swift */; };
+		AA00000000000000000000A4 /* ListHandoffSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A4 /* ListHandoffSheets.swift */; };
+		AA00000000000000000000A3 /* ListHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A3 /* ListHandoff.swift */; };
 		AA0000000000000000000099 /* AllowancesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000099 /* AllowancesView.swift */; };
 		AA00000000000000000000A1 /* AllowanceNudgeModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A1 /* AllowanceNudgeModal.swift */; };
 		AA00000000000000000000A2 /* AllowanceRefusalModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A2 /* AllowanceRefusalModal.swift */; };
@@ -188,6 +192,10 @@
 		BB0000000000000000000089 /* StoreDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreDetailView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000090 /* SpeechDictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechDictationService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000098 /* AllowanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowanceService.swift; sourceTree = "<group>"; };
+		BB00000000000000000000A6 /* ResendThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResendThrottle.swift; sourceTree = "<group>"; };
+		BB00000000000000000000A5 /* SignOutWarningModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignOutWarningModal.swift; sourceTree = "<group>"; };
+		BB00000000000000000000A4 /* ListHandoffSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListHandoffSheets.swift; sourceTree = "<group>"; };
+		BB00000000000000000000A3 /* ListHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListHandoff.swift; sourceTree = "<group>"; };
 		BB0000000000000000000099 /* AllowancesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowancesView.swift; sourceTree = "<group>"; };
 		BB00000000000000000000A1 /* AllowanceNudgeModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowanceNudgeModal.swift; sourceTree = "<group>"; };
 		BB00000000000000000000A2 /* AllowanceRefusalModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowanceRefusalModal.swift; sourceTree = "<group>"; };
@@ -312,6 +320,8 @@
 				BB0000000000000000000911 /* AisleSpeechService.swift */,
 				BB0000000000000000000090 /* SpeechDictationService.swift */,
 				BB0000000000000000000098 /* AllowanceService.swift */,
+				BB00000000000000000000A3 /* ListHandoff.swift */,
+				BB00000000000000000000A6 /* ResendThrottle.swift */,
 				BB0000000000000000000091 /* ShopperReminderService.swift */,
 				BB0000000000000000000072 /* StoreService.swift */,
 				BB0000000000000000000054 /* SubscriptionService.swift */,
@@ -378,6 +388,8 @@
 				BB0000000000000000000075 /* ShoppingActiveInfoModal.swift */,
 				BB00000000000000000000A1 /* AllowanceNudgeModal.swift */,
 				BB00000000000000000000A2 /* AllowanceRefusalModal.swift */,
+				BB00000000000000000000A4 /* ListHandoffSheets.swift */,
+				BB00000000000000000000A5 /* SignOutWarningModal.swift */,
 				BB0000000000000000000087 /* StatusSubtitleView.swift */,
 				BB0000000000000000000033 /* ToastView.swift */,
 				BB0000000000000000000912 /* StoreCard.swift */,
@@ -543,6 +555,10 @@
 				AA0000000000000000000056 /* AppLoadingState.swift in Sources */,
 				AA0000000000000000000090 /* SpeechDictationService.swift in Sources */,
 				AA0000000000000000000098 /* AllowanceService.swift in Sources */,
+				AA00000000000000000000A6 /* ResendThrottle.swift in Sources */,
+				AA00000000000000000000A5 /* SignOutWarningModal.swift in Sources */,
+				AA00000000000000000000A4 /* ListHandoffSheets.swift in Sources */,
+				AA00000000000000000000A3 /* ListHandoff.swift in Sources */,
 				AA0000000000000000000099 /* AllowancesView.swift in Sources */,
 				AA00000000000000000000A1 /* AllowanceNudgeModal.swift in Sources */,
 				AA00000000000000000000A2 /* AllowanceRefusalModal.swift in Sources */,
@@ -769,7 +785,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill? (Dev)";
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera so you can attach a photo to an item on your list.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to attach a photo to an item, to scan a household invite code, and to scan a shopping list someone hands you.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone so you can dictate grocery items into the bulk import list.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech is recognised on this phone so you can say which aisle something is in while you shop. Nothing is sent anywhere.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library so you can attach a photo to an item on your list.";
@@ -806,7 +822,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_CFBundleDisplayName = "Got Dill?";
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera so you can attach a photo to an item on your list.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to attach a photo to an item, to scan a household invite code, and to scan a shopping list someone hands you.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone so you can dictate grocery items into the bulk import list.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech is recognised on this phone so you can say which aisle something is in while you shop. Nothing is sent anywhere.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "This app accesses your photo library so you can attach a photo to an item on your list.";

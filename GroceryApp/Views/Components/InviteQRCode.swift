@@ -2,30 +2,26 @@ import SwiftUI
 import CoreImage.CIFilterBuiltins
 import AVFoundation
 
-/// The invite code as a QR square.
+/// Any payload as a QR square.
 ///
-/// Most household invites happen in the same room — you hand someone the phone,
-/// or they point theirs at yours. Reading eight characters aloud works and stays
-/// as the fallback, but scanning is the path people will actually use, and it
-/// cannot mishear a B for a D.
-///
-/// The payload is the bare code, nothing else. A URL would be nicer for someone
-/// who does not have the app yet, but that needs a URL scheme, an
-/// `apple-app-site-association` file and a web page to fall back to — none of
-/// which exist. A plain code needs none of it and the scanner below is the only
-/// thing that has to understand it.
-struct InviteQRCode: View {
-    let code: String
+/// Two things use this: a household invite code, and handing a shopping list to
+/// a guest's phone. Both are the same gesture — one person holds up a square,
+/// the other points a camera at it — so both draw the same way.
+struct QRSquare: View {
+    let payload: String
     var size: CGFloat = 180
+    /// `M` survives a fingerprint and is right for an invite square that gets
+    /// handed around. `L` packs about 27% more in and makes a smaller, easier
+    /// square, which is the better trade for a transfer that lives ten seconds
+    /// on a screen with nothing to damage it.
+    var correctionLevel: String = "M"
 
     private static let context = CIContext()
 
     private var image: UIImage? {
         let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(code.utf8)
-        // Medium correction: the square stays small enough to scan across a
-        // kitchen table while surviving a fingerprint on the screen.
-        filter.correctionLevel = "M"
+        filter.message = Data(payload.utf8)
+        filter.correctionLevel = correctionLevel
         guard let output = filter.outputImage else { return nil }
 
         // Render at the size it will be shown, scaled by nearest-neighbour, so
@@ -60,15 +56,40 @@ struct InviteQRCode: View {
                     )
             }
         }
-        .accessibilityLabel("Invite code \(code) as a QR square")
     }
 }
 
-/// Camera scanner for an invite QR.
+/// The invite code as a QR square.
 ///
-/// Reports the first code it reads and then stops, because an invite admits one
-/// person and there is nothing to scan twice.
-struct InviteQRScanner: UIViewControllerRepresentable {
+/// Most household invites happen in the same room — you hand someone the phone,
+/// or they point theirs at yours. Reading eight characters aloud works and stays
+/// as the fallback, but scanning is the path people will actually use, and it
+/// cannot mishear a B for a D.
+///
+/// The payload is the bare code, nothing else. A URL would be nicer for someone
+/// who does not have the app yet, but that needs a URL scheme, an
+/// `apple-app-site-association` file and a web page to fall back to — none of
+/// which exist. A plain code needs none of it and the scanner below is the only
+/// thing that has to understand it.
+struct InviteQRCode: View {
+    let code: String
+    var size: CGFloat = 180
+
+    var body: some View {
+        QRSquare(payload: code, size: size)
+            .accessibilityLabel("Invite code \(code) as a QR square")
+    }
+}
+
+/// Camera scanner for a QR square.
+///
+/// Reports the first code it reads and then stops. Both callers want exactly one
+/// result: an invite admits one person, and a scanned list is handed over once.
+///
+/// The value arrives trimmed but otherwise untouched. It used to be upper-cased
+/// here, which was invisible while an eight-character invite code was the only
+/// thing being scanned and would have shouted every item on a shopping list.
+struct QRScanner: UIViewControllerRepresentable {
     let onFound: (String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onFound: onFound) }
@@ -95,7 +116,7 @@ struct InviteQRScanner: UIViewControllerRepresentable {
                   let value = object.stringValue else { return }
             hasFound = true
             UINotificationFeedbackGenerator().notificationOccurred(.success)
-            onFound(value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+            onFound(value.trimmingCharacters(in: .whitespacesAndNewlines))
         }
     }
 

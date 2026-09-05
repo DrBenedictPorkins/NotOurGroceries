@@ -9,6 +9,9 @@ struct HouseholdSetupView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var isCheckingName = false
+    /// Someone can land here holding a Quick Trip list and a track record — after
+    /// being removed from a household, say — so this exit warns like the other.
+    @State private var showSignOutWarning = false
 
     var body: some View {
         ZStack {
@@ -39,6 +42,7 @@ struct HouseholdSetupView: View {
         .sheet(isPresented: $showScanner) {
             scannerSheet
         }
+        .signOutWarning($showSignOutWarning, onConfirm: signOut)
     }
 
     private func setDefaultHouseholdName() {
@@ -126,7 +130,7 @@ struct HouseholdSetupView: View {
             .disabled(isLoading)
 
             // Sign out option
-            Button(action: signOut) {
+            Button { showSignOutWarning = true } label: {
                 HStack {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
                     Text("Sign Out")
@@ -235,8 +239,10 @@ struct HouseholdSetupView: View {
 
     private var scannerSheet: some View {
         NavigationView {
-            InviteQRScanner { scanned in
-                inviteCode = scanned
+            QRScanner { scanned in
+                // Invite codes are upper-case; the scanner no longer shouts what
+                // it reads, so the casing is fixed here where it applies.
+                inviteCode = scanned.uppercased()
                 showScanner = false
                 joinHousehold()
             }

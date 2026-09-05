@@ -21,6 +21,8 @@ struct ListMenuSheet: View {
     @State private var sheenSwept = false
     @State private var showTrackRecord = false
     @State private var showRestoreConfirmation = false
+    @State private var showListQR = false
+    @State private var showListScanner = false
     var onAtStore: () -> Void
     var onQuickList: () -> Void
 
@@ -59,6 +61,8 @@ struct ListMenuSheet: View {
 
                     restoreSection
 
+                    handoffSection
+
                     trackRecord
 
                     Spacer(minLength: 20)
@@ -69,6 +73,58 @@ struct ListMenuSheet: View {
         .sheet(isPresented: $showTrackRecord) {
             TrackRecordView(isPresented: $showTrackRecord)
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showListQR) {
+            ShareListQRSheet(
+                names: viewModel.shoppingList.map(\.name),
+                isPresented: $showListQR
+            )
+        }
+        .sheet(isPresented: $showListScanner) {
+            ReceiveListSheet(isPresented: $showListScanner) { names in
+                QuickListStore.shared.add(contentsOf: names)
+                isPresented = false
+                onQuickList()
+            }
+        }
+    }
+
+    // MARK: - Handing the list to another phone
+
+    /// For the guest who offers to do the shop and is not in the household.
+    ///
+    /// Adding them to the household would hand over the history, the suggestions
+    /// and every future list, which is far more than the errand needs. So the
+    /// list is copied instead, by QR, and lands in their Quick Trip — this phone
+    /// only, never synced. Nothing goes to the server on either side.
+    ///
+    /// Two members of the same household have no use for this; they already see
+    /// the same list. Nothing stops them, because a check that saves nobody from
+    /// anything is not worth the code.
+    @ViewBuilder
+    private var handoffSection: some View {
+        section("Someone else is going") {
+            row(
+                icon: "qrcode",
+                tint: DesignSystem.Colors.dillGreen,
+                title: "Show the list",
+                detail: viewModel.shoppingList.isEmpty
+                    ? "Nothing on the list to hand over."
+                    : "A square for a guest to scan. Up to \(ListHandoff.maxItems) items, names only.",
+                disabled: viewModel.shoppingList.isEmpty
+            ) {
+                showListQR = true
+            }
+
+            row(
+                icon: "qrcode.viewfinder",
+                tint: DesignSystem.Colors.neonPurple,
+                title: "Scan a list",
+                detail: "Take someone's list into a Quick Trip. This phone only.",
+                disabled: false
+            ) {
+                showListScanner = true
+            }
         }
     }
 

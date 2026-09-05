@@ -13,6 +13,12 @@ struct ForgotPasswordView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
 
+    /// Seconds until this address may be mailed again. Driven by a timer so the
+    /// button counts down in front of the person waiting rather than staying
+    /// dead with no explanation.
+    @State private var cooldownRemaining = 0
+    private let cooldownTick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     var onDismiss: () -> Void
 
     var body: some View {
@@ -39,6 +45,17 @@ struct ForgotPasswordView: View {
                 }
                 .padding(.horizontal, 24)
             }
+        }
+        // Re-read on every tick rather than counting down a local number: the
+        // deadline is on disk, so backgrounding the app or coming back to this
+        // screen shows the time that is actually left.
+        .onReceive(cooldownTick) { _ in
+            let left = email.isEmpty ? 0 : ResendThrottle.secondsRemaining(for: email)
+            if left != cooldownRemaining { cooldownRemaining = left }
+        }
+        // Typing a different address must not inherit the previous one's wait.
+        .onChange(of: email) { _, newValue in
+            cooldownRemaining = newValue.isEmpty ? 0 : ResendThrottle.secondsRemaining(for: newValue)
         }
     }
 
@@ -94,6 +111,9 @@ struct ForgotPasswordView: View {
                     if isLoading {
                         ProgressView()
                             .tint(.white)
+                    } else if cooldownRemaining > 0 {
+                        Image(systemName: "clock")
+                        Text("Try again in \(cooldownRemaining)s")
                     } else {
                         Image(systemName: "envelope.badge.fill")
                         Text("Send Reset Code")
@@ -107,8 +127,9 @@ struct ForgotPasswordView: View {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(DesignSystem.Colors.accentGradient)
                 )
+                .opacity(cooldownRemaining > 0 ? 0.5 : 1)
             }
-            .disabled(isLoading)
+            .disabled(isLoading || cooldownRemaining > 0)
 
             Button("Back to Sign In") {
                 onDismiss()
@@ -188,12 +209,14 @@ struct ForgotPasswordView: View {
             .disabled(isLoading)
 
             HStack(spacing: 16) {
-                Button("Resend Code") {
+                Button(cooldownRemaining > 0 ? "Resend in \(cooldownRemaining)s" : "Resend Code") {
                     requestResetCode()
                 }
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(DesignSystem.Colors.dillGreen)
-                .disabled(isLoading)
+                .foregroundColor(cooldownRemaining > 0
+                                 ? DesignSystem.Colors.textTertiary
+                                 : DesignSystem.Colors.dillGreen)
+                .disabled(isLoading || cooldownRemaining > 0)
 
                 Text("|")
                     .foregroundColor(DesignSystem.Colors.textTertiary)
@@ -228,6 +251,15 @@ struct ForgotPasswordView: View {
             return
         }
 
+        // Checked here as well as on the button: the countdown is a courtesy,
+        // this is the part that actually holds.
+        let wait = ResendThrottle.secondsRemaining(for: email)
+        guard wait == 0 else {
+            cooldownRemaining = wait
+            errorMessage = "A code went to that address a moment ago. You can ask for another in \(wait)s."
+            return
+        }
+
         isLoading = true
         errorMessage = nil
         successMessage = nil
@@ -235,6 +267,9 @@ struct ForgotPasswordView: View {
         Task {
             do {
                 try await amplifyService.resetPassword(for: email)
+                // Only a send that happened starts a wait.
+                ResendThrottle.record(email)
+                cooldownRemaining = Int(ResendThrottle.cooldown)
                 isCodeSent = true
                 successMessage = "Reset code sent to \(email)"
             } catch {

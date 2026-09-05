@@ -25,6 +25,10 @@ struct SettingsView: View {
     @State private var showAllowances = false
     @ObservedObject private var allowances = AllowanceService.shared
 
+    /// Sign out wipes four local stores on the way out, three of which are the
+    /// only copy. The card says which, so the tap is informed.
+    @State private var showSignOutWarning = false
+
     @State private var showDeleteAccountWarning = false
     @State private var showDeleteAccountConfirm = false
     @State private var deleteConfirmationText = ""
@@ -89,6 +93,7 @@ struct SettingsView: View {
         .task {
             await loadCurrentUserProfile()
         }
+        .signOutWarning($showSignOutWarning, onConfirm: signOut)
     }
 
     // MARK: - Load Profile
@@ -578,7 +583,7 @@ struct SettingsView: View {
     // MARK: - Sign Out Button
 
     private var signOutButton: some View {
-        Button(action: signOut) {
+        Button { showSignOutWarning = true } label: {
             HStack {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
                 Text("Sign Out")

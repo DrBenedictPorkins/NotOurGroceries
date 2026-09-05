@@ -52,7 +52,7 @@ final class AisleSpeechService: ObservableObject {
             return
         }
         guard await requestAuthorisation() else {
-            state = .unavailable("Speech recognition is off for this app. Settings › Got Dill?")
+            state = .unavailable("Speech recognition is off for this app. Settings › \(AppIdentity.name)")
             return
         }
         // Speech recognition and the microphone are two separate grants. Only
@@ -60,7 +60,7 @@ final class AisleSpeechService: ObservableObject {
         // import the engine started against a microphone nobody had allowed and
         // recorded silence.
         guard await requestMicrophone() else {
-            state = .unavailable("The microphone is off for this app. Settings › Got Dill?")
+            state = .unavailable("The microphone is off for this app. Settings › \(AppIdentity.name)")
             return
         }
 

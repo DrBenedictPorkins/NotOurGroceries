@@ -17,7 +17,7 @@ enum ShareText {
     static func shoppingList(active: [GroceryItem],
                              inCart: [GroceryItem],
                              storeName: String?) -> String {
-        var lines: [String] = ["Got Dill? — Shopping list"]
+        var lines: [String] = ["\(AppIdentity.name) — Shopping list"]
 
         var subtitle: [String] = []
         if let storeName, !storeName.isEmpty { subtitle.append(storeName) }
@@ -45,7 +45,7 @@ enum ShareText {
         let remaining = quickLines.filter { !$0.checked }
         let got = quickLines.filter(\.checked)
 
-        var lines: [String] = ["Got Dill? — Quick trip"]
+        var lines: [String] = ["\(AppIdentity.name) — Quick trip"]
         lines.append(remaining.count == 1 ? "1 item" : "\(remaining.count) items")
 
         if !remaining.isEmpty {

@@ -9,22 +9,43 @@ const COMMIT_TABLE_NAME = process.env.COMMIT_TABLE_NAME!;
 const USER_TABLE_NAME = process.env.USER_TABLE_NAME!;
 
 /**
- * Get next sequence number atomically from Household table
+ * Get next sequence number atomically from Household table.
+ *
+ * Returns null when the household no longer exists, which means the record that
+ * triggered this is part of a household being deleted and no commit should be
+ * written for it.
+ *
+ * The condition is load-bearing. `UpdateItem` **creates the item if it is
+ * absent**, so without it deleting a household resurrected it: the cascade
+ * removed the household row, its own item deletions came back through this
+ * stream, and each one recreated the household as a stub carrying nothing but
+ * an id and a sequence number — alongside one orphaned Commit per deleted item.
+ * Observed 2026-09-04 on the last-member-deletes-account path: 18 items removed,
+ * 18 REMOVE_ITEM commits written, and a household that reported itself deleted
+ * still sitting in the table.
  */
-async function getNextSequenceNumber(householdId: string): Promise<number> {
-  const result = await client.send(new UpdateItemCommand({
-    TableName: HOUSEHOLD_TABLE_NAME,
-    Key: marshall({ id: householdId }),
-    UpdateExpression: 'SET sequenceNumber = if_not_exists(sequenceNumber, :zero) + :inc',
-    ExpressionAttributeValues: marshall({
-      ':inc': 1,
-      ':zero': 0,
-    }),
-    ReturnValues: 'UPDATED_NEW',
-  }));
+async function getNextSequenceNumber(householdId: string): Promise<number | null> {
+  try {
+    const result = await client.send(new UpdateItemCommand({
+      TableName: HOUSEHOLD_TABLE_NAME,
+      Key: marshall({ id: householdId }),
+      UpdateExpression: 'SET sequenceNumber = if_not_exists(sequenceNumber, :zero) + :inc',
+      ConditionExpression: 'attribute_exists(id)',
+      ExpressionAttributeValues: marshall({
+        ':inc': 1,
+        ':zero': 0,
+      }),
+      ReturnValues: 'UPDATED_NEW',
+    }));
 
-  const attrs = result.Attributes ? unmarshall(result.Attributes) : {};
-  return attrs.sequenceNumber as number;
+    const attrs = result.Attributes ? unmarshall(result.Attributes) : {};
+    return attrs.sequenceNumber as number;
+  } catch (error) {
+    if ((error as { name?: string }).name === 'ConditionalCheckFailedException') {
+      return null;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -200,8 +221,18 @@ export const handler: DynamoDBStreamHandler = async (event) => {
       // Get user information
       const userInfo = await getUserInfo(userId);
 
-      // Get next sequence number
+      // Get next sequence number. Null means the household is gone — this
+      // record is the wake of a cascade, not activity worth recording.
       const sequenceNumber = await getNextSequenceNumber(householdId);
+      if (sequenceNumber === null) {
+        console.warn(JSON.stringify({
+          event: 'commit.skipped',
+          reason: 'household_deleted',
+          householdId,
+          action,
+        }));
+        continue;
+      }
 
       // Create payload
       const payload = createPayload(action, oldImage, newImage);

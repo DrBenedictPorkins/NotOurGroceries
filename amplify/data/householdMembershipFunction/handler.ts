@@ -171,6 +171,7 @@ const USER_TABLE_NAME = process.env.USER_TABLE_NAME!;
 const GROCERY_ITEM_TABLE_NAME = process.env.GROCERY_ITEM_TABLE_NAME!;
 const COMMIT_TABLE_NAME = process.env.COMMIT_TABLE_NAME!;
 const HOUSEHOLD_STORE_TABLE_NAME = process.env.HOUSEHOLD_STORE_TABLE_NAME!;
+const PRODUCT_AISLE_MAPPING_TABLE_NAME = process.env.PRODUCT_AISLE_MAPPING_TABLE_NAME!;
 
 type Handler = Schema['manageHouseholdMembership']['functionHandler'];
 
@@ -329,6 +330,10 @@ async function deleteHouseholdData(householdId: string): Promise<void> {
     { table: HOUSEHOLD_STORE_TABLE_NAME, index: 'householdStoresByHouseholdId' },
   ];
 
+  // Collected as the stores are cleared, because ProductAisleMapping is reachable
+  // only through them and they are about to stop existing.
+  const storeIds: string[] = [];
+
   for (const { table, index } of scoped) {
     let lastKey: Record<string, unknown> | undefined;
     do {
@@ -343,6 +348,7 @@ async function deleteHouseholdData(householdId: string): Promise<void> {
         }));
 
         const ids = (page.Items ?? []).map((item) => unmarshall(item).id as string);
+        if (table === HOUSEHOLD_STORE_TABLE_NAME) storeIds.push(...ids);
         for (let i = 0; i < ids.length; i += 25) {
           await client.send(new BatchWriteItemCommand({
             RequestItems: {
@@ -361,9 +367,47 @@ async function deleteHouseholdData(householdId: string): Promise<void> {
     } while (lastKey);
   }
 
-  // ProductAisleMapping hangs off storeId rather than householdId, so it is not
-  // reachable by this query and is left behind. It is inert without the store
-  // that owns it.
+  // ProductAisleMapping hangs off storeId, not householdId, so the loop above
+  // cannot reach it — every deleted household used to leave its mappings behind
+  // for good. "Inert without the store that owns it" was true and still meant
+  // the rows accumulated forever; 28 of them were found orphaned on 2026-09-04,
+  // from four stores that no longer exist.
+  //
+  // The store ids have to be collected before the stores are deleted, which is
+  // why this runs off `storeIds` gathered in the loop rather than a second query.
+  for (const storeId of storeIds) {
+    let mappingKey: Record<string, unknown> | undefined;
+    do {
+      try {
+        const page = await client.send(new QueryCommand({
+          TableName: PRODUCT_AISLE_MAPPING_TABLE_NAME,
+          IndexName: 'productAisleMappingsByStoreId',
+          KeyConditionExpression: 'storeId = :sid',
+          ExpressionAttributeValues: marshall({ ':sid': storeId }),
+          ProjectionExpression: 'id',
+          ExclusiveStartKey: mappingKey as never,
+        }));
+
+        const ids = (page.Items ?? []).map((item) => unmarshall(item).id as string);
+        for (let i = 0; i < ids.length; i += 25) {
+          await client.send(new BatchWriteItemCommand({
+            RequestItems: {
+              [PRODUCT_AISLE_MAPPING_TABLE_NAME]: ids.slice(i, i + 25).map((id) => ({
+                DeleteRequest: { Key: marshall({ id }) },
+              })),
+            },
+          }));
+        }
+        mappingKey = page.LastEvaluatedKey as Record<string, unknown> | undefined;
+      } catch (error) {
+        logFailure('household.tableClearFailed', error, {
+          householdId, table: PRODUCT_AISLE_MAPPING_TABLE_NAME, storeId,
+        });
+        mappingKey = undefined;
+      }
+    } while (mappingKey);
+  }
+
   await client.send(new DeleteItemCommand({
     TableName: HOUSEHOLD_TABLE_NAME,
     Key: marshall({ id: householdId }),

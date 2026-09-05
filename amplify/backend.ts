@@ -195,6 +195,9 @@ addEnvVars(householdMembershipLambda, {
   GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
   COMMIT_TABLE_NAME: commitTable.tableName,
   HOUSEHOLD_STORE_TABLE_NAME: backend.data.resources.tables['HouseholdStore'].tableName,
+  // The cascade reaches mappings through the household's stores; without this
+  // every deleted household leaves its mappings behind for good.
+  PRODUCT_AISLE_MAPPING_TABLE_NAME: backend.data.resources.tables['ProductAisleMapping'].tableName,
   USER_POOL_ID: backend.auth.resources.userPool.userPoolId,
 });
 // Creating a household creates its group; removing or leaving revokes the claim,
@@ -228,6 +231,7 @@ userTable.grantReadWriteData(householdMembershipLambda);
 groceryItemTable.grantReadWriteData(householdMembershipLambda);
 commitTable.grantReadWriteData(householdMembershipLambda);
 backend.data.resources.tables['HouseholdStore'].grantReadWriteData(householdMembershipLambda);
+backend.data.resources.tables['ProductAisleMapping'].grantReadWriteData(householdMembershipLambda);
 // The cascade and the member count both go through GSIs.
 householdMembershipLambda.addToRolePolicy(new PolicyStatement({
   actions: ['dynamodb:Query'],
@@ -237,6 +241,7 @@ householdMembershipLambda.addToRolePolicy(new PolicyStatement({
     `${groceryItemTable.tableArn}/index/*`,
     `${commitTable.tableArn}/index/*`,
     `${backend.data.resources.tables['HouseholdStore'].tableArn}/index/*`,
+    `${backend.data.resources.tables['ProductAisleMapping'].tableArn}/index/*`,
   ],
 }));
 

@@ -198,11 +198,29 @@ sign C out to a fresh install state so both are sitting on the join screen.
 | 2 | Get **C** on one device and **D** on the other, both with the code typed in, join button unpressed |
 | 3 | Press both **as close to simultaneously as you can manage** |
 
-| Check | Pass | Result |
-|---|---|---|
-| **Exactly one** gets in | | |
-| The loser sees the single generic refusal — not a different message revealing the code was real | | |
-| Member count is 3, never 4 | | |
+**Verified by inspection 2026-09-04, not by racing.** Hand-timing two taps
+cannot produce a real race, so a run that failed to collide would have recorded a
+false pass. The guarantee is not timing-based:
+
+`consumeInviteCode` writes with `ConditionExpression: 'inviteCode = :used'`.
+DynamoDB serialises writes to a single item, so of two joiners who read the same
+code exactly one still finds it unchanged; the other takes
+`ConditionalCheckFailedException`, which the catch turns into `CODE_REFUSED`.
+There is no window in which both win, at any spacing, across any number of
+Lambda instances.
+
+The part that *could* have been wrong is the ordering, and it is correct: find →
+check expiry → **consume** → add to Cognito group → write the User row. The gate
+precedes every grant. Granting first would put both racers in the group before
+either was refused; this order's worst case is a loser holding a dead code, fixed
+by asking for another.
+
+| Check | Result |
+|---|---|
+| Exactly one can win | ✅ by inspection — conditional write |
+| Loser gets the same generic refusal | ✅ by inspection — single `CODE_REFUSED` constant |
+| Gate precedes any grant | ✅ by inspection |
+| Observed under real contention | ❌ not attempted — see above |
 
 ::: {.callout-tip}
 Hard to hit by hand. Three or four attempts with a fresh code each time is

@@ -1,7 +1,7 @@
 import { DynamoDBClient, DescribeTableCommand, ScanCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand as DocScanCommand } from '@aws-sdk/lib-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-import { setEntitlement, loadAllowance, summarize } from '../allowance';
+import { setEntitlement, loadAllowance, summarize, resetCounters } from '../allowance';
 
 // ========================================
 // TYPES
@@ -472,6 +472,18 @@ async function uncompHousehold(args: Record<string, any>): Promise<McpToolRespon
   }
 }
 
+/** Somebody ran out and asked. Counters to zero; period and caps untouched. */
+async function resetAllowances(args: Record<string, any>): Promise<McpToolResponse> {
+  const { householdId } = args;
+  if (!householdId) return { success: false, error: 'Missing required argument: householdId' };
+  try {
+    const row = await resetCounters(householdId);
+    return { success: true, data: summarize(row) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 async function getAllowances(args: Record<string, any>): Promise<McpToolResponse> {
   const { householdId } = args;
   if (!householdId) return { success: false, error: 'Missing required argument: householdId' };
@@ -501,6 +513,7 @@ const tools: Record<string, ToolHandler> = {
   get_allowances: getAllowances,
   comp_household: compHousehold,
   uncomp_household: uncompHousehold,
+  reset_allowances: resetAllowances,
 };
 
 // ========================================

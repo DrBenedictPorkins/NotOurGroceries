@@ -254,6 +254,25 @@ export async function setEntitlement(
   return unmarshall(result.Attributes!) as AllowanceRow;
 }
 
+/**
+ * Zero the counters and leave everything else alone — the period keeps its
+ * date, the caps stay what they are. This is the whole answer to "I ran out,
+ * can I have more": no per-household ceiling, no override column. Somebody who
+ * needs it twice is telling us about the cap, not asking for a knob.
+ */
+export async function resetCounters(householdId: string): Promise<AllowanceRow> {
+  await ensureAllowanceRow(householdId);
+  const result = await client.send(new UpdateItemCommand({
+    TableName: TABLE,
+    Key: marshall({ id: householdId }),
+    UpdateExpression: 'SET placementsThisPeriod = :zero, parsesThisPeriod = :zero, updatedAt = :now',
+    ExpressionAttributeValues: marshall({ ':zero': 0, ':now': new Date().toISOString() }),
+    ReturnValues: 'ALL_NEW',
+  }));
+  logEvent('allowance.reset', { householdId });
+  return unmarshall(result.Attributes!) as AllowanceRow;
+}
+
 export async function deleteAllowanceRow(householdId: string): Promise<void> {
   await client.send(new DeleteItemCommand({ TableName: TABLE, Key: marshall({ id: householdId }) }));
 }

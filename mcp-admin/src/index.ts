@@ -149,6 +149,17 @@ const tools = [
     },
   },
   {
+    name: "reset_allowances",
+    description: "Zero a household's placement and import counters for the current period. Period date and caps are untouched. The answer to 'I ran out, can I have more'.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        householdId: { type: "string", description: "Household ID" },
+      },
+      required: ["householdId"],
+    },
+  },
+  {
     name: "uncomp_household",
     description: "Return a comped household to FREE. Counters are kept; the caps apply again.",
     inputSchema: {

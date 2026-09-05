@@ -226,6 +226,14 @@ It also behaves like every other allowance — the wall refuses the next add, an
 the user makes room by deleting. Nothing falls off on its own and nothing is
 discarded behind their back.
 
+### Running out and asking for more
+
+Decided 2026-09-05: the answer is a **reset**, nothing else. `reset_allowances`
+in the admin tooling zeroes the household's counters; the period keeps its
+date and the caps stay what they are. No per-household ceiling, no override
+column, nothing new on the allowances page. Somebody who needs it twice is
+telling us about the cap, not asking for a knob.
+
 ### Comping an account
 
 There must be a way to lift a household's allowances by hand, with no purchase —

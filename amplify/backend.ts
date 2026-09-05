@@ -72,11 +72,17 @@ backend.auth.resources.cfnResources.cfnUserPool.policies = {
 // reproducing it from a client. A claim was made on 2026-08-30 that auth was
 // behaving in production, and it had no source behind it — this is that source.
 //
-// ERROR, not ALL. Errors are the interesting events (denials land here) and ALL
-// logs every resolver invocation, which on a shopping list is mostly noise you
-// pay to store. `excludeVerboseContent` keeps request and response bodies out of
-// CloudWatch — those carry shopping lists and email addresses, and logs are a
-// worse place for personal data than the database is.
+// DEBUG rather than ERROR, from 2026-09-05. ERROR answered "was this refused",
+// which is the question that prompted turning logging on, but not "what did this
+// request actually do" — and while the app is small enough that every report
+// comes with a person attached, a trace beats a reproduction. Revisit when the
+// volume stops being trivial: at ERROR the group held 1.4 MB over 14 days.
+//
+// `excludeVerboseContent` stays true, and it is the setting that matters here.
+// It keeps request and response bodies out of CloudWatch independently of the
+// level, so DEBUG buys resolver-level tracing without putting shopping lists and
+// email addresses in a log. Turning that off is a privacy decision, not a
+// debugging one.
 const appSyncLogRole = new Role(backend.data.stack, 'AppSyncCloudWatchRole', {
   assumedBy: new ServicePrincipal('appsync.amazonaws.com'),
   managedPolicies: [
@@ -85,7 +91,7 @@ const appSyncLogRole = new Role(backend.data.stack, 'AppSyncCloudWatchRole', {
 });
 
 backend.data.resources.cfnResources.cfnGraphqlApi.logConfig = {
-  fieldLogLevel: 'ERROR',
+  fieldLogLevel: 'DEBUG',
   cloudWatchLogsRoleArn: appSyncLogRole.roleArn,
   excludeVerboseContent: true,
 };
@@ -97,10 +103,11 @@ backend.data.resources.cfnResources.cfnGraphqlApi.logConfig = {
 //
 //   aws logs put-retention-policy \
 //     --log-group-name /aws/appsync/apis/vdsfrt2plzgwfdae2ucpxtwzh4 \
-//     --retention-in-days 14
+//     --retention-in-days 90
 //
-// Set to 14 days on 2026-08-30. Without it the group never expires and quietly
-// becomes a running cost.
+// Set to 14 days on 2026-08-30, raised to 90 on 2026-09-05 to match the Lambda
+// groups — a trace is no use if it expires before the report arrives. Without it
+// the group never expires and quietly becomes a running cost.
 
 // Grant Lambda functions access to DynamoDB tables
 const groceryItemTable = backend.data.resources.tables['GroceryItem'];

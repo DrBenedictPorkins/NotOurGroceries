@@ -185,6 +185,10 @@ class AmplifyService: ObservableObject {
         if result.isSignedIn {
             currentUser = try await Amplify.Auth.getCurrentUser()
             await fetchOrCreateUserProfile()
+            // A fresh sign-in, as opposed to a restored session: the allowance
+            // card shows once regardless of how much is used, so a new household
+            // sees what it has before it starts. See MONETIZATION.qmd, "The nudge".
+            AllowanceService.shared.showOnNextAppearance = true
             isAuthenticated = true
         } else {
             // Handle cases where sign-in is not yet complete

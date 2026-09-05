@@ -61,6 +61,26 @@ final class AllowanceService: ObservableObject {
     @Published private(set) var summary: AllowanceSummary?
     private(set) var lastRefreshed: Date?
 
+    /// Set by a fresh sign-in or sign-up; consumed by the first launch card
+    /// check after it. Shows the card once whatever the usage — a restored
+    /// session never sets it, so launches keep the half-used threshold.
+    var showOnNextAppearance = false
+
+    /// The gate for the whole import feature — speak, camera, photos, paste, and
+    /// dictation at the store. Checked at the entry point, not at the API call:
+    /// a person who is out of imports is stopped at the Import icon, not after
+    /// recording a list that then cannot be parsed.
+    var importsExhausted: Bool {
+        guard let s = summary else { return false }
+        return !s.entitled && s.parsesLeft == 0
+    }
+
+    /// Refresh without holding anything up. Fired whenever a metered feature is
+    /// opened, so the cache is at most one action stale.
+    func refreshInBackground() {
+        Task { await refresh() }
+    }
+
     /// The server puts this in front of an error when an allowance is spent. The
     /// wording lives on each screen, not in the message.
     static let exhaustedPrefix = "ALLOWANCE_EXHAUSTED:"

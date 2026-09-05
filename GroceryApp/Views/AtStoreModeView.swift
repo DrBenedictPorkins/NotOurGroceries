@@ -12,6 +12,8 @@ struct AtStoreModeView: View {
     @State private var showAisleManagement = false
     @FocusState private var searchFieldFocused: Bool
     @StateObject private var dictation = SpeechDictationService()
+    /// The import gate's card. The plan link hides itself while shopping.
+    @State private var refusal: AllowanceRefusal?
 
     // Get the currently selected household store (using shoppingStoreId when in shopping mode)
     private var selectedHouseholdStore: HouseholdStore? {
@@ -230,6 +232,7 @@ struct AtStoreModeView: View {
             shoppingActiveBorderOverlay
         }
         .navigationBarHidden(true)
+        .allowanceRefusal($refusal, viewModel: viewModel)
         .sheet(isPresented: $showAisleManagement) {
             if let store = selectedHouseholdStore {
                 StoreAisleManagementView(storeId: store.id)
@@ -566,6 +569,14 @@ struct AtStoreModeView: View {
     private func toggleVoiceCapture() {
         if dictation.isRecording {
             dictation.stop()
+            return
+        }
+        // Dictation is transcribed and then parsed, and the parse is an import.
+        // Stopped before the mic opens, not after a list has been spoken. A
+        // refusal, not a nudge — nothing is being sold mid-shop.
+        if AllowanceService.shared.importsExhausted {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            withAnimation(.easeIn(duration: 0.2)) { refusal = AllowanceRefusal(kind: .imports) }
             return
         }
         dictation.onCommit = { text in

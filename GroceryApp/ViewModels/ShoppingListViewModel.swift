@@ -69,6 +69,9 @@ class ShoppingListViewModel: ObservableObject {
     @Published var itemPendingDeletion: GroceryItem?
 
     @Published var showToast: Bool = false
+    /// A closed gate the list itself hit — the item cap. Shown by whichever
+    /// screen is attached with `.allowanceRefusal`.
+    @Published var allowanceRefusal: AllowanceRefusal?
     @Published var toastMessage: String = ""
     @Published var toastUserName: String = ""
     @Published var toastType: ToastType = .success
@@ -675,8 +678,8 @@ class ShoppingListViewModel: ObservableObject {
            !allowance.entitled,
            totalItemCount >= allowance.itemsCap,
            !items.contains(where: { $0.normalizedName == normalizeName(name) }) {
-            showToast(message: "The list is full at \(allowance.itemsCap) items. Delete a few to add more.", type: .warning)
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            allowanceRefusal = AllowanceRefusal(kind: .items)
             return
         }
 
@@ -2284,7 +2287,7 @@ class ShoppingListViewModel: ObservableObject {
     }
 
     // MARK: - Helpers
-    private func showToast(message: String, userName: String = "", type: ToastType = .success) {
+    func showToast(message: String, userName: String = "", type: ToastType = .success) {
         // On paper, a write never reaching the server is the design, not a fault.
         // Reporting it as an error would tell the user something broke when
         // nothing did — and it would fire on essentially every tap.

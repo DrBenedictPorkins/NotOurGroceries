@@ -13,6 +13,7 @@ struct ShoppingListView: View {
     @FocusState private var searchFieldFocused: Bool
     @State private var scrollProxy: ScrollViewProxy?
     @State private var showBulkImport = false
+    @State private var refusal: AllowanceRefusal?
     @State private var showForceFinishAlert = false
     @State private var showForceFinishHoldSheet = false
     @State private var showQuickList = false
@@ -78,7 +79,7 @@ struct ShoppingListView: View {
                                 isFocused: $searchFieldFocused,
                                 onSubmit: addItemFromSearch,
                                 onProductSelected: addProductFromSearch,
-                                onImport: { showBulkImport = true },
+                                onImport: openImport,
                                 canAdd: !viewModel.isListLockedByOtherSession
                             )
                         }
@@ -257,6 +258,12 @@ struct ShoppingListView: View {
         .sheet(isPresented: $showBulkImport) {
             BulkImportSheet(isPresented: $showBulkImport)
                 .environmentObject(viewModel)
+        }
+        .allowanceRefusal($refusal, viewModel: viewModel)
+        .onChange(of: scenePhase) { _, phase in
+            // The cache is refreshed on every return, not only long ones, so a
+            // gate never closes on a number another member changed an hour ago.
+            if phase == .active { AllowanceService.shared.refreshInBackground() }
         }
         .alert("Force finish shopping?", isPresented: $showForceFinishAlert) {
             Button("Cancel", role: .cancel) { }
@@ -878,6 +885,21 @@ struct ShoppingListView: View {
     // MARK: - Actions
 
     /// Add item from typed input - always custom since user typed something specific
+
+    /// The import gate. Refused here, at the icon, when the household is out of
+    /// imports — not after somebody has spoken a whole list into it. Otherwise
+    /// the sheet opens and the cache is refreshed behind it, so the Parse button
+    /// sees a current number.
+    private func openImport() {
+        if AllowanceService.shared.importsExhausted {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            withAnimation(.easeIn(duration: 0.2)) { refusal = AllowanceRefusal(kind: .imports) }
+            return
+        }
+        AllowanceService.shared.refreshInBackground()
+        showBulkImport = true
+    }
+
     private func addItemFromSearch() {
         let itemName = searchText.trimmingCharacters(in: .whitespaces)
         guard !itemName.isEmpty else { return }

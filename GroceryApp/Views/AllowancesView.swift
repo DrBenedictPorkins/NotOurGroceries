@@ -142,7 +142,10 @@ struct AllowancesView: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.textSecondary)
                 Spacer()
-                Text(entitled ? "\(used)" : "\(used) of \(cap)")
+                // Clamped while capped — the soft cap lets the last request
+                // overshoot, and "103 of 100" reads as a bug. Uncapped, the
+                // real count is the interesting number.
+                Text(entitled ? "\(used)" : "\(min(used, cap)) of \(cap)")
                     .font(.system(size: 14, weight: .semibold).monospacedDigit())
                     .foregroundColor(entitled || left > 0 ? DesignSystem.Colors.textPrimary : DesignSystem.Colors.warning)
             }

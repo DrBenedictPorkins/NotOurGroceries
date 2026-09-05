@@ -17,6 +17,7 @@ struct QuickListView: View {
     @State private var showClearConfirmation = false
     @State private var showDoneConfirmation = false
     @State private var showImport = false
+    @State private var refusal: AllowanceRefusal?
     @State private var mainListExpanded = false
 
     var body: some View {
@@ -43,6 +44,7 @@ struct QuickListView: View {
             }
             .environmentObject(viewModel)
         }
+        .allowanceRefusal($refusal, viewModel: viewModel)
     }
 
     // MARK: - Header
@@ -174,6 +176,12 @@ struct QuickListView: View {
             // fastest way to fill one.
             Button {
                 entryFocused = false
+                // Same gate as the main list's Import icon.
+                if AllowanceService.shared.importsExhausted {
+                    withAnimation(.easeIn(duration: 0.2)) { refusal = AllowanceRefusal(kind: .imports) }
+                    return
+                }
+                AllowanceService.shared.refreshInBackground()
                 showImport = true
             } label: {
                 Image(systemName: "mic.fill")

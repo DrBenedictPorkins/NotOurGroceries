@@ -85,6 +85,8 @@
 		AA0000000000000000000090 /* SpeechDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000090 /* SpeechDictationService.swift */; };
 		AA0000000000000000000098 /* AllowanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000098 /* AllowanceService.swift */; };
 		AA0000000000000000000099 /* AllowancesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000099 /* AllowancesView.swift */; };
+		AA00000000000000000000A1 /* AllowanceNudgeModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A1 /* AllowanceNudgeModal.swift */; };
+		AA00000000000000000000A2 /* AllowanceRefusalModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A2 /* AllowanceRefusalModal.swift */; };
 		AA0000000000000000000091 /* ShopperReminderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000091 /* ShopperReminderService.swift */; };
 		B411F78E2F0B6F160008B8CA /* amplify_outputs_prod.json in Resources */ = {isa = PBXBuildFile; fileRef = B411F78D2F0B6F160008B8CA /* amplify_outputs_prod.json */; };
 		BCE700C7876941359C07CABF /* UserCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15546147AB154BAB9998BE81 /* UserCache.swift */; };
@@ -187,6 +189,8 @@
 		BB0000000000000000000090 /* SpeechDictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechDictationService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000098 /* AllowanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowanceService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000099 /* AllowancesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowancesView.swift; sourceTree = "<group>"; };
+		BB00000000000000000000A1 /* AllowanceNudgeModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowanceNudgeModal.swift; sourceTree = "<group>"; };
+		BB00000000000000000000A2 /* AllowanceRefusalModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowanceRefusalModal.swift; sourceTree = "<group>"; };
 		BB0000000000000000000091 /* ShopperReminderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopperReminderService.swift; sourceTree = "<group>"; };
 		DD0000000000000000000001 /* GroceryApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GroceryApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FABAC34CC923AB999063F4EB /* ReadyToShopSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ReadyToShopSheet.swift; sourceTree = "<group>"; };
@@ -372,6 +376,8 @@
 				BB0000000000000000000057 /* MarqueeText.swift */,
 				BB0000000000000000000032 /* SearchBar.swift */,
 				BB0000000000000000000075 /* ShoppingActiveInfoModal.swift */,
+				BB00000000000000000000A1 /* AllowanceNudgeModal.swift */,
+				BB00000000000000000000A2 /* AllowanceRefusalModal.swift */,
 				BB0000000000000000000087 /* StatusSubtitleView.swift */,
 				BB0000000000000000000033 /* ToastView.swift */,
 				BB0000000000000000000912 /* StoreCard.swift */,
@@ -538,6 +544,8 @@
 				AA0000000000000000000090 /* SpeechDictationService.swift in Sources */,
 				AA0000000000000000000098 /* AllowanceService.swift in Sources */,
 				AA0000000000000000000099 /* AllowancesView.swift in Sources */,
+				AA00000000000000000000A1 /* AllowanceNudgeModal.swift in Sources */,
+				AA00000000000000000000A2 /* AllowanceRefusalModal.swift in Sources */,
 				AA0000000000000000000091 /* ShopperReminderService.swift in Sources */,
 				AA0000000000000000000055 /* ProductCache.swift in Sources */,
 				AA0000000000000000000093 /* LocalListStore.swift in Sources */,

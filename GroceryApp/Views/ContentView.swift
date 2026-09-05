@@ -55,6 +55,22 @@ struct ContentView: View {
                 .environmentObject(amplifyService)
             }
 
+            // The allowance pop-up, same card and place as the shopping modal.
+            if showAllowanceNudge, let summary = allowances.summary {
+                AllowanceNudgeModal(
+                    summary: summary,
+                    onSeeAllowances: {
+                        withAnimation(.easeOut(duration: 0.2)) { showAllowanceNudge = false }
+                        showAllowances = true
+                    },
+                    onDismiss: {
+                        withAnimation(.easeOut(duration: 0.2)) { showAllowanceNudge = false }
+                    }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(99)
+            }
+
             // Info modal overlay
             if showInfoModal {
                 ShoppingActiveInfoModal(
@@ -106,32 +122,27 @@ struct ContentView: View {
         }
         .task {
             await checkShoppingStatusOnLaunch()
-            await refreshAllowancesAndMaybeNudge()
+            await refreshAllowancesAndMaybeNudge(showCard: true)
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background:
                 backgroundedAt = Date()
             case .active:
-                guard let since = backgroundedAt, Date().timeIntervalSince(since) >= Self.longBackground else { return }
+                // Refresh on every return so the feature gates are current; the
+                // card only after a long time away.
+                let longEnough = backgroundedAt.map { Date().timeIntervalSince($0) >= Self.longBackground } ?? false
                 backgroundedAt = nil
-                Task { await refreshAllowancesAndMaybeNudge() }
+                Task { await refreshAllowancesAndMaybeNudge(showCard: longEnough) }
             default:
                 break
-            }
-        }
-        .alert("Your allowances", isPresented: $showAllowanceNudge) {
-            Button("See allowances") { showAllowances = true }
-            Button("OK", role: .cancel) {}
-        } message: {
-            if let a = allowances.summary {
-                Text("Aisle placements: \(a.placementsUsed) of \(a.placementsCap) used\nImports: \(a.parsesUsed) of \(a.parsesCap) used\nResets in \(a.daysUntilReset) day\(a.daysUntilReset == 1 ? "" : "s")")
             }
         }
         .sheet(isPresented: $showAllowances) {
             AllowancesView()
                 .environmentObject(viewModel)
         }
+        .allowanceRefusal($viewModel.allowanceRefusal, viewModel: viewModel)
         .onChange(of: isAtStoreMode) { _, newValue in
             // When exiting shopping mode, sync the viewModel state
             if !newValue {
@@ -149,13 +160,17 @@ struct ContentView: View {
 
     // MARK: - Allowances
 
-    private func refreshAllowancesAndMaybeNudge() async {
+    private func refreshAllowancesAndMaybeNudge(showCard: Bool) async {
         await allowances.refresh()
+        guard showCard else { return }
         // The hard rule: never while at the store. `isAtStoreMode` covers the
         // shopper; `shoppingStatus` covers everyone else in the household.
         guard !isAtStoreMode, viewModel.shoppingStatus != .atStore else { return }
-        if allowances.summary?.warrantsNudge == true {
-            showAllowanceNudge = true
+        guard let summary = allowances.summary, !summary.entitled else { return }
+        let freshSignIn = allowances.showOnNextAppearance
+        allowances.showOnNextAppearance = false
+        if freshSignIn || summary.warrantsNudge {
+            withAnimation(.easeIn(duration: 0.3)) { showAllowanceNudge = true }
         }
     }
 

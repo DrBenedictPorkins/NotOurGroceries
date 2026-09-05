@@ -81,6 +81,9 @@ struct BulkImportSheet: View {
     @State private var phase: ImportPhase = .input
     @State private var ingredients: [ParsedIngredient] = []
     @State private var errorMessage: String?
+    /// Backstop for the Import gate: the sheet was open when the last import
+    /// was spent, or the server refused. Same card as the icon shows.
+    @State private var refusal: AllowanceRefusal?
     @FocusState private var editorFocused: Bool
     @StateObject private var dictation = SpeechDictationService()
     @State private var showMicAuthHint = false
@@ -123,6 +126,7 @@ struct BulkImportSheet: View {
         // and take the image and transcript with it. Work in progress is not
         // something to lose to a gesture.
         .interactiveDismissDisabled(isBusy)
+        .allowanceRefusal($refusal, viewModel: viewModel)
         .onAppear {
             // Opens empty, every time. A persisted draft used to outlive the
             // sheet so a stray dismissal couldn't cost a long dictation, but in
@@ -823,20 +827,14 @@ struct BulkImportSheet: View {
 
     // MARK: - Actions
 
-    /// Copy for a household that has used its imports. Phase 1 has nothing to
-    /// sell yet, so it says when they come back and nothing else.
-    private func importsExhaustedMessage(_ a: AllowanceSummary) -> String {
-        "Your household has used its \(a.parsesCap) imports for this period. They reset in \(a.daysUntilReset) day\(a.daysUntilReset == 1 ? "" : "s")."
-    }
-
     private func startParsing() {
         errorMessage = nil
         editorFocused = false
 
         // Checked before the call so the refusal is instant and costs nothing;
         // the server checks again and is what actually refuses.
-        if let a = AllowanceService.shared.summary, !a.entitled, a.parsesLeft == 0 {
-            errorMessage = importsExhaustedMessage(a)
+        if AllowanceService.shared.importsExhausted {
+            withAnimation(.easeIn(duration: 0.2)) { refusal = AllowanceRefusal(kind: .imports) }
             return
         }
 
@@ -875,8 +873,8 @@ struct BulkImportSheet: View {
                 let exhausted = AllowanceService.isExhausted(error)
                 if exhausted { await AllowanceService.shared.refresh() }
                 await MainActor.run {
-                    if exhausted, let a = AllowanceService.shared.summary {
-                        errorMessage = importsExhaustedMessage(a)
+                    if exhausted {
+                        withAnimation(.easeIn(duration: 0.2)) { refusal = AllowanceRefusal(kind: .imports) }
                     } else {
                         errorMessage = "Failed to parse. Please try again."
                     }
@@ -995,13 +993,28 @@ struct BulkImportSheet: View {
         }
     }
 
-    private func resizeImage(_ image: UIImage, maxDimension: CGFloat = 1568) -> Data? {
+    /// Shrink a photo to what the request can carry.
+    ///
+    /// The image travels base64-encoded inside a GraphQL argument, and AppSync
+    /// refuses the whole request — "Transformation too large", before the Lambda
+    /// is ever invoked — once that argument is roughly a megabyte. A 1568px JPEG
+    /// at 0.85 from a phone camera is comfortably over. 1200px is still more than
+    /// the model needs to read a recipe, and the quality steps down until the
+    /// bytes fit with room for the base64 overhead.
+    private func resizeImage(_ image: UIImage, maxDimension: CGFloat = 1200, maxBytes: Int = 400_000) -> Data? {
         let size = image.size
         let scale = min(maxDimension / size.width, maxDimension / size.height, 1.0)
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
         let renderer = UIGraphicsImageRenderer(size: newSize)
         let resized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
-        return resized.jpegData(compressionQuality: 0.85)
+
+        var quality: CGFloat = 0.8
+        var data = resized.jpegData(compressionQuality: quality)
+        while let d = data, d.count > maxBytes, quality > 0.3 {
+            quality -= 0.1
+            data = resized.jpegData(compressionQuality: quality)
+        }
+        return data
     }
 
     private func extractIngredients(from json: JSONValue) -> [ParsedIngredient] {

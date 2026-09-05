@@ -429,7 +429,6 @@ const imageBucket = backend.storage.resources.bucket;
 
 addEnvVars(itemImageLambda, {
   IMAGE_BUCKET_NAME: imageBucket.bucketName,
-  GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
 });
 
 // Scoped to the one prefix the app uses, so a bug here cannot reach anything
@@ -439,16 +438,21 @@ itemImageLambda.addToRolePolicy(new PolicyStatement({
   resources: [`${imageBucket.bucketArn}/item-images/*`],
 }));
 
-// Counting an item's existing photos before signing another upload. ListBucket
-// is granted on the bucket itself rather than on keys, so the prefix condition
-// is what keeps it from enumerating anything outside `item-images/`.
+// Counting a household's existing photos before signing another upload.
+// ListBucket is granted on the bucket itself rather than on keys, so the prefix
+// condition is what keeps it from enumerating anything outside `item-images/`.
+//
+// Deliberately no DynamoDB grant here. Reading GroceryItem to prove an item id
+// was real failed the deploy with a circular dependency between the data and
+// function stacks (job 129, 2026-09-05) — note that the same grant on
+// householdMembershipLambda below is fine, so it is something about this
+// function rather than the pattern, and the mechanism was not chased down.
+// It did not need chasing: a per-household cap bounds the bill whatever item
+// ids are invented, which is what the DynamoDB read was for, and it needs
+// nothing but S3.
 itemImageLambda.addToRolePolicy(new PolicyStatement({
   actions: ['s3:ListBucket'],
   resources: [imageBucket.bucketArn],
   conditions: { StringLike: { 's3:prefix': 'item-images/*' } },
 }));
 
-// The upload path checks the named item is real and belongs to the household
-// before it counts anything — without that the cap is per id string, and a
-// caller that invents a fresh id each time never reaches it.
-groceryItemTable.grantReadData(itemImageLambda);

@@ -1,17 +1,13 @@
 import type { AppSyncResolverHandler } from 'aws-lambda';
 import { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { DynamoDBClient, GetItemCommand } from '@aws-sdk/client-dynamodb';
-import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { randomUUID } from 'node:crypto';
 import { requireHousehold } from '../requireHousehold';
 import { logEvent, logWarning, logFailure } from '../telemetry';
 import type { Schema } from '../resource';
 
 const s3 = new S3Client({});
-const ddb = new DynamoDBClient({});
 const BUCKET = process.env.IMAGE_BUCKET_NAME!;
-const ITEM_TABLE = process.env.GROCERY_ITEM_TABLE_NAME!;
 
 /**
  * How long a signed link lives.
@@ -24,63 +20,55 @@ const READ_TTL_SECONDS = 15 * 60;
 const WRITE_TTL_SECONDS = 5 * 60;
 
 /**
- * How many photos one item may hold.
+ * How many photos one item may hold, and how many a household may hold at all.
  *
- * The sheet already stops at five and greys out the camera, so this is not what
- * an honest client runs into. It is here because the client-side cap was the
- * only cap: the bucket would have signed a six-hundredth upload just as readily
- * as a sixth, and signup is open, so the bill was bounded by nobody's restraint
- * but ours. Keep it in step with `ItemDetailSheet.photosSection`.
+ * The sheet already stops at five and greys out the camera, so the per-item cap
+ * is not what an honest client meets. It is here because the client-side cap was
+ * the only cap: the bucket would have signed a six-hundredth upload as readily
+ * as a sixth, and signup is open.
+ *
+ * The household cap is what actually bounds the bill. A per-item cap counts
+ * photos per id string, so a caller that invents a fresh item id each time never
+ * meets it; a per-household cap holds however many ids are invented. Keep the
+ * per-item number in step with `ItemDetailSheet.photosSection`.
  */
 const MAX_IMAGES_PER_ITEM = 5;
+const MAX_IMAGES_PER_HOUSEHOLD = 500;
 
 const PREFIX = 'item-images/';
 
 /**
  * Item ids look like `{householdId}-{epoch}.{micros}-{hex}` — hyphens and one
- * dot, never a slash or an underscore. Anything else is not one of ours, and
- * more to the point a caller that can put arbitrary text here can put each
- * upload under its own prefix and never meet the cap at all.
+ * dot, never a slash. Anything else is not one of ours, and keeping the shape
+ * tight also keeps the key it is spliced into predictable.
  */
 function isWellFormedItemId(itemId: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9.\-]{0,127}$/.test(itemId);
 }
 
 /**
- * How many photos this item already has, counted in S3 rather than from the
- * item's `images` field.
+ * How many photos this household holds, and how many of them belong to one item.
  *
- * `images` is written by the client after an upload succeeds, so counting it
- * would let every abandoned or unrecorded upload land for free — and those cost
- * exactly as much to store as the ones we can see. This counts what is actually
- * in the bucket. Only ever asks for the first `MAX_IMAGES_PER_ITEM` keys,
- * because past that the answer is the same either way.
+ * Counted in S3 rather than from the item's `images` field, which the client
+ * writes only after an upload succeeds — counting that would make every
+ * abandoned or unrecorded upload free, and those cost exactly as much to store
+ * as the ones we can see.
+ *
+ * One listing answers both: the household's own prefix is a superset of the
+ * item's, and the household cap keeps the count inside a single page.
  */
-async function countExistingImages(householdId: string, itemId: string): Promise<number> {
+async function countImages(householdId: string, itemId: string): Promise<{ item: number; household: number }> {
+  const itemPrefix = `${PREFIX}${householdId}_${itemId}_`;
   const result = await s3.send(new ListObjectsV2Command({
     Bucket: BUCKET,
-    Prefix: `${PREFIX}${householdId}_${itemId}_`,
-    MaxKeys: MAX_IMAGES_PER_ITEM,
+    Prefix: `${PREFIX}${householdId}_`,
+    MaxKeys: MAX_IMAGES_PER_HOUSEHOLD + 1,
   }));
-  return result.KeyCount ?? 0;
-}
-
-/**
- * Does this item exist, and does it belong to the household the caller named?
- *
- * Without this the cap counts photos per id string rather than per item, and a
- * caller that invents a new id each time never reaches it. The membership check
- * on `householdId` happens before this; this is what ties that id to something
- * real.
- */
-async function itemBelongsToHousehold(itemId: string, householdId: string): Promise<boolean> {
-  const result = await ddb.send(new GetItemCommand({
-    TableName: ITEM_TABLE,
-    Key: marshall({ id: itemId }),
-    ProjectionExpression: 'householdId',
-  }));
-  if (!result.Item) return false;
-  return unmarshall(result.Item).householdId === householdId;
+  const keys = result.Contents ?? [];
+  return {
+    household: keys.length,
+    item: keys.filter((k) => (k.Key ?? '').startsWith(itemPrefix)).length,
+  };
 }
 
 /**
@@ -143,15 +131,14 @@ export const handler: AppSyncResolverHandler<
       logWarning('auth.rejected', { reason: 'malformed_item_id' });
       throw new Error('That is not a valid item.');
     }
-    if (!(await itemBelongsToHousehold(itemId, householdId))) {
-      logWarning('auth.rejected', { reason: 'upload_to_unknown_item' });
-      throw new Error('That item no longer exists.');
-    }
-
-    const existing = await countExistingImages(householdId, itemId);
-    if (existing >= MAX_IMAGES_PER_ITEM) {
+    const counts = await countImages(householdId, itemId);
+    if (counts.item >= MAX_IMAGES_PER_ITEM) {
       logWarning('image.uploadRejected', { householdId, reason: 'per_item_limit' });
       throw new Error(`An item can have at most ${MAX_IMAGES_PER_ITEM} photos. Delete one first.`);
+    }
+    if (counts.household >= MAX_IMAGES_PER_HOUSEHOLD) {
+      logWarning('image.uploadRejected', { householdId, reason: 'per_household_limit' });
+      throw new Error('This household has reached its photo limit. Delete a few first.');
     }
 
     // Built here, not accepted from the client. A caller that chooses its own

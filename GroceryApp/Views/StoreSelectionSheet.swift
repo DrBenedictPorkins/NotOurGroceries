@@ -14,6 +14,21 @@ struct StoreSelectionSheet: View {
     @State private var showReadyToShop = false
     @State private var isCheckingMappings = false
 
+    /// The allowance warning at the "I'm at the store" tap — before the state
+    /// flips, which is what keeps it inside the never-while-shopping rule. The
+    /// cap is soft: a trip that starts with anything left is mapped in full.
+    enum PlacementWarning: Identifiable {
+        case lastOnes(uses: Int, left: Int)
+        case exhausted(resetsInDays: Int)
+        var id: String {
+            switch self {
+            case .lastOnes: return "last"
+            case .exhausted: return "exhausted"
+            }
+        }
+    }
+    @State private var placementWarning: PlacementWarning?
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -61,6 +76,7 @@ struct StoreSelectionSheet: View {
                         onComplete: {
                             // After batch mapping, show ready to shop
                             showReadyToShop = true
+                            Task { await AllowanceService.shared.refresh() }
                         },
                         onCancel: {
                             // User cancelled, clear selection
@@ -69,6 +85,24 @@ struct StoreSelectionSheet: View {
                         }
                     )
                     .environmentObject(viewModel)
+                }
+            }
+            .alert(item: $placementWarning) { warning in
+                switch warning {
+                case .lastOnes(let uses, let left):
+                    return Alert(
+                        title: Text("Last of your aisle placements"),
+                        message: Text("This trip places \(uses) items and uses the rest of your \(left) for this period. After it, trips shop unsorted until the allowance resets."),
+                        primaryButton: .default(Text("Continue")) { showBatchMapping = true },
+                        secondaryButton: .cancel { selectedStore = nil; unmappedItems = [] }
+                    )
+                case .exhausted(let days):
+                    return Alert(
+                        title: Text("Out of aisle placements"),
+                        message: Text("This trip shops unsorted — new items go under TO GET. Placements reset in \(days) day\(days == 1 ? "" : "s")."),
+                        primaryButton: .default(Text("Shop anyway")) { showReadyToShop = true },
+                        secondaryButton: .cancel { selectedStore = nil; unmappedItems = [] }
+                    )
                 }
             }
             .sheet(isPresented: $showReadyToShop) {
@@ -120,6 +154,8 @@ struct StoreSelectionSheet: View {
 
         // Fetch mappings for this store
         _ = try? await storeService.fetchMappings(storeId: store.id)
+        // And where the household stands, so the warning below is current.
+        await AllowanceService.shared.refresh()
 
         // Find unmapped items (same logic as AtStoreModeView)
         let unmapped = viewModel.shoppingList.filter { item in
@@ -140,9 +176,23 @@ struct StoreSelectionSheet: View {
             // mapped.
             if unmapped.isEmpty || store.aisleLayout.isEmpty {
                 showReadyToShop = true
-            } else {
-                showBatchMapping = true
+                return
             }
+
+            // What this trip is about to spend, against what is left. At zero
+            // the mapping sheet is skipped and the trip shops unsorted; on the
+            // last ones the user is told before, not after.
+            if let allowance = AllowanceService.shared.summary, !allowance.entitled {
+                if allowance.placementsLeft == 0 {
+                    placementWarning = .exhausted(resetsInDays: allowance.daysUntilReset)
+                    return
+                }
+                if unmapped.count >= allowance.placementsLeft {
+                    placementWarning = .lastOnes(uses: unmapped.count, left: allowance.placementsLeft)
+                    return
+                }
+            }
+            showBatchMapping = true
         }
     }
 

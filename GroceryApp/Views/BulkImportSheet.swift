@@ -823,9 +823,23 @@ struct BulkImportSheet: View {
 
     // MARK: - Actions
 
+    /// Copy for a household that has used its imports. Phase 1 has nothing to
+    /// sell yet, so it says when they come back and nothing else.
+    private func importsExhaustedMessage(_ a: AllowanceSummary) -> String {
+        "Your household has used its \(a.parsesCap) imports for this period. They reset in \(a.daysUntilReset) day\(a.daysUntilReset == 1 ? "" : "s")."
+    }
+
     private func startParsing() {
         errorMessage = nil
         editorFocused = false
+
+        // Checked before the call so the refusal is instant and costs nothing;
+        // the server checks again and is what actually refuses.
+        if let a = AllowanceService.shared.summary, !a.entitled, a.parsesLeft == 0 {
+            errorMessage = importsExhaustedMessage(a)
+            return
+        }
+
         phase = .parsing
 
         Task {
@@ -856,9 +870,16 @@ struct BulkImportSheet: View {
                         phase = .review(items)
                     }
                 }
+                await AllowanceService.shared.refresh()
             } catch {
+                let exhausted = AllowanceService.isExhausted(error)
+                if exhausted { await AllowanceService.shared.refresh() }
                 await MainActor.run {
-                    errorMessage = "Failed to parse. Please try again."
+                    if exhausted, let a = AllowanceService.shared.summary {
+                        errorMessage = importsExhaustedMessage(a)
+                    } else {
+                        errorMessage = "Failed to parse. Please try again."
+                    }
                     phase = .input
                 }
             }

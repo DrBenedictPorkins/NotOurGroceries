@@ -1,6 +1,7 @@
 import { DynamoDBClient, DescribeTableCommand, ScanCommand, DeleteItemCommand } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand, ScanCommand as DocScanCommand } from '@aws-sdk/lib-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { setEntitlement, loadAllowance, summarize } from '../allowance';
 
 // ========================================
 // TYPES
@@ -439,6 +440,50 @@ async function clearShoppingData(args: Record<string, any>): Promise<McpToolResp
 }
 
 // ========================================
+// ALLOWANCES
+// ========================================
+
+/**
+ * Lift a household's allowances by hand, with no receipt — friends, testers,
+ * the live household. `subscribed || comped` is the entitlement check, so this
+ * is also how every allowance gets tested against a real account without buying
+ * anything. See MONETIZATION.qmd, "Comping an account".
+ */
+async function compHousehold(args: Record<string, any>): Promise<McpToolResponse> {
+  const { householdId } = args;
+  if (!householdId) return { success: false, error: 'Missing required argument: householdId' };
+  try {
+    const row = await setEntitlement(householdId, 'COMPED');
+    return { success: true, data: summarize(row) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+/** Back to FREE. Counters are left as they are; the caps simply apply again. */
+async function uncompHousehold(args: Record<string, any>): Promise<McpToolResponse> {
+  const { householdId } = args;
+  if (!householdId) return { success: false, error: 'Missing required argument: householdId' };
+  try {
+    const row = await setEntitlement(householdId, 'FREE');
+    return { success: true, data: summarize(row) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function getAllowances(args: Record<string, any>): Promise<McpToolResponse> {
+  const { householdId } = args;
+  if (!householdId) return { success: false, error: 'Missing required argument: householdId' };
+  try {
+    const row = await loadAllowance(householdId);
+    return { success: true, data: { ...summarize(row), periodStartedAt: row.periodStartedAt } };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// ========================================
 // TOOL REGISTRY
 // ========================================
 
@@ -453,6 +498,9 @@ const tools: Record<string, ToolHandler> = {
   get_commits: getCommits,
   delete_item: deleteItem,
   clear_shopping_data: clearShoppingData,
+  get_allowances: getAllowances,
+  comp_household: compHousehold,
+  uncomp_household: uncompHousehold,
 };
 
 // ========================================

@@ -12,6 +12,7 @@ import {
   transcribeAudioFunction,
   adminMcpFunction,
   itemImageFunction,
+  householdAllowancesFunction,
 } from './data/resource';
 import { storage } from './storage/resource';
 import { Function, CfnFunction } from 'aws-cdk-lib/aws-lambda';
@@ -36,6 +37,7 @@ const backend = defineBackend({
   transcribeAudioFunction,
   adminMcpFunction,
   itemImageFunction,
+  householdAllowancesFunction,
 });
 
 // Password policy. Set here because defineAuth doesn't expose it.
@@ -282,6 +284,28 @@ inferProductAisleLambda.addToRolePolicy(new PolicyStatement({
 }));
 
 // ========================================
+// ALLOWANCES (metering and entitlement)
+// ========================================
+
+// One row per household; see `amplify/data/allowance.ts`. Written by the
+// Lambdas that do metered work, after the work succeeds, and read by the query
+// the app calls. Every function that touches it is in the `data` resource group
+// — a function outside it that is granted a table ends up in a nested-stack
+// cycle, which is what happened to `itemImage`.
+const allowanceTable = backend.data.resources.tables['HouseholdAllowance'];
+const householdAllowancesLambda = backend.householdAllowancesFunction.resources.lambda as Function;
+const parseIngredientsLambda = backend.parseIngredientsFunction.resources.lambda as Function;
+
+for (const fn of [inferProductAisleLambda, parseIngredientsLambda, householdAllowancesLambda, householdMembershipLambda]) {
+  addEnvVars(fn, { ALLOWANCE_TABLE_NAME: allowanceTable.tableName });
+  allowanceTable.grantReadWriteData(fn);
+}
+
+// Joining only reads: the member cap is checked, never spent.
+addEnvVars(joinHouseholdLambda, { ALLOWANCE_TABLE_NAME: allowanceTable.tableName });
+allowanceTable.grantReadData(joinHouseholdLambda);
+
+// ========================================
 // ADMIN MCP FUNCTION (Database Management)
 // ========================================
 
@@ -293,6 +317,10 @@ const shoppingRequestTable = backend.data.resources.tables['ShoppingRequest'];
 
 // Get the Lambda
 const adminMcpLambda = backend.adminMcpFunction.resources.lambda as Function;
+
+// Comping a household is an admin act with no receipt behind it.
+addEnvVars(adminMcpLambda, { ALLOWANCE_TABLE_NAME: allowanceTable.tableName });
+allowanceTable.grantReadWriteData(adminMcpLambda);
 
 // Add environment variables for all tables
 addEnvVars(adminMcpLambda, {
@@ -373,6 +401,7 @@ const structuredLogging = [
   backend.transcribeAudioFunction,
   backend.joinHouseholdFunction,
   backend.householdMembershipFunction,
+  backend.householdAllowancesFunction,
 ];
 
 structuredLogging.forEach((fn) => {

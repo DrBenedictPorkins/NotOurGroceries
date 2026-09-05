@@ -11,6 +11,7 @@ import {
 import type { Schema } from '../resource';
 import { requireHousehold } from '../requireHousehold';
 import { logEvent, logWarning, logFailure, tokenUsage } from '../telemetry';
+import { checkAllowance, spend } from '../allowance';
 
 
 type Handler = Schema['parseIngredients']['functionHandler'];
@@ -34,7 +35,8 @@ async function resolveAmplifySecrets(): Promise<void> {
 }
 
 export const handler: Handler = async (event) => {
-  requireHousehold(event);
+  const [householdId] = requireHousehold(event);
+  const spentBy = (event as { identity?: { sub?: string } }).identity?.sub;
   await resolveAmplifySecrets();
   const { rawText, knownTerms, imageData } = event.arguments;
 
@@ -61,6 +63,11 @@ export const handler: Handler = async (event) => {
     logEvent('ai.parse', { ...shape, outcome: 'empty_input', itemCount: 0, ms: Date.now() - startedAt });
     return [] as unknown as string;
   }
+
+  // Allowance. After the empty-input return, so a blank paste is not a parse;
+  // before the model is called, so a refusal costs nothing. Throws with the
+  // `ALLOWANCE_EXHAUSTED:` prefix the app looks for. Soft cap — see allowance.ts.
+  await checkAllowance(householdId, 'parses');
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
@@ -115,6 +122,9 @@ export const handler: Handler = async (event) => {
   logEvent('ai.parse', {
     ...shape, ...usage, outcome: 'ok', itemCount: capped.length, ms: Date.now() - startedAt,
   });
+
+  // One parse, however many items came out of it, charged only on success.
+  await spend(householdId, 'parses', 1, spentBy);
 
   return capped as unknown as string;
 };

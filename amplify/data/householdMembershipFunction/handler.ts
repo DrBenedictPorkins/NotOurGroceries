@@ -21,6 +21,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Schema } from '../resource';
+import { ensureAllowanceRow, deleteAllowanceRow } from '../allowance';
 
 const client = new DynamoDBClient({});
 const cognito = new CognitoIdentityProviderClient({});
@@ -324,6 +325,9 @@ async function householdGroupIsEmpty(householdId: string, departingUserId: strin
  * but a member left attached to a household the caller believes is gone is worse.
  */
 async function deleteHouseholdData(householdId: string): Promise<void> {
+  // Bookkeeping, not user data; nothing else reaches it by household id.
+  await deleteAllowanceRow(householdId);
+
   const scoped: { table: string; index: string }[] = [
     { table: GROCERY_ITEM_TABLE_NAME, index: 'groceryItemsByHouseholdIdAndStatus' },
     { table: COMMIT_TABLE_NAME, index: 'commitsByHouseholdIdAndSequenceNumber' },
@@ -464,6 +468,10 @@ export const handler: Handler = async (event) => {
         __typename: 'Household',
       }),
     }));
+
+    // The household's allowance period starts now. Lazily created on first use
+    // for households older than the table; seeded here for everyone new.
+    await ensureAllowanceRow(newId, now);
 
     await client.send(new UpdateItemCommand({
       TableName: USER_TABLE_NAME,

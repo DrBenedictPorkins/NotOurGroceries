@@ -139,6 +139,10 @@ class ShoppingListViewModel: ObservableObject {
         return a.id < b.id
     }
 
+    /// Everything the household holds — list, cart and suggestions — which is
+    /// what the item allowance counts. One pool with a status, not two lists.
+    var totalItemCount: Int { items.count }
+
     /// Items already in the cart during the current shopping trip
     /// Same order as the list it came from, so an item does not jump position
     /// when you tick it off.
@@ -658,6 +662,21 @@ class ShoppingListViewModel: ObservableObject {
         let currentUserId = AmplifyService.shared.currentUser?.userId ?? ""
         guard !currentUserId.isEmpty else {
             showToast(message: "Not signed in", type: .warning)
+            return
+        }
+
+        // The item allowance, checked here and only here. Items are written
+        // straight to the table, so this is the one cap the server cannot
+        // refuse; a device that is offline can pass it and sync later, which was
+        // accepted — see MONETIZATION.qmd. Checked after the sign-in guards and
+        // before the duplicate checks, because re-adding something already on
+        // the list or in suggestions does not create an item.
+        if let allowance = AllowanceService.shared.summary,
+           !allowance.entitled,
+           totalItemCount >= allowance.itemsCap,
+           !items.contains(where: { $0.normalizedName == normalizeName(name) }) {
+            showToast(message: "The list is full at \(allowance.itemsCap) items. Delete a few to add more.", type: .warning)
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
             return
         }
 

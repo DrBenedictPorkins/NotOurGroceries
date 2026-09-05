@@ -22,6 +22,9 @@ struct SettingsView: View {
     @State private var isClearing = false
     @State private var clearProgress: (done: Int, total: Int) = (0, 0)
 
+    @State private var showAllowances = false
+    @ObservedObject private var allowances = AllowanceService.shared
+
     @State private var showDeleteAccountWarning = false
     @State private var showDeleteAccountConfirm = false
     @State private var deleteConfirmationText = ""
@@ -54,6 +57,9 @@ struct SettingsView: View {
                     // User info card
                     userInfoCard
 
+                    // Plan and allowances
+                    planSection
+
                     // App info section
                     appInfoSection
 
@@ -68,6 +74,10 @@ struct SettingsView: View {
             }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showAllowances) {
+            AllowancesView()
+                .environmentObject(viewModel)
+        }
         .sheet(isPresented: $showColorPicker) {
             ProfileColorPickerSheet(
                 selectedColor: $currentColor,
@@ -177,6 +187,34 @@ struct SettingsView: View {
         let fmt = DateFormatter()
         fmt.dateFormat = "MMM d, yyyy 'at' h:mm a"
         return fmt.string(from: date)
+    }
+
+    // MARK: - Plan
+
+    /// One row: which plan the household is on, and the way to the allowances
+    /// page. Comped households are told they are comped.
+    private var planSection: some View {
+        Button {
+            showAllowances = true
+        } label: {
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
+                Text("Plan")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textPrimary)
+                Spacer()
+                Text(allowances.summary?.plan.label ?? "")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+            .padding(20)
+            .background(glassCard)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - App Info Section

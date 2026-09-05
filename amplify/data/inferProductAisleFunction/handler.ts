@@ -3,6 +3,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import Anthropic from '@anthropic-ai/sdk';
 import { requireHousehold, callerHouseholdIds } from '../requireHousehold';
+import { checkAllowance, spend, EXHAUSTED_PREFIX } from '../allowance';
 import { logEvent, logWarning, logFailure, tokenUsage } from '../telemetry';
 
 const ddbClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -559,6 +560,21 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
 
 
 
+    // Allowance. Checked once the request is known to be real — a store with
+    // nothing to place in is refused above without touching the counter — and
+    // before anything is spent. Soft cap: a household with anything left is
+    // served in full; see `allowance.ts`.
+    const householdId = callerHouseholds[0];
+    const spentBy = (event as { identity?: { sub?: string } }).identity?.sub;
+    try {
+      await checkAllowance(householdId, 'placements');
+    } catch (error: any) {
+      if (typeof error?.message === 'string' && error.message.startsWith(EXHAUSTED_PREFIX)) {
+        return { success: false, error: error.message };
+      }
+      throw error;
+    }
+
     // Build context for LLM
     const aisleContext = buildAisleContext(existingMappings, storeAisles);
 
@@ -613,6 +629,10 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
         };
       });
 
+      // Charged after the call succeeded, one per item placed. A failed call
+      // costs the household nothing.
+      await spend(householdId, 'placements', resultsWithIds.length, spentBy);
+
       return {
         success: true,
         results: resultsWithIds,
@@ -632,6 +652,8 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
       productCount: 1, confidence: result.confidence,
       outcome: 'ok', ms: Date.now() - startedAt,
     });
+
+    await spend(householdId, 'placements', 1, spentBy);
 
     return {
       success: true,

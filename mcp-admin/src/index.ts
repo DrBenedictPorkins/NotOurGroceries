@@ -126,6 +126,39 @@ const tools = [
       required: ["confirm"],
     },
   },
+  {
+    name: "get_allowances",
+    description: "A household's entitlement (FREE, SUBSCRIBED, COMPED), what it has used this period, the caps, and when the period resets.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        householdId: { type: "string", description: "Household ID" },
+      },
+      required: ["householdId"],
+    },
+  },
+  {
+    name: "comp_household",
+    description: "Mark a household COMPED: every allowance lifted, no receipt. For friends, testers and the live household.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        householdId: { type: "string", description: "Household ID" },
+      },
+      required: ["householdId"],
+    },
+  },
+  {
+    name: "uncomp_household",
+    description: "Return a comped household to FREE. Counters are kept; the caps apply again.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        householdId: { type: "string", description: "Household ID" },
+      },
+      required: ["householdId"],
+    },
+  },
 ];
 
 // Create MCP server

@@ -57,6 +57,14 @@ export const joinHouseholdFunction = defineFunction({
   resourceGroupName: 'data',
 });
 
+// Where the caller's household stands against its allowances. Read-only; the
+// counters are written by the Lambdas that do the metered work.
+export const householdAllowancesFunction = defineFunction({
+  name: 'householdAllowancesFunction',
+  entry: './householdAllowancesFunction/handler.ts',
+  resourceGroupName: 'data',
+});
+
 // Admin MCP function for database management
 export const adminMcpFunction = defineFunction({
   name: 'adminMcpFunction',
@@ -75,6 +83,11 @@ const schema = a.schema({
   ItemStatus: a.enum(['ACTIVE', 'IN_CART', 'SUGGESTION']),
 
   ShoppingStatus: a.enum(['IDLE', 'AT_STORE', 'AD_HOC']),
+
+  /// What lifts a household's allowances. SUBSCRIBED is a validated receipt and
+  /// lapses with `subscriptionExpiresAt`; COMPED is set by hand from the admin
+  /// tooling and never lapses. See MONETIZATION.qmd.
+  Entitlement: a.enum(['FREE', 'SUBSCRIBED', 'COMPED']),
 
   CommitAction: a.enum([
     'ADD_ITEM',
@@ -183,6 +196,30 @@ const schema = a.schema({
     .secondaryIndexes((index) => [
       index('inviteCode'),
       index('name').queryField('listHouseholdByName'),
+    ]),
+
+  // ========================================
+  // HOUSEHOLD ALLOWANCE (metering and entitlement)
+  // ========================================
+  /// One row per household, `id` equal to the household id. Kept off `Household`
+  /// on purpose: members can update their own household row from the client,
+  /// and a counter or an entitlement flag a member can write is not a limit.
+  /// This row is readable by the household and written only by Lambdas over
+  /// IAM — `amplify/data/allowance.ts` is the sole writer.
+  HouseholdAllowance: a
+    .model({
+      groupName: a.string().required(),
+      entitlement: a.ref('Entitlement').required(),
+      subscriptionExpiresAt: a.datetime(),
+      /// Start of the first period. The current period is derived from it in
+      /// thirty-day steps; the counters are zeroed lazily on the first read
+      /// after a boundary.
+      periodStartedAt: a.datetime().required(),
+      placementsThisPeriod: a.integer().default(0),
+      parsesThisPeriod: a.integer().default(0),
+    })
+    .authorization((allow) => [
+      allow.groupDefinedIn('groupName').to(['read']),
     ]),
 
   // ========================================
@@ -438,6 +475,26 @@ const schema = a.schema({
     .returns(a.ref('Product').array())
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(searchProductsFunction)),
+
+  /// Entitlement, usage this period, the caps and when the period rolls, for the
+  /// caller's household. The caps come from here so the app never hardcodes one.
+  householdAllowances: a
+    .query()
+    .returns(a.customType({
+      // A string, not a.ref('Entitlement'): the enum ref in a custom return type
+      // gives the handler an opaque type it cannot construct.
+      entitlement: a.string().required(),
+      entitled: a.boolean().required(),
+      periodResetsAt: a.datetime().required(),
+      placementsUsed: a.integer().required(),
+      placementsCap: a.integer().required(),
+      parsesUsed: a.integer().required(),
+      parsesCap: a.integer().required(),
+      membersCap: a.integer().required(),
+      itemsCap: a.integer().required(),
+    }))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(householdAllowancesFunction)),
 
   // Regenerate invite code for a household
   regenerateInviteCode: a

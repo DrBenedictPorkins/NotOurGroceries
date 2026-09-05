@@ -9,6 +9,7 @@ import {
 } from '@aws-sdk/client-cognito-identity-provider';
 import { randomInt } from 'node:crypto';
 import type { Schema } from '../resource';
+import { loadAllowance, isEntitled, CAPS } from '../allowance';
 
 const client = new DynamoDBClient({});
 const cognito = new CognitoIdentityProviderClient({});
@@ -209,6 +210,31 @@ async function consumeInviteCode(householdId: string, usedCode: string): Promise
   }
 }
 
+/**
+ * The member cap. Structural, not metered: a free household holds `CAPS.members`
+ * people and the next one is refused until somebody subscribes. Counted from the
+ * index, the same projection `colourForNewMember` reads; the row it is compared
+ * against is loaded through `allowance.ts` so a comped or subscribed household
+ * is never refused. The message is a person who is not yet a member reading it,
+ * so it is written for them, not for whoever pays.
+ */
+async function refuseIfHouseholdFull(householdId: string): Promise<void> {
+  const row = await loadAllowance(householdId);
+  if (isEntitled(row)) return;
+
+  const count = await client.send(new QueryCommand({
+    TableName: USER_TABLE_NAME,
+    IndexName: 'usersByHouseholdId',
+    KeyConditionExpression: 'householdId = :hid',
+    ExpressionAttributeValues: marshall({ ':hid': householdId }),
+    Select: 'COUNT',
+  }));
+  if ((count.Count ?? 0) >= CAPS.members) {
+    logWarning('allowance.refused', { householdId, kind: 'members', used: count.Count, cap: CAPS.members });
+    throw new Error(`This household already has ${CAPS.members} members, which is the most a free household can hold. Subscribing lifts that.`);
+  }
+}
+
 async function colourForNewMember(householdId: string): Promise<string> {
   const taken = new Set<string>();
   let cursor: Record<string, unknown> | undefined;
@@ -300,6 +326,9 @@ export const handler: Handler = async (event) => {
     if (previousHouseholdId === household.id) {
       throw new Error('You are already a member of this household');
     }
+
+    // Before the code is spent, so a refused joiner keeps a usable code.
+    await refuseIfHouseholdFull(household.id);
 
     // Single use. Spent before anything is granted — see consumeInviteCode.
     await consumeInviteCode(household.id, inviteCode);

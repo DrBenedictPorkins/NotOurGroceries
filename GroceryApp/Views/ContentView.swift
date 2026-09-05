@@ -9,6 +9,16 @@ struct ContentView: View {
     @State private var showInfoModal = false
     @State private var isAtStoreMode = false
 
+    // The allowance pop-up. Shown on launch and on return to the foreground
+    // after a long background, when half or more of a recurring allowance is
+    // gone, and never while a trip is on — see MONETIZATION.qmd, "The nudge".
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var allowances = AllowanceService.shared
+    @State private var backgroundedAt: Date?
+    @State private var showAllowanceNudge = false
+    @State private var showAllowances = false
+    private static let longBackground: TimeInterval = 90 * 60
+
     var body: some View {
         ZStack {
             if isAtStoreMode {
@@ -96,6 +106,31 @@ struct ContentView: View {
         }
         .task {
             await checkShoppingStatusOnLaunch()
+            await refreshAllowancesAndMaybeNudge()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .background:
+                backgroundedAt = Date()
+            case .active:
+                guard let since = backgroundedAt, Date().timeIntervalSince(since) >= Self.longBackground else { return }
+                backgroundedAt = nil
+                Task { await refreshAllowancesAndMaybeNudge() }
+            default:
+                break
+            }
+        }
+        .alert("Your allowances", isPresented: $showAllowanceNudge) {
+            Button("See allowances") { showAllowances = true }
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let a = allowances.summary {
+                Text("Aisle placements: \(a.placementsUsed) of \(a.placementsCap) used\nImports: \(a.parsesUsed) of \(a.parsesCap) used\nResets in \(a.daysUntilReset) day\(a.daysUntilReset == 1 ? "" : "s")")
+            }
+        }
+        .sheet(isPresented: $showAllowances) {
+            AllowancesView()
+                .environmentObject(viewModel)
         }
         .onChange(of: isAtStoreMode) { _, newValue in
             // When exiting shopping mode, sync the viewModel state
@@ -110,6 +145,18 @@ struct ContentView: View {
     private var shoppingStoreName: String? {
         guard let storeId = viewModel.shoppingStoreId else { return nil }
         return viewModel.householdStores.first(where: { $0.id == storeId })?.name
+    }
+
+    // MARK: - Allowances
+
+    private func refreshAllowancesAndMaybeNudge() async {
+        await allowances.refresh()
+        // The hard rule: never while at the store. `isAtStoreMode` covers the
+        // shopper; `shoppingStatus` covers everyone else in the household.
+        guard !isAtStoreMode, viewModel.shoppingStatus != .atStore else { return }
+        if allowances.summary?.warrantsNudge == true {
+            showAllowanceNudge = true
+        }
     }
 
     // MARK: - Shopping Status Check

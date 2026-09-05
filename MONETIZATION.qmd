@@ -7,7 +7,8 @@ format:
     toc-depth: 2
 ---
 
-Agreed 2026-09-04. **Nothing here is built.** This records the shape and the
+Agreed 2026-09-04, revised 2026-09-05 with the price, the allowance numbers and
+the soft-cap rule. **Nothing here is built.** This records the shape and the
 reasoning so the decisions are not re-litigated, and so whoever implements it
 knows which parts are settled and which are still open.
 
@@ -55,11 +56,11 @@ than left to be inferred:
 
 | Section | Heading reads | Examples |
 |---|---|---|
-| **Recurring** | "Resets in 12 days" | AI mapping calls, shopping sessions |
-| **Structural** | "Lifts when you subscribe" | Household members, photos per item, total items and suggestions |
+| **Recurring** | "Resets in 12 days" | Aisle placements, parses |
+| **Structural** | "Lifts when you subscribe" | Household members, total items |
 
-"12 AI calls left this month" and "1 member slot left" look identical on a screen
-and mean entirely different things — one refills on its own and one never will.
+"12 placements left" and "1 member slot left" look identical on a screen and
+mean entirely different things — one refills on its own and one never will.
 Labelling them the same way means people wait for the wrong number to reset.
 
 The structural section doubles as the upgrade pitch: it is a list of exactly what
@@ -75,6 +76,30 @@ Consequence for the copy: whoever hits a limit may not be whoever pays. The
 message has to make sense to a person who cannot buy — "your household is out of
 placements this month" — while offering the purchase to the person reading it.
 
+### The period rolls from the household, not the calendar
+
+Thirty days from household creation, rolled forward in 30-day steps. Somebody who
+signs up on the 28th gets a full period, not three days. "Resets in N days" reads
+the same either way, and it is one field on `Household` rather than a
+system-wide clock. Decided 2026-09-05.
+
+### One subscription, no one-off
+
+**$1.99 a month or $14.99 a year.** Subscription only for the first version. The
+"$0.99 to finish out the month" one-off is a good idea and is parked, not
+rejected — a second SKU is a second thing to test, explain and validate, and one
+SKU keeps the entitlement a boolean. Review once there is conversion data.
+
+The price is derived in *The economics*, below. Short version: at $0.99 the free
+tier loses money at any realistic conversion rate; at $1.99 it does not.
+
+### Small Business Program
+
+Enrol. Commission drops from 30% to 15%, which every figure in this document
+assumes. Enrolment is by the Account Holder in App Store Connect after the Paid
+Apps Agreement is signed; enrolling by the 15th of a month takes effect on the
+1st of the next. Do it before the paywall ships, not after the first sale.
+
 ---
 
 ## The nudge
@@ -87,43 +112,97 @@ being held hostage, and it is the fastest way to make a household utility feel
 predatory. This is an invariant, enforced in one place, not a judgement call at
 each call site.
 
-**Where it does appear:** on launch, when the app has been idle a while, as a
-status summary — where you stand across every allowance.
+### Where it appears — settled 2026-09-05
 
-**Open, and worth settling before building:**
+Two places, and only two:
 
-- **Frequency.** This app is opened several times a day to add one thing. Every
-  launch is too often; the recommendation is at most once a day, and only past
-  some fraction of the allowance. Early in the month the number is noise.
-- **Form.** A pop-up must be dismissed, which taxes every launch. A line under
-  the list header costs nothing to ignore and is read by the same people. Not
-  settled — he leans toward the pop-up on launch, which is defensible *because*
-  it is bounded to launch rather than following you around.
+1. **On launch or return to foreground after a long background.** A pop-up
+   showing where the household stands across every allowance. Bounded to launch,
+   so it does not follow you around; a pop-up rather than a banner because he
+   wants it read, not ignored. Threshold still open — see below.
+2. **At the "I'm at the store" tap, before the state flips.** The app knows at
+   that moment exactly what the trip will cost — the unmapped count is right
+   there — so it can say "this trip uses 23 of your 30 placements" or "this is
+   your last one." That is a warning about what is about to be spent, delivered
+   before `AT_STORE`, and so consistent with the hard rule. Nothing is shown
+   after the state flips.
 
 **Why forewarning is the whole mechanism.** People resent surprise more than
 restriction. An allowance that has been counting down in plain sight for a
 fortnight is a fact; the same wall with no warning is an ambush. The reminders
 are not marketing, they are what makes the limit acceptable.
 
+**Threshold, settled 2026-09-05:** half or more of any recurring allowance
+gone. Early in the period the number is noise and a dismiss on every launch
+taxes an app opened several times a day to add one thing.
+
 ---
 
 ## The allowances
 
-**"Allowance" is the word, everywhere** \u2014 in the code, in the UI and in this
+**"Allowance" is the word, everywhere** — in the code, in the UI and in this
 document. Not "restriction", not "limit", not "quota". An allowance is something
 you have; a restriction is something done to you, and the difference is the whole
 tone of the free tier.
 
-Numbers below are provisional. They are reasoning, not measurements — see the
-warning under *The economics*.
+### The numbers — provisional, agreed 2026-09-05
 
-| Allowance | Kind | Provisional | Rationale |
+Set against the baseline household described under *The economics*: two members,
+two regular stores, a repertoire of about 150 products.
+
+| Allowance | Kind | Free | Reasoning |
 |---|---|---|---|
-| AI mapping calls | Recurring | — | The only line with real marginal cost |
-| Shopping sessions | Recurring | — | Understandable unit; see the caveat below |
-| Household members | Structural | **2** | Two people shop in most households, so it rarely bites; the third is a genuine reason to pay |
-| Total items | Structural | **50** | List and suggestions together — see below |
-| Photos per item | Structural | — | S3 is charged per GB; a real cost, unlike sessions |
+| **Aisle placements** | Recurring, soft | **100** | Month one for two stores needs ~300. 100 covers the first store's first trip (40–60) plus top-ups; a second store or a big first list crosses it. That is the nudge landing on the enthusiastic user, deliberately. Steady state (~15/month) never touches it |
+| **Parses** | Recurring, soft | **3** | Recipe, paste, photo and dictation all count as one parse. The occasional user never notices; a meal-planner does. This is the only recurring cost on the free tier, so it is the tightest line |
+| **Household members** | Structural | **2** | Two people shop in most households, so it rarely bites; the third is a genuine reason to pay |
+| **Total items** | Structural | **150** | List and suggestions together. A typical repertoire fits; a big family's does not. Items cost nothing, so this is capacity, not metering |
+| Photos | — | server cap only | 5 per item and 500 per household, enforced in the broker already. Not worth a line on the status screen |
+| Shopping sessions | — | **none** | A session costs nothing. Metering it was pure friction with no cost story, and it was the one allowance that bit the normal case. Dropped 2026-09-05 |
+
+### What the words are in the app
+
+"Aisle placements" and "imports". A parse is an import to the person doing it —
+the sheet is called Import, and paste, photo and dictation all land there — so
+that is the word on the allowances page and in every refusal. "Parses" stays in
+the code and the telemetry.
+
+### Placements, not calls
+
+The unit for aisle mapping is the **item placed in an aisle**, not the AI call. A
+batch call places anywhere from one to fifty items; "12 calls left" tells the
+user nothing about how many items that is. Placements are what they see on the
+screen and what scales the bill.
+
+### The cap is soft
+
+**A trip that starts with allowance left is fully served.** The check is "is the
+balance above zero"; if it is, the whole trip maps — all 23 items against 10
+remaining — and the balance floors at zero. The next trip with nothing left shops
+unmapped, under the **TO GET** heading that already exists for stores without
+layouts. The trip proceeds either way; only the sorting stops.
+
+Why soft rather than exact: an exact cap means mapping 10 of 23 and leaving the
+list half-sorted, which needs an ordering rule and looks broken. The overshoot is
+bounded by one trip's unmapped count, which is pennies. Same rule for parses —
+the paste you just submitted parses in full even if it was your last one.
+
+Decided 2026-09-05.
+
+### Dictation is a parse
+
+Dictation is recorded on device, transcribed by OpenAI (`gpt-4o-mini-transcribe`,
+~$0.001 per clip), then handed to `parseIngredients` like any pasted text. The
+transcription is not the cost; the parse behind it is. So a dictation is one
+parse, and there is no separate dictation meter.
+
+Apple's on-device recogniser (`SFSpeechRecognizer`, already used for the aisle
+field) was never evaluated for list dictation — dictation arrived on Whisper in
+`70d5cbc` with no comparison. Considered again 2026-09-05 and not pursued: the
+saving is a tenth of a cent, offline transcription is worthless while the parse
+still needs the network, and grocery vocabulary is where on-device accuracy is
+weakest. The one real gain — one fewer external processor in the privacy policy —
+only matters if the AWS-only posture in `APP-STORE-READINESS.qmd` goes ahead, and
+that decision would justify the test on its own terms.
 
 ### One item allowance, not two
 
@@ -153,9 +232,9 @@ every allowance gets tested against a real account without buying anything.
 ### Two warnings carried forward from earlier decisions
 
 **A shopping session is not an outing.** One trip to two shops finishes two
-sessions — observed 2026-08-30, and correctly recorded as two. A household may
-run 3–4 a week, not 1–2. Any cap has to be set against that, or it bites the
-normal case in the first week.
+sessions — observed 2026-08-30. Sessions are no longer metered, so this no
+longer sets a cap, but it still matters for reading usage data: 3–4 sessions a
+week is a normal household, not a heavy one.
 
 **A tight member cap was rejected on 2026-09-03, and reinstated on 2026-09-04.**
 The original objection: a family of four is exactly who wants a shared list, and
@@ -171,7 +250,7 @@ metering.
 Hitting a limit refuses the **next** action. It never discards something
 half-done, and it never fails a save that was already accepted. That is the
 difference between a limit and a bug, and it is the one way this design could
-make the app feel broken.
+make the app feel broken. The soft cap above is this rule applied to a trip.
 
 ---
 
@@ -183,28 +262,23 @@ make the app feel broken.
 |---|---|
 | Total items | **Derived.** Query `groceryItemsByHouseholdIdAndStatus` with `Select: COUNT` |
 | Household members | **Derived.** Query `usersByHouseholdId` with `Select: COUNT` |
-| AI mapping calls | **Must be accumulated.** Not recorded anywhere today |
-| Shopping sessions | **Must be accumulated.** Not recorded anywhere today |
+| Aisle placements | **Must be accumulated.** Not recorded anywhere today |
+| Parses | **Must be accumulated.** Not recorded anywhere today |
 
 Query the GSIs, never scan the table: a scan reads every household's rows to
 count one household's, and it gets slower and dearer as the app grows.
 
 ### The two that need building
 
-Neither of these leaves a row today.
+Neither leaves a row today. Both exist only as CloudWatch log lines, which
+cannot answer "how many this period" per household at request time.
 
-**Shopping sessions.** `Household` carries `shoppingStatus`, `activeShopperId`,
-`shoppingStoreId` and `shoppingStartedAt` — all *current state*, overwritten by
-the next session. `CommitAction` has eight values and none of them is starting or
-finishing one. A completed session is invisible the moment it ends.
-
-**AI calls.** They exist only as CloudWatch log lines, which cannot answer "how
-many this month" per household at request time.
-
-Simplest shape for both: counters on `Household` — `aiCallsThisPeriod`,
-`sessionsThisPeriod`, `periodStartedAt` — incremented with an atomic DynamoDB
+Simplest shape: counters on `Household` — `placementsThisPeriod`,
+`parsesThisPeriod`, `periodStartedAt` — incremented with an atomic DynamoDB
 `ADD` inside the Lambda that does the work, and reset lazily when
-`periodStartedAt` has rolled past the period. No scheduled job, no cron.
+`periodStartedAt` is more than 30 days old. No scheduled job, no cron.
+`periodStartedAt` is initialised to the household's creation time, which is what
+makes the period roll from the household.
 
 ### Metered per household, attributed per user
 
@@ -215,70 +289,179 @@ one member run dry while the other had plenty — of one shared list.
 Record *who* spent each call as a telemetry field, not as a separate budget. It
 answers "is one person doing all the mapping" without turning the pool into two.
 
-### Enforcement is server-side
+### Enforcement is server-side — with one exception
 
 The client check keeps the UI honest; the Lambda refusing is what makes the
-allowance real. `inferProductAisle` already calls `requireHousehold`, which is
-where the AI check belongs — same function, same place, one more reason to
-refuse.
+allowance real. `inferProductAisle` and `parseIngredients` already call
+`requireHousehold`, which is where the check belongs — same function, same
+place, one more reason to refuse.
+
+With a soft cap the server check is one comparison: balance above zero, serve
+the whole request and `ADD` the count; otherwise refuse. The client's job is to
+know the answer before asking, so the "at the store" warning can be shown.
 
 A client-only check is not a limit, it is a suggestion.
+
+**The exception is the item cap.** Items are written by the client straight
+through `createGroceryItem`; there is no Lambda to refuse in. Enforcing 150 on
+the server means routing every add through a custom mutation, a real lift for a
+cap on something that costs nothing. Decided 2026-09-05: **client-only.** Known
+consequence: a device that is offline (Paper List Mode) can add past 150 and
+sync them up later. Accepted — the excess costs pennies, nothing is discarded,
+and the next online add is refused as usual.
+
+---
+
+## Implementation plan — agreed 2026-09-05
+
+Two phases. Phase 1 is everything except payment, tested on real accounts via
+the comp flag; it goes through TestFlight and a release before Phase 2 starts.
+
+### Phase 1 — backend
+
+| Piece | Detail |
+|---|---|
+| `HouseholdAllowance` row | `placementsThisPeriod`, `parsesThisPeriod`, `periodStartedAt`, `entitlement` (`FREE`, `SUBSCRIBED`, `COMPED`), `subscriptionExpiresAt`. **Its own model, not fields on `Household`** — changed while building: members can update their own household row from the client, and a counter or entitlement flag a member can write is not a limit. The row is readable by the household (`groupDefinedIn`, read only) and written only by Lambdas over IAM, all through `amplify/data/allowance.ts`. Seeded when a household is created; created lazily on first metered use for households older than the table, whose period therefore starts at that first use |
+| `householdAllowances` query | Returns balances **and caps**. Caps live in one server constants file; the client never hardcodes a number |
+| `amplify/data/allowance.ts` | `checkAllowance(householdId, kind)`: load, lazily roll `periodStartedAt` in 30-day steps, refuse if `FREE` and balance ≤ 0. `spend(householdId, kind, n)`: atomic `ADD` **after** the work succeeds, so a failed Claude call is not charged. Entitled households are still counted, for telemetry |
+| Wire in | `inferProductAisle` both modes, `n = results.length`; `parseIngredients`, `n = 1`. Both need `householdTable.grantReadWriteData` in `backend.ts` — the grant `householdMembership` already carries, so it should clear the nested-stack cycle that bit `itemImage`, but the deploy is the proof |
+| Members | `joinHousehold` counts `usersByHouseholdId` (grant exists) and refuses the third unless entitled |
+| Admin MCP | `comp_household`, `uncomp_household` |
+| First act | Comp the live household. A separate test household exercises the free caps |
+
+### Phase 1 — frontend
+
+| Piece | Detail |
+|---|---|
+| `AllowanceService` | Fetches `householdAllowances` on launch, on return to foreground after **90 minutes**, and whenever the status screen opens. Cached in between |
+| Launch pop-up | Only when half or more of any recurring allowance is gone. (The earlier "or 3 or fewer left" was dropped: with 3 free imports it would fire on every launch.) A system alert with the counts and "See allowances" / "OK" |
+| `StoreSelectionSheet` | Before `showBatchMapping`: "this trip uses N of M", or "this is your last one"; at zero, skip the mapping sheet and go straight to At Store with the TO GET heading |
+| `ShoppingListViewModel:2569` | Mid-trip mapping of items added from home. Handles the server refusal silently — it is `AT_STORE`, no nudge |
+| `BulkImportSheet` | Same pre-check before parse; paste, photo and dictation share the path |
+| Settings row | One row, `Plan · Free` / `Subscribed` / `Complimentary`, which opens the allowances page. Comped households are told they are comped — three states in the copy, decided 2026-09-05 |
+| Allowances page | Plan label at the top, then the Recurring ("Resets in N days") and Structural ("Lifts when you subscribe") sections. An entitled household still sees its recurring counts, uncapped. Opening it refreshes. In Phase 2 the Subscribe button lives here and in the nudges, nowhere else |
+| Item cap | Refused at 150 in `addItem` and the bulk-add paths. Client-only, see above |
+| Refusal copy | The server's allowance error maps to the same wording everywhere, and always names when it resets |
+
+### Phase 2 — payment
+
+| Piece | Detail |
+|---|---|
+| StoreKit 2 | Two products, one `PaywallSheet`, reached only from the status screen and the nudges |
+| `redeemSubscription` Lambda | Client sends the transaction JWS; the Lambda verifies Apple's signature and sets `entitlement = SUBSCRIBED` and `subscriptionExpiresAt` |
+| Expiry | No webhook. The client re-syncs `Transaction.currentEntitlements` on launch and when the status screen opens, and re-redeems; the server treats a past `subscriptionExpiresAt` as `FREE`. A lapse is noticed at the next open, not the minute it happens — accepted |
+| Small Business Program | Enrolled before this phase ships |
 
 ---
 
 ## The economics
 
 ::: {.callout-warning}
-## Do not plan against these numbers
+## Estimates, not measurements
 
-Every figure below comes from **two developers testing the app**, on the day the
-telemetry shipped. It is not usage data. It is skewed in both directions at once:
-
-- **AI is overstated.** Most of those calls were deliberate mapping runs against
-  a store built minutes earlier, to exercise the feature. Nobody shopping behaves
-  like that.
-- **AI is also understated.** A real new household maps a full store's worth of
-  items over its first weeks; ours had sixteen.
-- **Amplify is wildly overstated.** \$2.71 of build minutes is a dozen deploys in
-  one afternoon, and has nothing to do with users at all.
-
-What the numbers are good for is **shape** — which line dominates, and by roughly
-what order of magnitude. AI being ~20x the infrastructure is a conclusion worth
-carrying; \$0.58 a month is not.
-
-**Real data needs real users.** A fortnight of a handful of households who are
-actually shopping, from the structured events now being logged. Until then, treat
-every figure here as an illustration of the argument, not as an input to a price.
+There is no usage data — two developers testing is not usage. Every figure here
+is derived from a **hypothetical baseline household**, agreed 2026-09-05, and
+from published per-token prices. Use it for shape and for relative sizes. Replace
+it with the structured telemetry once a handful of real households have shopped
+for a fortnight.
 :::
 
-Measured 2026-09-04 from the telemetry shipped the same day.
+### Where the cost went — 2026-09-04 to 2026-09-05
+
+The previous version of this section measured `inferProductAisle` on Sonnet
+with a full sentence of `reasoning` per item, and recommended two levers before
+pricing. **Both were pulled on 2026-09-05:** the model is `claude-haiku-4-5`
+after a bake-off on the live Stop & Shop layout (Sonnet 29–30/31, Haiku 28/31,
+at a third of the price), and `reasoning` is capped at ten words. The figures
+below are for the app as it now runs.
+
+### The baseline household
 
 | | |
 |---|---|
-| `inferProductAisle` | 3 calls, 34 products mapped, **\$0.035** |
-| Cost per product mapped | **~\$0.001** |
-| Extrapolated to 49 calls/month | ~\$0.58 per household per month — *see the warning above* |
-| AWS, whole account | \$3.19/month |
-| Cognito | Free to 10,000 MAU — see `APP-STORE-READINESS.qmd` |
+| Members on the app | 2, family of 3–4 |
+| Sessions | ~3 a week: one big shop, two top-ups |
+| Regular stores | 2 |
+| Repertoire | ~150 distinct products by month three |
+| List sizes | ~40 items on the big shop, ~8 on a top-up |
+| Placements | ~300 in month one (150 products × 2 stores), ~15 a month after |
+| Parses | ~3 a month, dictation included |
+| Photos | ~10 a month |
 
-**Output tokens exceeded input** — 1,983 against 1,898. Output is 5x the price of
-input on Sonnet, so **more than half the AI bill is the `reasoning` prose**, the
-"Pasta sauce is typically shelved alongside pasta…" sentence that most people
-never read.
+### The shape: front-loaded, then near zero
 
-### Pull the cost levers before setting a price
+A new household has an empty list and no stores. The first "I'm at the store"
+tap maps most of the list at once — that is the bulk of the household's lifetime
+AI spend, in one call. Each subsequent trip places only what is new, and the
+list stabilises within a few weeks at one or two new items a trip. Mappings stay
+with the store and are not redone. A second regular store restarts the hump once,
+then it is flat again.
 
-Both are code changes with no user-visible downside, and together they plausibly
-move the number by an order of magnitude — to well under \$0.10 per household per
-month.
+**The expensive user is the new user, not the heavy user.** A long-tenured
+household that shops daily costs less than a fortnight-old one that shops weekly.
+The only thing that does not decay is parsing, which is per action rather than
+per item — a meal-planner pastes as many recipes in month twelve as in month
+one. That is why parses carry the tightest free allowance.
 
-1. **`inferProductAisle` from Sonnet to Haiku.** Output drops from \$15 to \$5
-   per Mtok. Do it in the same pass as the Bedrock migration; they rewrite the
-   same model-id lines in the same handlers.
-2. **Trim or drop `reasoning`,** at least for high-confidence results.
+This also means the recurring placement allowance binds hardest in month one and
+stops binding by month three. That is accepted deliberately: hitting the wall
+while enthusiastic — mid-onboarding, second store, big first list — is when
+somebody is most willing to pay, and the soft cap means the wall never spoils
+the trip they are on.
 
-Pricing decided against today's cost is pricing against a number about to be
-invalidated.
+### Unit costs
+
+Haiku 4.5 at $1 per Mtok in, $5 out.
+
+| | Cost | How |
+|---|---|---|
+| One placement | **~$0.0005** | ~3k input tokens per batch (layout, existing mappings, items) shared across the batch; ~30 output tokens per item |
+| One parse | **~$0.006** | Measured $0.005 input including cache write; ~300 output tokens |
+| One dictation transcript | ~$0.001 | OpenAI, $0.003 per minute, ~20-second clips |
+| Infrastructure | **~$0.03** per household per month | AppSync, DynamoDB, S3, Cognito at current volume. Cognito is free to 10,000 MAU |
+
+Amplify build minutes (~$3 a month) and the Apple developer fee ($99 a year, about
+eight yearly subscriptions) are fixed costs and are left out of the per-household
+figures.
+
+### Per household per month
+
+| | Month one | Steady state |
+|---|---|---|
+| **Free**, at the caps (100 placements, 3 parses) | ~$0.10 | ~$0.06 |
+| **Paid**, heavy (300 placements, 20 parses) | ~$0.30 | ~$0.15 |
+
+A paying household covers its own cost many times over at any price considered.
+That is not the question.
+
+### The question is break-even conversion
+
+The free tier is carried by the paid one. What matters is how many free
+households one paid household can carry, and whether a realistic conversion
+rate reaches that.
+
+Net of 15% commission:
+
+| Price | Net | Net per month | Free households carried at $0.06 | Break-even conversion |
+|---|---|---|---|---|
+| $0.99 / month | $0.84 | $0.84 | 14 | ~7% |
+| $9.99 / year | $8.49 | $0.71 | 12 | **~8%** |
+| **$1.99 / month** | $1.69 | $1.69 | 28 | ~3.5% |
+| **$14.99 / year** | $12.74 | $1.06 | 18 | **~5%** |
+
+Typical freemium conversion is 2–5%. At $0.99/$9.99 the yearly plan — which is
+what most subscribers pick — needs 8%, at the far end of plausible. Worked at
+3%: 100 households, 3 paying yield $2.13 a month, 97 free cost $5.82. A loss,
+and one that grows with every free household.
+
+At $1.99/$14.99 break-even is 3.5–5%, inside the normal range, and $14.99 a year
+is what AnyList charges, so it is not an unfamiliar number. **Hence $1.99 a month,
+$14.99 a year.** The yearly is priced at 7.5 months, the conventional discount.
+
+Free parses were cut from a proposed 5 to 3 in the same pass: they are $0.03 of
+the $0.06 steady-state free cost, the one line that does not decay with tenure,
+and the difference between 5 and 3 is invisible to anyone who is not
+meal-planning from recipes every week — who is exactly who should pay.
 
 ### What the infrastructure actually costs
 
@@ -286,83 +469,40 @@ Real bill, 30 days to 2026-09-04, by service:
 
 | Service | 30 days |
 |---|---|
-| AWS Amplify | **\$2.71** |
-| AppSync | \$0.028 |
-| CloudWatch | \$0.001 |
-| Lambda | \$0 |
+| AWS Amplify | **$2.71** |
+| AppSync | $0.028 |
+| CloudWatch | $0.001 |
+| Lambda | $0 |
 | DynamoDB, S3, Cognito | not billed |
 
-**The \$2.71 is not a user cost.** Amplify bills build minutes — it is what
+**The $2.71 is not a user cost.** Amplify bills build minutes — it is what
 *deploying* costs, and it scales with how often `main` is pushed, not with how
-many households exist. On a day of heavy iteration it dominates the bill and
-says nothing about users.
+many households exist.
 
-Everything users actually touch came to **\$0.03 a month**. Cognito is free to
-10,000 MAU, Lambda and DynamoDB did not register at this volume.
-
-So per household: **AI \$0.58, infrastructure \$0.03** — AI is roughly 20x
-everything else combined, and at 100x the users the ratio holds, because nothing
-else on the bill grows fast enough to matter.
-
-**The corollary that shapes the free tier: a household that never touches AI
-costs essentially nothing.** Be generous with everything that is not an AI call;
-the entire monetization question reduces to metering that one thing.
-
-### The cost asymptotes, it does not just front-load
-
-A new household has an empty list, no suggestions and no stores. All three fill
-and then **plateau**: the suggestion list converges on what this household
-actually buys, the store list stops growing at the two or three shops they use,
-and — because those two are finite — the aisle mappings saturate. Once a
-household's regular items are placed in its regular stores, inference has nothing
-left to do.
-
-So AI spend per household decays toward zero with tenure. A mature household
-costs storage and API calls, which is the \$0.03 above.
-
-**This inverts the usual assumption, and it matters for choosing numbers.** The
-expensive user is not the heavy user, it is the *new* user. A long-tenured
-household that shops daily costs less than a fortnight-old one that shops weekly.
-
-**Consequence for a recurring AI allowance:** it binds hardest in month one and
-stops binding by month three. That is backwards — the meter would be tightest
-exactly when somebody is still deciding whether the app is any good, and slack
-once they are committed and costing nothing. Worth deciding deliberately how to
-handle this rather than discovering it:
-
-- a larger allowance for a household's first month, or
-- a lifetime onboarding allowance separate from the recurring one, or
-- accept it, on the grounds that hitting the wall while enthusiastic is exactly
-  when somebody is most willing to pay.
-
-The third is a real position, not a cop-out — but it should be chosen, not
-stumbled into.
-
-### The shape of the cost is front-loaded
-
-Mapping a store is most of the spend and it happens in week one; a settled
-household costs almost nothing. Revenue metered on recurring allowances is flat.
-So the loss is on a household that onboards heavily and churns, and the margin is
-on one that stays. Normal enough, but it means **the free tier's real exposure is
-churn, not heavy use** — and that a generous free tier is affordable, because
-most free households cost pennies after their first fortnight.
+Everything users actually touch came to **$0.03 a month.** A household that never
+touches AI costs essentially nothing, which is why everything that is not an AI
+call is either uncapped or capped only as capacity.
 
 ---
 
 ## Open questions
 
-- Price points. \$0.99 to finish out the month was the original sketch; at 15%
-  App Store commission that nets \$0.84, which is comfortable against \$0.10 and
-  thin against \$0.58. Settle after the cost levers.
-- Subscription price and period.
-- Every allowance number.
-- Nudge frequency and form (above).
+- The one-off "finish out the month" SKU — parked until there is conversion data.
 - Whether a household that lapses keeps its data — it must, but the read-only
-  behaviour needs specifying.
+  behaviour needs specifying. With allowances rather than gates, "lapsed" most
+  likely just means "back to free caps" with anything already over the cap kept
+  and only the next add refused.
+- Every number here, once there is a fortnight of real households in the
+  telemetry.
 
 ## Prerequisites
 
 - Per-household authorization — **done**, verified with an outsider account.
-- Cost per household — **now measurable**; the telemetry landed 2026-09-04.
-  A fortnight of data turns the estimate above into a number.
-- Receipt validation and the entitlement flag on `Household` — not started.
+- Cost per household — **measurable**; the telemetry landed 2026-09-04. The
+  estimates above get replaced by it.
+- Small Business Program enrolment — not started; needs the Paid Apps Agreement.
+- Phase 1 above — **built 2026-09-05, not yet deployed or tested.** Backend
+  typechecks and existing tests pass; the app builds. Needs a push to deploy the
+  schema, then the live household comped and a test household run through the
+  caps.
+- Phase 2 above — not started, and not before Phase 1 has shipped.

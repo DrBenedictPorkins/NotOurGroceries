@@ -12,6 +12,10 @@ struct AllowancesView: View {
     @EnvironmentObject var viewModel: ShoppingListViewModel
     @ObservedObject private var allowances = AllowanceService.shared
     @ObservedObject private var userCache = UserCache.shared
+    /// Nothing is shown until the fresh answer is in. The cached numbers could
+    /// be an hour old, and a page that shows them and then swaps in new ones
+    /// looks like it changed its mind.
+    @State private var loaded = false
 
     var body: some View {
         NavigationView {
@@ -21,14 +25,19 @@ struct AllowancesView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
-                        if let summary = allowances.summary {
+                        if loaded, let summary = allowances.summary {
                             planCard(summary)
                             recurringCard(summary)
                             structuralCard(summary)
                         } else {
-                            ProgressView()
-                                .tint(DesignSystem.Colors.dillGreen)
-                                .padding(.top, 60)
+                            VStack(spacing: 12) {
+                                ProgressView()
+                                    .tint(DesignSystem.Colors.dillGreen)
+                                Text("Checking…")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(DesignSystem.Colors.textTertiary)
+                            }
+                            .padding(.top, 80)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -44,7 +53,10 @@ struct AllowancesView: View {
                 }
             }
         }
-        .task { await allowances.refresh() }
+        .task {
+            await allowances.refresh()
+            withAnimation(.easeOut(duration: 0.2)) { loaded = true }
+        }
     }
 
     // MARK: - Plan

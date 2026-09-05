@@ -214,6 +214,20 @@ const STANDARD_SECTIONS: Array<{ id: string; name: string }> = [
  * built-in departments by id or name; then the value untouched, because an aisle
  * we cannot place is better kept than mangled.
  */
+/**
+ * Did the model actually put this somewhere?
+ *
+ * Mirrors `AisleNaming.isUnplaced` on the client. Used to decide what to charge:
+ * a household that asks about twelve items and gets "Unknown" for nine of them
+ * has been given three placements, and its allowance is spent by three. The
+ * call cost the same either way — that is accepted; the allowance meters what
+ * the person received, not what the API did.
+ */
+export function isPlaced(aisleId: string | null | undefined): boolean {
+  const key = (aisleId ?? '').trim().toLowerCase();
+  return key !== '' && !['null', 'none', 'unknown', 'undefined', 'n/a'].includes(key);
+}
+
 export function canonicalAisleId(value: string, aisles: StoreAisle[] = []): string {
   const trimmed = (value ?? '').trim();
   if (!trimmed) return trimmed;
@@ -629,9 +643,10 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
         };
       });
 
-      // Charged after the call succeeded, one per item placed. A failed call
-      // costs the household nothing.
-      await spend(householdId, 'placements', resultsWithIds.length, spentBy);
+      // Charged after the call succeeded, one per item actually placed. An
+      // "Unknown" is not a placement and is not charged; a failed call costs
+      // the household nothing.
+      await spend(householdId, 'placements', resultsWithIds.filter((r) => isPlaced(r.suggestedAisle)).length, spentBy);
 
       return {
         success: true,
@@ -653,12 +668,13 @@ export const handler: AppSyncResolverHandler<Arguments, Response> = async (event
       outcome: 'ok', ms: Date.now() - startedAt,
     });
 
-    await spend(householdId, 'placements', 1, spentBy);
+    const suggestedAisle = canonicalAisleId(result.aisle, storeAisles);
+    await spend(householdId, 'placements', isPlaced(suggestedAisle) ? 1 : 0, spentBy);
 
     return {
       success: true,
       // Canonical id, not whatever spelling the model echoed back.
-      suggestedAisle: canonicalAisleId(result.aisle, storeAisles),
+      suggestedAisle,
       confidence: result.confidence,
       reasoning: result.reasoning,
     };

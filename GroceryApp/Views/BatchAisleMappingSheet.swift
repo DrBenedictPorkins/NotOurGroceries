@@ -126,13 +126,13 @@ struct BatchAisleMappingSheet: View {
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.white)
 
-                Text(itemsWorthAsking.isEmpty
-                     ? "These were already tried against \(store.name)'s aisles and couldn't be placed. Asking again won't change the answer — say where one is while you're in the shop, and the rest get easier."
-                     : "Use AI to automatically find the best aisle for each item based on \(store.name)'s layout.")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                if !itemsWorthAsking.isEmpty {
+                    Text("Use AI to automatically find the best aisle for each item based on \(store.name)'s layout.")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
             }
 
             // Item preview (first few items)
@@ -167,10 +167,37 @@ struct BatchAisleMappingSheet: View {
 
             Spacer()
 
-            // Map with AI button. Hidden once the model has already failed on every
-            // item with the store exactly as it stands — pressing it would spend
-            // the same tokens to return the same Unknowns.
-            if !itemsWorthAsking.isEmpty {
+            // Map with AI button. Replaced, not hidden, once the model has already
+            // failed on every item with the store exactly as it stands — pressing
+            // it would spend the same tokens to return the same Unknowns. The
+            // notice sits where the button was, because that is where the eye
+            // goes; a paragraph up top was read only after the button was missed.
+            if itemsWorthAsking.isEmpty {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.warning)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Already tried — nothing new to ask")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                        Text("\(store.name) has no aisle for these. Say where one is while you shop.")
+                            .font(.system(size: 14))
+                            .foregroundColor(DesignSystem.Colors.textSecondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(DesignSystem.Colors.warning.opacity(0.15))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(DesignSystem.Colors.warning.opacity(0.6), lineWidth: 1.5)
+                        )
+                )
+                .padding(.horizontal, 24)
+            } else {
             Button {
                 Task { await performBatchInference() }
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()

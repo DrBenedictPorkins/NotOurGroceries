@@ -173,6 +173,13 @@ batch call places anywhere from one to fifty items; "12 calls left" tells the
 user nothing about how many items that is. Placements are what they see on the
 screen and what scales the bill.
 
+**An "Unknown" is not a placement.** Observed 2026-09-05 on a store with only
+the seeded departments: twelve items went to the model, most came back
+unplaced, and all twelve were charged. The call cost the same either way, but
+the allowance meters what the person received, not what the API did — so only
+results with a real aisle are charged. A household that gets nothing useful
+pays nothing.
+
 ### The cap is soft
 
 **A trip that starts with allowance left is fully served.** The check is "is the

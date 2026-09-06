@@ -1,4 +1,16 @@
-import { defineAuth } from '@aws-amplify/backend';
+import { defineAuth, defineFunction } from '@aws-amplify/backend';
+
+/**
+ * Puts an invite code in the sign-up confirmation email.
+ *
+ * A verified address is the gate: a code minted at the moment Cognito sends the
+ * confirmation is one that cannot be scraped, because the scarce thing was never
+ * the code — it is an account somebody proved they can receive mail at.
+ */
+export const customMessageFunction = defineFunction({
+  name: 'customMessageFunction',
+  entry: './customMessageFunction/handler.ts',
+});
 
 /**
  * Define and configure your auth resource
@@ -22,6 +34,9 @@ export const auth = defineAuth({
     //   callbackUrls: ['http://localhost:3000/auth/callback', 'myapp://'],
     //   logoutUrls: ['http://localhost:3000/', 'myapp://'],
     // },
+  },
+  triggers: {
+    customMessage: customMessageFunction,
   },
   // Password policy is not expressible here; it is set on the underlying
   // Cognito construct in `backend.ts`.

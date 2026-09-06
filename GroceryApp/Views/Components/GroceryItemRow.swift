@@ -199,7 +199,8 @@ struct GroceryItemRow: View {
             itemContentView
                 .opacity(item.isAnimatingIn ? 0 : 1)
         }
-        .padding(16)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
         .background(cardBackground)
         .cornerRadius(16)
         .overlay(animatingInGlow)
@@ -217,16 +218,18 @@ struct GroceryItemRow: View {
     }
 
     private var itemContentView: some View {
-        HStack(alignment: .top, spacing: 12) {
+        // One line, not two. The attribution used to sit under the name, which
+        // made every row two lines tall for a word that is subordinate to the
+        // item anyway — a list of forty items paid for that forty times.
+        HStack(alignment: .center, spacing: 10) {
             // Show icon for suggestions and inCart items
             statusIcon
 
-            VStack(alignment: .leading, spacing: 4) {
-                itemNameRow
-                ownerRow
-            }
+            itemNameRow
 
-            Spacer()
+            Spacer(minLength: 8)
+
+            ownerRow
 
             // Lock info in top right when locked: [Username] <lock>
             // Hide lock icons during shopping mode - locks are not honored while shopping
@@ -241,25 +244,34 @@ struct GroceryItemRow: View {
                 }
             }
 
-            // Detail sheet button
-            Button {
-                viewModel.itemShowingDetail = item
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(DesignSystem.Colors.textTertiary)
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            // Detail sheet.
+            //
+            // A `Button` here did nothing at all: the whole row carries an
+            // `onTapGesture`, and in a `List` that outer gesture swallows a
+            // plain-styled button's tap before it fires. A high-priority tap on
+            // the shape wins instead of competing, which is the only arrangement
+            // that actually opens the sheet.
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.textTertiary)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    TapGesture().onEnded {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        viewModel.itemShowingDetail = item
+                    }
+                )
         }
     }
 
-    /// Shows who added the item [Username]
+    /// Who added it, on the right of the name rather than under it.
+    @ViewBuilder
     private var ownerRow: some View {
         HStack(spacing: 6) {
             if item.status == .active {
-                Text("[\(addedByDisplayName)]")
+                Text(addedByDisplayName)
+                    .lineLimit(1)
                     .font(.system(size: 11, weight: .medium))
                     // Near full strength. The 11pt size already keeps this
                     // subordinate to the item name, and knocking the colour back

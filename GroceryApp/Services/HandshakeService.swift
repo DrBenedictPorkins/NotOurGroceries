@@ -49,18 +49,133 @@ enum HandshakeService {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let raw = try await API.query(request)
+        // Not `API.query`. A resolver returning `AWSJSON` hands back a JSON
+        // string, and Amplify's decoder frequently cannot fit that to the
+        // declared response type — it reports `.transformationError` and
+        // attaches the perfectly good body, which the normal path throws away.
+        // `BulkImportSheet` hit exactly this with the parse Lambda; the
+        // handshake is the same shape.
+        let response = try await API.queryRecoveringRaw(request)
 
-        // `AWSJSON` arrives as a string containing the payload.
-        guard case .object(let root) = raw,
-              case .string(let encoded) = root["handshake"],
-              let data = encoded.data(using: .utf8),
-              let payload = try? JSONDecoder().decode(JSONValue.self, from: data),
-              case .object(let body) = payload else {
-            throw ServiceFailure.malformed("The server's answer wasn't readable.")
+        let node: JSONValue
+        switch response {
+        case .success(let value):
+            node = try field(from: value)
+        case .failure(let graphQLError):
+            switch graphQLError {
+            case .partial(let value, _):
+                node = try field(from: value)
+            case .transformationError(let rawResponse, let apiError):
+                SessionLog.shared.warning("handshake", "transformationError",
+                                          ["rawBytes": "\(rawResponse.utf8.count)",
+                                           "api": ServiceFailure.from(apiError).logKind])
+                node = try field(fromRaw: rawResponse)
+            case .error(let errors):
+                throw ServiceFailure.from(graphQLErrors: errors)
+            case .unknown(let description, _, _):
+                throw ServiceFailure.server(description)
+            }
         }
 
+        // `AWSJSON` arrives either already parsed into an object or still a
+        // string that has to be decoded. Both shapes have to work; accepting only
+        // one was enough to discard a handshake the server had served in full.
+        let body: [String: JSONValue]
+        switch node {
+        case .object(let parsed):
+            body = parsed
+        case .string(let encoded):
+            // Peeled rather than decoded once.
+            //
+            // `AWSJSON` is serialised by AppSync from whatever the resolver
+            // returns, so a resolver that returns `JSON.stringify(payload)` — as
+            // this one did — gets stringified a second time. One decode then
+            // yields the JSON text again as a `String` rather than an object, and
+            // the guard that only accepted an object rejected a payload that was
+            // entirely intact. The server is fixed too; this keeps working either
+            // way, and would have made the bug visible in one launch instead of
+            // four.
+            guard let parsed = peelToObject(encoded) else {
+                SessionLog.shared.error("handshake", "stringNotJSONObject",
+                                        ["bytes": "\(encoded.utf8.count)"])
+                throw ServiceFailure.malformed("The server's answer wasn't readable. (string)")
+            }
+            body = parsed
+        default:
+            SessionLog.shared.error("handshake", "unexpectedNodeShape", ["shape": shape(node)])
+            throw ServiceFailure.malformed("The server's answer wasn't readable. (shape \(shape(node)))")
+        }
+
+        SessionLog.shared.info("handshake", "parsed", [
+            "sections": body.keys.sorted().joined(separator: ","),
+        ])
+
         return apply(body)
+    }
+
+    private static func field(from value: JSONValue) throws -> JSONValue {
+        guard case .object(let root) = value else {
+            SessionLog.shared.error("handshake", "rootNotObject", ["shape": shape(value)])
+            throw ServiceFailure.malformed("The server's answer wasn't readable. (root)")
+        }
+        guard let node = root["handshake"] else {
+            SessionLog.shared.error("handshake", "fieldMissing",
+                                    ["keys": root.keys.sorted().joined(separator: ",")])
+            throw ServiceFailure.malformed("The server's answer wasn't readable. (field)")
+        }
+        return node
+    }
+
+    /// Decode a JSON string, and keep decoding while the result is still a
+    /// string. Bounded, because "keep going until it works" on hostile input is
+    /// how you write a loop that never ends.
+    private static func peelToObject(_ text: String, maxLayers: Int = 3) -> [String: JSONValue]? {
+        var current = text
+        for layer in 0..<maxLayers {
+            guard let data = current.data(using: .utf8),
+                  let value = try? JSONDecoder().decode(JSONValue.self, from: data) else {
+                return nil
+            }
+            switch value {
+            case .object(let parsed):
+                if layer > 0 {
+                    SessionLog.shared.warning("handshake", "payloadWasDoubleEncoded",
+                                              ["layers": "\(layer + 1)"])
+                }
+                return parsed
+            case .string(let inner):
+                current = inner
+            default:
+                return nil
+            }
+        }
+        return nil
+    }
+
+    /// The *kind* of thing we got, never its content.
+    private static func shape(_ value: JSONValue) -> String {
+        switch value {
+        case .object: return "object"
+        case .array: return "array"
+        case .string: return "string"
+        case .number: return "number"
+        case .boolean: return "boolean"
+        case .null: return "null"
+        }
+    }
+
+    /// The untouched response body, for when Amplify could not decode it.
+    private static func field(fromRaw raw: String) throws -> JSONValue {
+        guard let data = raw.data(using: .utf8),
+              let whole = try? JSONDecoder().decode(JSONValue.self, from: data) else {
+            SessionLog.shared.error("handshake", "rawUndecodable", ["bytes": "\(raw.utf8.count)"])
+            throw ServiceFailure.malformed("The server's answer wasn't readable. (raw)")
+        }
+        guard case .object(let envelope) = whole, let dataNode = envelope["data"] else {
+            SessionLog.shared.error("handshake", "rawNoDataNode", ["shape": shape(whole)])
+            throw ServiceFailure.malformed("The server's answer wasn't readable. (envelope)")
+        }
+        return try field(from: dataNode)
     }
 
     /// Push each section into the thing that owns it, then hand back the parts

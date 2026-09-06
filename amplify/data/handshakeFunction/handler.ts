@@ -119,9 +119,17 @@ export function deviceState(user: Record<string, any> | null, deviceId?: string 
   };
 }
 
-/// AppSync hands `AWSJSON` back as a string.
-function json(payload: unknown): string {
-  return JSON.stringify(payload);
+/**
+ * Returned as an object, not a string.
+ *
+ * `AWSJSON` is serialised by AppSync from whatever the resolver returns, so
+ * handing it `JSON.stringify(payload)` gets the payload stringified twice. The
+ * client then decodes one layer and finds the JSON text again as a string rather
+ * than an object, and rejects a body that was entirely intact. Cost four
+ * launches to find, because the Lambda logged success every time.
+ */
+function json(payload: Record<string, unknown>): Record<string, unknown> {
+  return payload;
 }
 
 // MARK: - Reads

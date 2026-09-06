@@ -267,6 +267,22 @@ enum API {
         }
     }
 
+    /// A read whose body must survive Amplify's decoder failing on it.
+    ///
+    /// Same reason as `mutateRecoveringPartials`: a resolver returning `AWSJSON`
+    /// hands back a JSON *string*, and Amplify routinely fails to fit that to the
+    /// declared response type and reports `.transformationError` — with the
+    /// perfectly good payload attached. `query` throws that away. This does not.
+    static func queryRecoveringRaw(
+        _ request: GraphQLRequest<JSONValue>
+    ) async throws -> GraphQLResponse<JSONValue> {
+        do {
+            return try await Amplify.API.query(request: request)
+        } catch {
+            throw ServiceFailure.from(error)
+        }
+    }
+
     private static func unwrap(_ response: GraphQLResponse<JSONValue>) throws -> JSONValue {
         switch response {
         case .success(let value):

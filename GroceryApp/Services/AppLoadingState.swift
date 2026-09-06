@@ -124,7 +124,19 @@ class AppLoadingState: ObservableObject {
     /// off the eight-second deadline meant it never appeared at all.
     @Published private(set) var offeringOffGrid = false
 
-    var isAskingSomething: Bool { stalledStep != nil || offeringOffGrid }
+    /// A step that failed outright, as opposed to one that is merely slow.
+    ///
+    /// A fault is not a condition. Being offline is something the app is built to
+    /// carry on through; an unreadable or rejected answer means we do not know
+    /// what the server thinks, and carrying on would put somebody in a list
+    /// assembled from a stale local file with a banner apologising for it — the
+    /// exact half-loaded state one call was supposed to end.
+    @Published private(set) var failedStep: LoadingStep?
+    @Published private(set) var failureReason: String?
+
+    var isAskingSomething: Bool {
+        stalledStep != nil || offeringOffGrid || failedStep != nil
+    }
 
     enum StallDecision { case retry, skip }
     private var stallDecision: CheckedContinuation<StallDecision, Never>?
@@ -212,6 +224,19 @@ class AppLoadingState: ObservableObject {
             stallDecision = c
         }
         offeringOffGrid = false
+        return decision
+    }
+
+    /// Stop and ask. `.retry` runs the step again, `.skip` carries on knowingly.
+    func askAboutFailure(_ step: LoadingStep, _ failure: ServiceFailure) async -> StallDecision {
+        failedStep = step
+        failureReason = failure.errorDescription
+        let decision = await withCheckedContinuation { (c: CheckedContinuation<StallDecision, Never>) in
+            stallDecision = c
+        }
+        failedStep = nil
+        failureReason = nil
+        if decision == .skip { skippedSteps.append(step) }
         return decision
     }
 

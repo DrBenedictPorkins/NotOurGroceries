@@ -90,11 +90,26 @@ class SubscriptionService: ObservableObject {
 
     // MARK: - Subscribe to Household
 
-    func subscribeToHousehold(_ householdId: String) {
-        // Already subscribed to this household - do nothing
-        if currentHouseholdId == householdId && createTask != nil {
+    /// - Parameter force: rebuild the sockets even if we believe we already hold
+    ///   them. Needed on every return to the foreground: iOS tears these down
+    ///   during suspension, and a `Task` that has been killed is still non-nil,
+    ///   so the "already subscribed" test below was satisfied by four dead
+    ///   sockets. The result was that live updates stopped at the first sleep and
+    ///   never came back — and the banner that appeared told the user to pull
+    ///   down to refresh, which routed straight back into this early return and
+    ///   fixed nothing.
+    func subscribeToHousehold(_ householdId: String, force: Bool = false) {
+        // Already subscribed to this household, and we have reason to believe the
+        // sockets are alive rather than merely allocated.
+        if !force, currentHouseholdId == householdId, createTask != nil,
+           connectionState != .disconnected {
             print("SubscriptionService: Already subscribed to household \(householdId)")
             return
+        }
+
+        if force {
+            print("SubscriptionService: Re-subscribing to household \(householdId)")
+            unsubscribeAll()
         }
 
         // Cancel existing subscriptions if household changes

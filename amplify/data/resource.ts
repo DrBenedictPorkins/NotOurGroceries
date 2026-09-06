@@ -57,6 +57,13 @@ export const joinHouseholdFunction = defineFunction({
   resourceGroupName: 'data',
 });
 
+// Redeem an invite code: bind it to this household and lift its allowances.
+export const redeemCompCodeFunction = defineFunction({
+  name: 'redeemCompCodeFunction',
+  entry: './redeemCompCodeFunction/handler.ts',
+  resourceGroupName: 'data',
+});
+
 // Everything the app needs to be usable, in one call. See the handler.
 export const handshakeFunction = defineFunction({
   name: 'handshakeFunction',
@@ -69,13 +76,6 @@ export const handshakeFunction = defineFunction({
 export const claimDeviceFunction = defineFunction({
   name: 'claimDeviceFunction',
   entry: './claimDeviceFunction/handler.ts',
-  resourceGroupName: 'data',
-});
-
-// Redeem a comp code: burn it, then lift the household's allowances.
-export const redeemCompCodeFunction = defineFunction({
-  name: 'redeemCompCodeFunction',
-  entry: './redeemCompCodeFunction/handler.ts',
   resourceGroupName: 'data',
 });
 
@@ -268,22 +268,24 @@ const schema = a.schema({
       allow.groupDefinedIn('groupName').to(['read']),
     ]),
 
-  // One row per minted comp code. The cap on comped households *is* the number
-  // of rows: mint a hundred and a hundred-and-first cannot be redeemed, because
-  // there is nothing to redeem. No counter, so no race.
+  // One row per invite code, minted against the address it was emailed to when
+  // Cognito sent the sign-up confirmation. The cap on comped households is the
+  // number of rows: issue a hundred and there is no hundred-and-first.
   //
   // Nobody can read this through the API. `admins` is a Cognito group with no
-  // members and never will have any — it exists to make the deny explicit,
-  // because a model readable by authenticated users is a model where anybody
-  // lists all hundred codes and spends them. The Lambda reaches the table
-  // directly over IAM, exactly as `allowance.ts` does.
+  // members and never will have any — it makes the deny explicit, because a
+  // model readable by authenticated users is one where anybody lists every code.
+  // The Lambdas reach the table directly over IAM, as `allowance.ts` does.
   CompCode: a
     .model({
       code: a.string().required(),
+      /// The address it was emailed to. Kept in the clear rather than hashed:
+      /// the whole point is being able to answer "who has which code" when
+      /// somebody writes in saying theirs did not work.
+      issuedToEmail: a.string(),
+      issuedAt: a.datetime(),
       redeemedByHouseholdId: a.id(),
       redeemedAt: a.datetime(),
-      /// Free text for whoever minted it — which batch, who it went to.
-      note: a.string(),
     })
     .identifier(['code'])
     .authorization((allow) => [
@@ -642,7 +644,7 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(claimDeviceFunction)),
 
-  // Type a code, get comped. The whole of the first-hundred onboarding.
+  // Type the code from your confirmation email, and the household is comped.
   redeemCompCode: a
     .mutation()
     .arguments({

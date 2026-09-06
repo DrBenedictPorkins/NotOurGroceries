@@ -157,7 +157,12 @@ struct SplashView: View {
     /// The auth step is the one where "skip" does not mean skip. There is
     /// nothing behind it but the sign-in screen — unless this phone is carrying
     /// a list, in which case there is somewhere real to go.
-    private var stallStep: LoadingStep { loadingState.stalledStep ?? loadingState.currentStep }
+    private var stallStep: LoadingStep {
+        loadingState.stalledStep ?? loadingState.failedStep ?? loadingState.currentStep
+    }
+
+    /// A failure is not a slow step and must not read like one.
+    private var stallIsFailure: Bool { loadingState.failedStep != nil }
 
     private var stallIsAuthStep: Bool {
         loadingState.offeringOffGrid
@@ -167,17 +172,22 @@ struct SplashView: View {
     /// A failed check reads differently from a slow one, and the person is about
     /// to be asked a different question.
     private var stallHeadline: String {
-        loadingState.offeringOffGrid
+        if stallIsFailure { return loadingState.failureReason ?? "The server's answer wasn't usable." }
+        return loadingState.offeringOffGrid
             ? "Couldn't reach the server."
             : "Still waiting on the server. Your connection may be slow."
     }
 
     private var stallSkipTitle: String {
+        if stallIsFailure { return "Use my saved list" }
         guard stallIsAuthStep else { return stallStep.skipButtonTitle }
         return AmplifyService.shared.canGoOffGrid ? "Go off-grid" : "Sign in instead"
     }
 
     private var stallConsequence: String {
+        if stallIsFailure {
+            return "Your saved list is still here, but it may not match what the household has now."
+        }
         guard stallIsAuthStep else { return stallStep.stallConsequence }
         return AmplifyService.shared.canGoOffGrid
             ? "Off-grid shops from your saved list. Changes stay on this phone and go up when you're back."

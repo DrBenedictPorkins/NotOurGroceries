@@ -36,6 +36,18 @@ Nothing hard-codes `got-dill.com`, so the whole site can move to another domain
 without editing a single page. Keep it that way — the app references the domain in
 exactly one place, `AppIdentity.privacyPolicyURL`.
 
+## The invite page
+
+`/invite` hands one comp code to each visitor, so the first hundred households
+arrive through a link rather than through individually written emails.
+
+A code handed out is **reserved, not spent**: unredeemed, it returns to the pool
+after an hour. That is the whole defence against somebody draining the page —
+not making it hard, making it pointless. A scrape costs the batch one hour and
+gains the scraper nothing, and it heals without anybody doing anything.
+
+The page is `noindex`, because the point is that you choose who gets the link.
+
 ### Not published yet
 
 `website/terms-of-service.md` is a draft that has never gone live, so there is no
@@ -97,6 +109,7 @@ match the filenames.
 | `privacy.html` | `privacy` | Live URLs have no extension. |
 | `support.html` | `support` | " |
 | `account-deletion.html` | `account-deletion` | " |
+| `invite.html` | `invite` | " |
 | `assets/**` | `assets/**` | Unchanged. |
 
 **A plain `aws s3 sync site/ s3://got-dill-com-site/` is wrong** — it would create
@@ -111,6 +124,14 @@ AWS_PROFILE=mine aws s3 cp index.html            s3://$B/index.html       --cont
 AWS_PROFILE=mine aws s3 cp privacy.html          s3://$B/privacy          --content-type "text/html; charset=utf-8" --cache-control "public, max-age=300"
 AWS_PROFILE=mine aws s3 cp support.html          s3://$B/support          --content-type "text/html; charset=utf-8" --cache-control "public, max-age=300"
 AWS_PROFILE=mine aws s3 cp account-deletion.html s3://$B/account-deletion --content-type "text/html; charset=utf-8" --cache-control "public, max-age=300"
+# invite.html carries a placeholder for the Lambda Function URL and must never
+# be uploaded with it unresolved — the page would tell every visitor it is not
+# wired up. Substituted at deploy time, never committed with the real URL.
+URL=$(AWS_PROFILE=mine aws cloudformation describe-stacks --region us-east-1 \
+  --query "Stacks[?contains(StackName,'amplify-d2rsreno8nimo5')].Outputs[?OutputKey=='compCodeHandOutUrl'].OutputValue" --output text | head -1)
+[ -n "$URL" ] || { echo "no compCodeHandOutUrl output — is the backend deployed?"; exit 1; }
+sed "s|__COMP_CODE_HANDOUT_URL__|$URL|" invite.html > /tmp/invite.html
+AWS_PROFILE=mine aws s3 cp /tmp/invite.html          s3://$B/invite           --content-type "text/html; charset=utf-8" --cache-control "public, max-age=60"
 AWS_PROFILE=mine aws s3 sync assets/ s3://$B/assets/ --content-type "image/png" --cache-control "public, max-age=86400" --delete
 AWS_PROFILE=mine aws cloudfront create-invalidation --distribution-id E12UV51UT41FNP --paths "/*"
 ```

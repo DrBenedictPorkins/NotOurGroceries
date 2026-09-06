@@ -572,6 +572,15 @@ class ShoppingListViewModel: ObservableObject {
     /// The same hold-or-tell rule as `loadShoppingList`: queued work means this
     /// phone knows something the server does not, so the server's answer is not
     /// applied until the queue drains. Nothing is merged.
+    /// The launch fetch did not land, and the person has been told. Show the
+    /// saved copy for what it is rather than as a current list.
+    @MainActor
+    func noteOfflineAtLaunch() {
+        hasLoadedInitialData = true
+        if !items.isEmpty { isShowingLocalSnapshot = true }
+        handleServerUnreachable()
+    }
+
     @MainActor
     func apply(handshake: HandshakeService.Result) {
         // `householdId` is a computed read of AmplifyService, which the
@@ -1719,7 +1728,10 @@ class ShoppingListViewModel: ObservableObject {
     private func noteSubscriptionsDropped() {
         guard socketDropTask == nil else { return }
         socketDropTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            // Twenty seconds, not ten. A drop noticed on waking is the common
+            // case and the reconnect that follows it is the slowest, so the
+            // shorter wait announced an outage that was already fixing itself.
+            try? await Task.sleep(nanoseconds: 20_000_000_000)
             guard !Task.isCancelled, let self else { return }
             self.socketDropTask = nil
             guard SubscriptionService.shared.connectionState == .disconnected else { return }
@@ -1729,6 +1741,17 @@ class ShoppingListViewModel: ObservableObject {
             self.showToast(message: "Live updates stopped. Pull down to refresh and see anyone else's changes.",
                            type: .warning)
         }
+    }
+
+    /// Rebuild the realtime sockets, which iOS kills during suspension.
+    ///
+    /// Called on every return to the foreground. Cheap when they are already
+    /// healthy, and the only thing that brings them back when they are not.
+    func reconnectSubscriptions() {
+        guard let householdId = householdId else { return }
+        socketDropTask?.cancel()
+        socketDropTask = nil
+        SubscriptionService.shared.subscribeToHousehold(householdId, force: true)
     }
 
     func setupSubscriptions() {

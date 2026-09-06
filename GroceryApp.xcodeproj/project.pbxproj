@@ -63,6 +63,7 @@
 		AA0000000000000000000055 /* ProductCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000055 /* ProductCache.swift */; };
 		AA0000000000000000000093 /* LocalListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000093 /* LocalListStore.swift */; };
 		AA00000000000000000000B5 /* ServiceFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000B5 /* ServiceFailure.swift */; };
+		AA00000000000000000000B9 /* SessionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000B9 /* SessionLog.swift */; };
 		AA00000000000000000000B6 /* DeviceRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000B6 /* DeviceRegistry.swift */; };
 		AA00000000000000000000B8 /* HandshakeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000B8 /* HandshakeService.swift */; };
 		AA00000000000000000000B3 /* StoreKitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000B3 /* StoreKitService.swift */; };
@@ -183,6 +184,7 @@
 		BB0000000000000000000055 /* ProductCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCache.swift; sourceTree = "<group>"; };
 		BB0000000000000000000093 /* LocalListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalListStore.swift; sourceTree = "<group>"; };
 		BB00000000000000000000B5 /* ServiceFailure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceFailure.swift; sourceTree = "<group>"; };
+		BB00000000000000000000B9 /* SessionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLog.swift; sourceTree = "<group>"; };
 		BB00000000000000000000B6 /* DeviceRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRegistry.swift; sourceTree = "<group>"; };
 		BB00000000000000000000B8 /* HandshakeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HandshakeService.swift; sourceTree = "<group>"; };
 		BB00000000000000000000B3 /* StoreKitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitService.swift; sourceTree = "<group>"; };
@@ -333,6 +335,7 @@
 				BB0000000000000000000055 /* ProductCache.swift */,
 				BB0000000000000000000093 /* LocalListStore.swift */,
 				BB00000000000000000000B5 /* ServiceFailure.swift */,
+				BB00000000000000000000B9 /* SessionLog.swift */,
 				BB00000000000000000000B6 /* DeviceRegistry.swift */,
 				BB00000000000000000000B8 /* HandshakeService.swift */,
 				BB00000000000000000000B3 /* StoreKitService.swift */,
@@ -607,6 +610,7 @@
 				AA0000000000000000000055 /* ProductCache.swift in Sources */,
 				AA0000000000000000000093 /* LocalListStore.swift in Sources */,
 				AA00000000000000000000B5 /* ServiceFailure.swift in Sources */,
+				AA00000000000000000000B9 /* SessionLog.swift in Sources */,
 				AA00000000000000000000B6 /* DeviceRegistry.swift in Sources */,
 				AA00000000000000000000B8 /* HandshakeService.swift in Sources */,
 				AA00000000000000000000B3 /* StoreKitService.swift in Sources */,

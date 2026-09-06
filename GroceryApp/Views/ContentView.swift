@@ -1,6 +1,8 @@
 import SwiftUI
+import OSLog
 
 struct ContentView: View {
+    private let logger = Logger(subsystem: "com.byteclub.grocery", category: "Launch")
     @EnvironmentObject var amplifyService: AmplifyService
     @StateObject private var viewModel = ShoppingListViewModel()
 
@@ -169,6 +171,9 @@ struct ContentView: View {
                 // card only after a long time away.
                 let longEnough = backgroundedAt.map { Date().timeIntervalSince($0) >= Self.longBackground } ?? false
                 backgroundedAt = nil
+                // First, because everything else is a request and the sockets
+                // are what keep the list current between them.
+                viewModel.reconnectSubscriptions()
                 Task {
                     await comeBackOnTheGridIfPossible()
                     await flushPendingFinish()
@@ -329,22 +334,42 @@ struct ContentView: View {
         // account. Eight round trips became one, and eight ways of being half
         // loaded became none.
         var restoreShopping = false
-        await loading.perform(.syncing) {
-            do {
-                let result = try await HandshakeService.run(deviceId: DeviceRegistry.shared.deviceId)
-                viewModel.apply(handshake: result)
-                restoreShopping = viewModel.isCurrentUserShopping
-                if !result.deviceStillOurs {
-                    DeviceRegistry.shared.noteSuperseded(by: result.activeDeviceName)
+        var handshakeDone = false
+
+        while !handshakeDone {
+            var failure: ServiceFailure?
+            await loading.perform(.syncing) {
+                do {
+                    let result = try await HandshakeService.run(deviceId: DeviceRegistry.shared.deviceId)
+                    viewModel.apply(handshake: result)
+                    restoreShopping = viewModel.isCurrentUserShopping
+                    if !result.deviceStillOurs {
+                        DeviceRegistry.shared.noteSuperseded(by: result.activeDeviceName)
+                    }
+                } catch {
+                    failure = ServiceFailure.from(error)
                 }
-            } catch {
-                let failure = ServiceFailure.from(error)
-                print("Handshake failed: \(failure)")
-                // The local snapshot is already on screen from the view model's
-                // init, so there is a list to shop from either way. Say what
-                // happened rather than leaving it looking loaded.
-                viewModel.showToast(message: failure.sentence("Couldn't get the latest list"),
-                                    type: .error)
+            }
+
+            guard let failure else { handshakeDone = true; break }
+
+            SessionLog.shared.failure("launch", "handshakeFailed", failure)
+
+            // Offline is a condition the app is built to carry on through — the
+            // snapshot is already on screen and the header says what it is.
+            // Anything else is a fault: we do not know what the household looks
+            // like, and walking somebody into a list built from a stale file
+            // while a banner apologises for it is the half-loaded state this
+            // whole call was meant to end. So stop and ask.
+            if failure.isOffline {
+                viewModel.noteOfflineAtLaunch()
+                handshakeDone = true
+                break
+            }
+
+            if await loading.askAboutFailure(.syncing, failure) == .skip {
+                viewModel.noteOfflineAtLaunch()
+                handshakeDone = true
             }
         }
 

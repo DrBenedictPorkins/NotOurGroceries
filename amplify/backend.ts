@@ -6,6 +6,7 @@ import {
   searchProductsFunction,
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
+  finishShoppingFunction,
   householdMembershipFunction,
   inferProductAisleFunction,
   parseIngredientsFunction,
@@ -31,6 +32,7 @@ const backend = defineBackend({
   searchProductsFunction,
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
+  finishShoppingFunction,
   householdMembershipFunction,
   inferProductAisleFunction,
   parseIngredientsFunction,
@@ -195,6 +197,19 @@ joinHouseholdLambda.addToRolePolicy(new PolicyStatement({
   actions: ['dynamodb:Query'],
   resources: [`${householdTable.tableArn}/index/*`, `${userTable.tableArn}/index/*`],
 }));
+
+// Ending a shopping trip: one call that moves the bought items to suggestions,
+// clears the trip-scoped notes, writes any items added while offline, and puts
+// the household back to IDLE. Writes both tables, so both grants are required —
+// and neither `tsc` nor the tests can see a missing one. It fails at runtime,
+// in a shop car park, on the call that ends the trip.
+const finishShoppingLambda = backend.finishShoppingFunction.resources.lambda as Function;
+addEnvVars(finishShoppingLambda, {
+  GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
+  HOUSEHOLD_TABLE_NAME: householdTable.tableName,
+});
+groceryItemTable.grantReadWriteData(finishShoppingLambda);
+householdTable.grantReadWriteData(finishShoppingLambda);
 
 // Membership changes: remove a member, or leave (and delete the household when
 // the last member goes). Needs write on User because `allow.owner()` prevents

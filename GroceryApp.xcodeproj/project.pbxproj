@@ -62,6 +62,7 @@
 		AA0000000000000000000054 /* SubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000054 /* SubscriptionService.swift */; };
 		AA0000000000000000000055 /* ProductCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000055 /* ProductCache.swift */; };
 		AA0000000000000000000093 /* LocalListStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000093 /* LocalListStore.swift */; };
+		AA00000000000000000000B1 /* PendingFinishStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000B1 /* PendingFinishStore.swift */; };
 		AA0000000000000000000056 /* AppLoadingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000056 /* AppLoadingState.swift */; };
 		AA0000000000000000000057 /* MarqueeText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000057 /* MarqueeText.swift */; };
 		AA0000000000000000000058 /* ItemDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000058 /* ItemDetailSheet.swift */; };
@@ -172,6 +173,7 @@
 		BB0000000000000000000054 /* SubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000055 /* ProductCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCache.swift; sourceTree = "<group>"; };
 		BB0000000000000000000093 /* LocalListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalListStore.swift; sourceTree = "<group>"; };
+		BB00000000000000000000B1 /* PendingFinishStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingFinishStore.swift; sourceTree = "<group>"; };
 		BB0000000000000000000056 /* AppLoadingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLoadingState.swift; sourceTree = "<group>"; };
 		BB0000000000000000000057 /* MarqueeText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarqueeText.swift; sourceTree = "<group>"; };
 		BB0000000000000000000058 /* ItemDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailSheet.swift; sourceTree = "<group>"; };
@@ -312,6 +314,7 @@
 				BB0000000000000000000056 /* AppLoadingState.swift */,
 				BB0000000000000000000055 /* ProductCache.swift */,
 				BB0000000000000000000093 /* LocalListStore.swift */,
+				BB00000000000000000000B1 /* PendingFinishStore.swift */,
 				BB0000000000000000000901 /* QuickListStore.swift */,
 				BB0000000000000000000903 /* NetworkStatus.swift */,
 				BB0000000000000000000904 /* Outbox.swift */,
@@ -573,6 +576,7 @@
 				AA0000000000000000000091 /* ShopperReminderService.swift in Sources */,
 				AA0000000000000000000055 /* ProductCache.swift in Sources */,
 				AA0000000000000000000093 /* LocalListStore.swift in Sources */,
+				AA00000000000000000000B1 /* PendingFinishStore.swift in Sources */,
 				AA0000000000000000000901 /* QuickListStore.swift in Sources */,
 				AA0000000000000000000903 /* NetworkStatus.swift in Sources */,
 				AA0000000000000000000904 /* Outbox.swift in Sources */,

@@ -40,9 +40,13 @@ struct ShoppingListView: View {
 
                 // Offline is a condition, not a mode: everything still works, it
                 // just isn't syncing. One line, not a screen and not a dialog.
-                if viewModel.isOffline {
+                // Off-grid never trips `isOffline`, because it never gets as far
+                // as a failed load to trip it with — it skips the launch fetches
+                // outright. Without this it would be the one state with nothing
+                // on screen to explain it, which is the opposite of the point.
+                if viewModel.isOffline || amplifyService.isOffGrid {
                     HStack(spacing: 7) {
-                        Image(systemName: "wifi.slash")
+                        Image(systemName: amplifyService.isOffGrid ? "antenna.radiowaves.left.and.right.slash" : "wifi.slash")
                             .font(.system(size: 12, weight: .semibold))
                         Text(offlineLine)
                             .font(.system(size: 12, weight: .medium))
@@ -448,10 +452,14 @@ struct ShoppingListView: View {
     }
 
     private var offlineLine: String {
+        // Off-grid is the harder version of offline: we could not even check the
+        // sign-in, so say so rather than implying a normal session that has lost
+        // its connection.
+        let label = amplifyService.isOffGrid ? "Off-grid" : "Offline"
         if let savedAt = viewModel.localSnapshotSavedAt {
-            return "Offline · your list as of \(LocalListStore.savedAtDescription(savedAt)) · changes saved here"
+            return "\(label) · your list as of \(LocalListStore.savedAtDescription(savedAt)) · changes saved here"
         }
-        return "Offline · changes saved on this phone"
+        return "\(label) · changes saved on this phone"
     }
 
     /// The one line that changes with what's actually happening.

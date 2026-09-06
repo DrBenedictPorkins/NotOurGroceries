@@ -621,6 +621,11 @@ class ShoppingListViewModel: ObservableObject {
             return
         }
 
+        // Before anything is fetched. A finished trip waiting to be sent is the
+        // one thing that makes the server's answer wrong — it still thinks the
+        // list is mid-trip and the household is at the store.
+        await sendPendingFinish()
+
         // Parallel fetch
         async let itemsTask: () = loadShoppingList(forceRefresh: true)
         async let storesTask: () = loadStores(forceRefresh: true)
@@ -1448,15 +1453,6 @@ class ShoppingListViewModel: ObservableObject {
 
     /// Wipe every trip-scoped note in the household. Called when a shopping session
     /// finishes — the note was written for that trip and shouldn't survive into the next.
-    private func clearEphemeralNotes() async {
-        let itemsToClear = items.filter { $0.notesEphemeral && $0.notes != nil }
-        guard !itemsToClear.isEmpty else { return }
-
-        for item in itemsToClear {
-            await updateNotes(for: item, notes: nil)
-        }
-        logger.info("Cleared \(itemsToClear.count) trip-scoped notes")
-    }
 
     // MARK: - Lock/Unlock Item
     func toggleLock(_ item: GroceryItem) async {
@@ -2693,6 +2689,9 @@ class ShoppingListViewModel: ObservableObject {
             case .success(let json):
                 if case .object(let root) = json,
                    case .object(let household) = root["updateHousehold"] {
+                    // The household knows a trip is running, so the finish has a
+                    // status to put back.
+                    Self.tripWasAnnounced = true
                     // Update local state
                     if case .string(let status) = household["shoppingStatus"] {
                         shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
@@ -2777,82 +2776,208 @@ class ShoppingListViewModel: ObservableObject {
     /// will not know about it. Deliberately not an error toast — nothing the user
     /// wanted has failed. They are shopping.
     private func enteredShoppingModeOffline(store: HouseholdStore, error: Error) {
+        // Nobody was told, so there is nothing to put back when it ends.
+        Self.tripWasAnnounced = false
         logger.error("Shopping mode started offline at \(store.name): \(error)")
         showToast(message: "Shopping at \(store.name) · offline, others won't see it", type: .warning)
         persistShoppingContext()
     }
 
-    /// Exit shopping mode
+    /// Finish the trip.
+    ///
+    /// Two halves, and the split is the whole point. The first half is what the
+    /// shopper's phone already knows — items to suggestions, trip-scoped notes
+    /// gone, out of At Store, trip recorded, completion sheet — and it happens
+    /// unconditionally, because none of it needs the server and the shopper is
+    /// standing in a car park wanting to be done.
+    ///
+    /// The second half is one `finishShopping` mutation stating that outcome. It
+    /// is the only thing that can fail, and when it does it waits in
+    /// `PendingFinishStore` until there is signal.
+    ///
+    /// It used to be about forty-one calls in a row: one per item, one per note,
+    /// then the household. Offline the item calls queued and the household call
+    /// threw, so the items moved but the trip never ended — no completion sheet,
+    /// nothing recorded, and the shopper stuck on the At Store screen with a
+    /// trip everyone else could still see running.
     func exitShoppingMode(discardUncrossed: Bool) async {
         guard let householdId = householdId else {
             showToast(message: "No household selected", type: .error)
             return
         }
 
+        ShopperReminderService.shared.cancel()
+
+        // Stats before anything moves, or there is nothing left to count.
+        let itemsInCart = inCart
+        let itemsOnList = shoppingList
+        let customItemsInCart = itemsInCart.filter { $0.isCustom }
+        let storeName = selectedHouseholdStore?.name ?? "Store"
+        let startTime = shoppingStartedAt ?? Date()
+        let endTime = Date()
+
+        let stats = ShoppingCompletionStats(
+            itemsPickedUp: itemsInCart.count,
+            // Left behind either way — keeping them doesn't make them bought.
+            itemsNotPickedUp: itemsOnList.count,
+            itemsAddedDuringTrip: 0,
+            customItemsLearned: customItemsInCart.count,
+            storeName: storeName,
+            startedAt: startTime,
+            endedAt: endTime
+        )
+
+        let itemsToUpdate = discardUncrossed ? itemsInCart + itemsOnList : itemsInCart
+        let noteIds = items.filter { $0.notesEphemeral && $0.notes != nil }.map(\.id)
+
+        // Items added during the trip that the server has never seen. They cannot
+        // be sent as "id X becomes a suggestion", because there is no row X yet —
+        // they travel whole instead.
+        let neverSentIds = Set(Outbox.shared.entries.filter { $0.kind == .create }.map(\.id))
+        let created = itemsToUpdate
+            .filter { neverSentIds.contains($0.id) }
+            .map { PendingFinish.CreatedItem(finishing: $0) }
+        let toSuggestion = itemsToUpdate
+            .filter { !neverSentIds.contains($0.id) }
+            .map(\.id)
+
+        let finish = PendingFinish(
+            tripId: UUID().uuidString,
+            householdId: householdId,
+            toSuggestion: toSuggestion,
+            clearNotesFor: noteIds,
+            created: created,
+            endTrip: Self.tripWasAnnounced,
+            queuedAt: endTime
+        )
+
+        applyFinishLocally(itemsToUpdate: itemsToUpdate, noteIds: noteIds)
+
+        // Anything queued about these items is now stale — the finish states
+        // where they ended up, and replaying a mid-trip "moved to cart" after it
+        // would drag an item back out of suggestions. Deliberately blunt: the
+        // finish is the truth, everything queued before it about the same item
+        // is not. Deletes are untouched; a deleted item is not in this list.
+        for id in toSuggestion + created.map(\.id) + noteIds {
+            Outbox.shared.remove(id)
+        }
+
+        PendingFinishStore.append(finish)
+        Self.tripWasAnnounced = false
+
+        shoppingCompletionStats = stats
+        showShoppingCompletedSheet = true
+
+        // Same numbers, kept on this phone so the list menu can show a running
+        // tally. Recorded here because this is the point where a trip is
+        // definitely finished — which is now true offline as well as online.
+        TripStats.shared.recordTrip(
+            storeName: storeName,
+            itemNames: itemsInCart.map(\.name),
+            leftBehindNames: itemsOnList.map(\.name),
+            customLearned: customItemsInCart.count,
+            startedAt: startTime,
+            endedAt: endTime
+        )
+
+        logger.info("Finished trip - picked up \(stats.itemsPickedUp) items in \(stats.formattedDuration)")
+
+        await sendPendingFinish(announceQueue: true)
+    }
+
+    /// Everything about ending a trip that does not need the server.
+    private func applyFinishLocally(itemsToUpdate: [GroceryItem], noteIds: [String]) {
+        let movingIds = Set(itemsToUpdate.map(\.id))
+        let clearingIds = Set(noteIds)
+
+        for index in items.indices {
+            if movingIds.contains(items[index].id) {
+                items[index].status = .suggestion
+            }
+            if clearingIds.contains(items[index].id) {
+                items[index].notes = nil
+                items[index].notesEphemeral = false
+            }
+        }
+
+        shoppingStatus = .idle
+        activeShopperId = nil
+        shoppingStoreId = nil
+        selectedHouseholdStore = nil
+        shoppingStartedAt = nil
+        isAtStoreMode = false
+
+        applySorting()
+        persistShoppingContext()
+    }
+
+    /// Send the finish that is waiting, if there is one.
+    ///
+    /// Called at the end of a trip and again whenever the app finds the network
+    /// — it is the one piece of a finished trip that still needs a server, so it
+    /// is also the one piece that has to keep trying.
+    func sendPendingFinish(announceQueue: Bool = false) async {
+        // Oldest first, and stop at the first failure — a later finish cannot be
+        // right about a list an earlier one has not been applied to yet.
+        while let finish = PendingFinishStore.next {
+            guard await send(finish, announceQueue: announceQueue) else { return }
+        }
+    }
+
+    private func send(_ finish: PendingFinish, announceQueue: Bool) async -> Bool {
+
+        let document = """
+        mutation FinishShopping(
+            $tripId: String!,
+            $householdId: ID!,
+            $toSuggestion: [String],
+            $clearNotesFor: [String],
+            $created: AWSJSON,
+            $endTrip: Boolean!
+        ) {
+            finishShopping(
+                tripId: $tripId,
+                householdId: $householdId,
+                toSuggestion: $toSuggestion,
+                clearNotesFor: $clearNotesFor,
+                created: $created,
+                endTrip: $endTrip
+            ) {
+                tripId
+                alreadyApplied
+                itemsUpdated
+                itemsCreated
+                notesCleared
+                householdEnded
+            }
+        }
+        """
+
+        // `created` is an AWSJSON argument, which is a *string* on the wire.
+        let createdJSON: String
+        if finish.created.isEmpty {
+            createdJSON = "[]"
+        } else if let data = try? JSONEncoder().encode(finish.created),
+                  let text = String(data: data, encoding: .utf8) {
+            createdJSON = text
+        } else {
+            logger.error("Could not encode offline-created items for the finish")
+            createdJSON = "[]"
+        }
+
+        let variables: [String: Any] = [
+            "tripId": finish.tripId,
+            "householdId": finish.householdId,
+            "toSuggestion": finish.toSuggestion,
+            "clearNotesFor": finish.clearNotesFor,
+            "created": createdJSON,
+            "endTrip": finish.endTrip
+        ]
+
         do {
-            // Stop reminder timer
-                ShopperReminderService.shared.cancel()
-
-            // Calculate stats BEFORE changing item statuses
-            let itemsInCart = inCart
-            let itemsOnList = shoppingList
-            let customItemsInCart = itemsInCart.filter { $0.isCustom }
-            let storeName = selectedHouseholdStore?.name ?? "Store"
-            let startTime = shoppingStartedAt ?? Date()
-            let endTime = Date()
-
-            // Create completion stats
-            let stats = ShoppingCompletionStats(
-                itemsPickedUp: itemsInCart.count,
-                // Left behind either way — keeping them doesn't make them bought.
-                itemsNotPickedUp: itemsOnList.count,
-                itemsAddedDuringTrip: 0, // TODO: Track this separately if needed
-                customItemsLearned: customItemsInCart.count,
-                storeName: storeName,
-                startedAt: startTime,
-                endedAt: endTime
-            )
-
-            // Change all inCart items to SUGGESTION status
-            // Change all active items to SUGGESTION status if discardUncrossed is true
-            let itemsToUpdate = discardUncrossed
-                ? inCart + shoppingList
-                : inCart
-
-            // Batch update items to SUGGESTION status
-            for item in itemsToUpdate {
-                await updateItemStatus(item, to: .suggestion)
-            }
-
-            // Trip-scoped notes ("get only 1", "optional if found") die with the trip
-            await clearEphemeralNotes()
-
-            // Update Household via GraphQL mutation
-            let document = """
-            mutation UpdateHousehold($input: UpdateHouseholdInput!) {
-                updateHousehold(input: $input) {
-                    id
-                    # See the note on entering At Store: groupName must be in the
-                    # selection set or no other member is told.
-                    groupName
-                    shoppingStatus
-                    activeShopperId
-                    shoppingStoreId
-                }
-            }
-            """
-
-            let input: [String: Any] = [
-                "id": householdId,
-                "shoppingStatus": "IDLE",
-                "activeShopperId": NSNull(),
-                "shoppingStoreId": NSNull(),
-                "shoppingStartedAt": NSNull()
-            ]
-
             let request = GraphQLRequest<JSONValue>(
                 document: document,
-                variables: ["input": input],
+                variables: variables,
                 responseType: JSONValue.self,
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
@@ -2861,47 +2986,51 @@ class ShoppingListViewModel: ObservableObject {
 
             switch response {
             case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let household) = root["updateHousehold"] {
-                    // Update local state
-                    if case .string(let status) = household["shoppingStatus"] {
-                        shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
-                    }
-                    activeShopperId = nil
-                    shoppingStoreId = nil
-                    selectedHouseholdStore = nil
-                    shoppingStartedAt = nil
-                    isAtStoreMode = false
-
-                    // Clear all pending requests AFTER status is set to IDLE
-                    // This prevents remote members from submitting more requests
-
-                    // Set stats and show completion sheet
-                    shoppingCompletionStats = stats
-                    showShoppingCompletedSheet = true
-
-                    // Same numbers, kept on this phone so the list menu can show
-                    // a running tally. Recorded here because this is the only
-                    // point where a trip is definitely finished.
-                    TripStats.shared.recordTrip(
-                        storeName: storeName,
-                        itemNames: itemsInCart.map(\.name),
-                        leftBehindNames: itemsOnList.map(\.name),
-                        customLearned: customItemsInCart.count,
-                        startedAt: startTime,
-                        endedAt: endTime
-                    )
-
-                    logger.info("Exited shopping mode - picked up \(stats.itemsPickedUp) items in \(stats.formattedDuration)")
+                guard case .object(let root) = json,
+                      case .object(let result) = root["finishShopping"] else {
+                    logger.error("finishShopping returned an unreadable response")
+                    return false
                 }
+                if case .boolean(true) = result["alreadyApplied"] {
+                    logger.info("finishShopping had already been applied — clearing the queue")
+                } else {
+                    logger.info("finishShopping applied")
+                }
+                PendingFinishStore.remove(tripId: finish.tripId)
+                noteServerReachable()
+                return true
+
             case .failure(let error):
-                showToast(message: "Failed to exit shopping mode", type: .error)
-                logger.error("Failed to exit shopping mode: \(error)")
+                logger.error("finishShopping failed: \(error)")
+                announceQueuedFinish(announceQueue)
+                AmplifyService.shared.handleAuthError(error)
+                return false
             }
         } catch {
-            showToast(message: "Failed to exit shopping mode", type: .error)
-            logger.error("Failed to exit shopping mode: \(error)")
+            logger.error("finishShopping threw: \(error)")
+            announceQueuedFinish(announceQueue)
+            return false
         }
+    }
+
+    /// Said once, when the trip ends, and never again on a background retry.
+    ///
+    /// Not an error and not a warning: the trip is over, the list is right on
+    /// this phone, and nothing is asked of the person. Raising the error banner
+    /// for it would make a finished trip look like a failed one.
+    private func announceQueuedFinish(_ announce: Bool) {
+        guard announce else { return }
+        showToast(message: "Trip saved on this phone — it'll sync when you're back.", type: .info)
+    }
+
+    /// Whether the household was ever told this trip started.
+    ///
+    /// A trip begun with no signal is invisible to everybody else by definition,
+    /// so there is no status to put back at the end. Persisted because iOS is at
+    /// its most likely to kill the app in the middle of a shop.
+    static var tripWasAnnounced: Bool {
+        get { UserDefaults.standard.bool(forKey: "tripWasAnnounced") }
+        set { UserDefaults.standard.set(newValue, forKey: "tripWasAnnounced") }
     }
 
     /// Force-finish an abandoned shopping session started by another member.

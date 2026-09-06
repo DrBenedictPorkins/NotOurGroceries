@@ -133,8 +133,14 @@ struct ContentView: View {
             Text("This removes it permanently. To keep it for next time, tap the item instead — it moves to suggestions.")
         }
         .task {
-            await checkShoppingStatusOnLaunch()
-            await refreshAllowancesAndMaybeNudge(showCard: true)
+            await runLaunchHandshake()
+        }
+        .onReceive(NetworkStatus.shared.$pathIsSatisfied) { satisfied in
+            guard satisfied else { return }
+            Task {
+                await comeBackOnTheGridIfPossible()
+                await flushPendingFinish()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
@@ -145,7 +151,11 @@ struct ContentView: View {
                 // card only after a long time away.
                 let longEnough = backgroundedAt.map { Date().timeIntervalSince($0) >= Self.longBackground } ?? false
                 backgroundedAt = nil
-                Task { await refreshAllowancesAndMaybeNudge(showCard: longEnough) }
+                Task {
+                    await comeBackOnTheGridIfPossible()
+                    await flushPendingFinish()
+                    await refreshAllowancesAndMaybeNudge(showCard: longEnough)
+                }
             default:
                 break
             }
@@ -207,6 +217,13 @@ struct ContentView: View {
     private func refreshAllowancesAndMaybeNudge(showCard: Bool) async {
         await allowances.refresh()
         guard showCard else { return }
+        maybeShowAllowanceNudge()
+    }
+
+    /// The decision half, separated from the fetch so the launch handshake can
+    /// time the fetch as its own step and still ask this afterwards.
+    @MainActor
+    private func maybeShowAllowanceNudge() {
         // The hard rule: never while at the store. `isAtStoreMode` covers the
         // shopper; `shoppingStatus` covers everyone else in the household.
         guard !isAtStoreMode, viewModel.shoppingStatus != .atStore else { return }
@@ -218,40 +235,97 @@ struct ContentView: View {
         }
     }
 
+    /// Off-grid ends by itself, not by the person remembering to leave it.
+    ///
+    /// Tried whenever the app comes forward and whenever an interface appears —
+    /// the two moments a phone that was in a shop basement is likely to have
+    /// signal again. Costs one token refresh and does nothing at all when there
+    /// is still no network.
+    private func comeBackOnTheGridIfPossible() async {
+        guard amplifyService.isOffGrid else { return }
+        await amplifyService.retrySessionIfOffGrid()
+        guard !amplifyService.isOffGrid else { return }
+        viewModel.showToast(message: "Back on the grid — sending your changes.", type: .success)
+        await viewModel.refreshAllData()
+    }
+
+    /// A trip that ended with no signal still has one call to make. Tried on
+    /// every return to the app, whether or not we were ever off-grid — the
+    /// common case is a trip finished in a car park by somebody who never lost
+    /// their session, only their bars.
+    private func flushPendingFinish() async {
+        guard PendingFinishStore.isPending else { return }
+        await viewModel.sendPendingFinish()
+    }
+
     // MARK: - Shopping Status Check
 
-    private func checkShoppingStatusOnLaunch() async {
+    /// The second half of the launch handshake, run while the splash is still on
+    /// screen.
+    ///
+    /// These four used to run after the splash had gone. On a good connection
+    /// nobody noticed; on a bad one the list, the stores and the allowance card
+    /// arrived one at a time over the following minute, on top of a screen the
+    /// person was already using, with nothing to say why. Everything the app
+    /// needs before it is usable is now watched, named and given a deadline.
+    private func runLaunchHandshake() async {
+        let loading = AppLoadingState.shared
+        await loading.waitForPhaseOne()
+
         guard !hasCheckedShoppingStatus else { return }
         hasCheckedShoppingStatus = true
 
-        // Load shopping list and stores first
-        await viewModel.loadShoppingList()
-        await viewModel.loadStores()
+        // Off-grid means the server has already been shown not to answer. Making
+        // the person sit through four more eight-second deadlines to be told the
+        // same thing four more times is not resilience, it is a punishment. The
+        // snapshot is already on screen; go straight in.
+        if amplifyService.isOffGrid {
+            loading.setStep(.ready)
+            return
+        }
 
-        // Check if shopping is active (either as shopper or remote member)
-        let shouldRestoreShoppingMode = await viewModel.fetchHouseholdShoppingStatus()
+        await loading.perform(.syncingList) {
+            await viewModel.loadShoppingList()
+        }
+        await loading.perform(.syncingStores) {
+            await viewModel.loadStores()
+        }
 
-        await MainActor.run {
-            // AT_STORE with nobody holding the slot is not somebody else's trip,
-            // it is a wedged household: the button is hidden because a trip is
-            // running, and no one can end a trip they do not own. Treat it as
-            // over so the app can always be used.
-            if viewModel.shoppingStatus == .atStore, viewModel.activeShopperId == nil {
-                viewModel.shoppingStatus = .idle
-                return
+        var shouldRestoreShoppingMode = false
+        await loading.perform(.checkingTrip) {
+            shouldRestoreShoppingMode = await viewModel.fetchHouseholdShoppingStatus()
+        }
+        await loading.perform(.checkingAllowances) {
+            await allowances.refresh()
+        }
+
+        loading.setStep(.ready)
+
+        applyShoppingStatusOnLaunch(shouldRestoreShoppingMode)
+        maybeShowAllowanceNudge()
+    }
+
+    @MainActor
+    private func applyShoppingStatusOnLaunch(_ shouldRestoreShoppingMode: Bool) {
+        // AT_STORE with nobody holding the slot is not somebody else's trip,
+        // it is a wedged household: the button is hidden because a trip is
+        // running, and no one can end a trip they do not own. Treat it as
+        // over so the app can always be used.
+        if viewModel.shoppingStatus == .atStore, viewModel.activeShopperId == nil {
+            viewModel.shoppingStatus = .idle
+            return
+        }
+
+        if viewModel.shoppingStatus == .atStore {
+            // Shopping is active - show info modal
+            if shouldRestoreShoppingMode {
+                // Current user is the shopper
+                viewModel.isAtStoreMode = true
+                isAtStoreMode = true
             }
-
-            if viewModel.shoppingStatus == .atStore {
-                // Shopping is active - show info modal
-                if shouldRestoreShoppingMode {
-                    // Current user is the shopper
-                    viewModel.isAtStoreMode = true
-                    isAtStoreMode = true
-                }
-                // Show info modal for both shopper and non-shopper
-                withAnimation(.easeIn(duration: 0.3)) {
-                    showInfoModal = true
-                }
+            // Show info modal for both shopper and non-shopper
+            withAnimation(.easeIn(duration: 0.3)) {
+                showInfoModal = true
             }
         }
     }

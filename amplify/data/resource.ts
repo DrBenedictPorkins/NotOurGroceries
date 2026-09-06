@@ -57,6 +57,16 @@ export const joinHouseholdFunction = defineFunction({
   resourceGroupName: 'data',
 });
 
+// End a shopping trip in one call instead of one per item.
+export const finishShoppingFunction = defineFunction({
+  name: 'finishShoppingFunction',
+  entry: './finishShoppingFunction/handler.ts',
+  resourceGroupName: 'data',
+  // A full list is capped at 150 items and each one is a conditional update.
+  // Comfortably inside this; the default 3s is not.
+  timeoutSeconds: 60,
+});
+
 // Where the caller's household stands against its allowances. Read-only; the
 // counters are written by the Lambdas that do the metered work.
 export const householdAllowancesFunction = defineFunction({
@@ -187,6 +197,11 @@ const schema = a.schema({
       activeShopperId: a.id(),  // User ID of the person currently shopping
       shoppingStoreId: a.id(),  // HouseholdStore ID where they're shopping
       shoppingStartedAt: a.datetime(),  // When the current session began — drives abandoned-session detection on other members' devices
+      // The last trip `finishShopping` put away. Its only job is to recognise
+      // the same finish arriving twice — the call is queued and retried when a
+      // trip ends with no signal, and a lost reply is indistinguishable from a
+      // failure to the phone that sent it.
+      lastFinishedTripId: a.string(),
     })
     .authorization((allow) => [
       // Creation cannot go through this rule — nobody is in the group before the
@@ -543,6 +558,38 @@ const schema = a.schema({
     }))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(householdMembershipFunction)),
+
+  // Put a finished shopping trip away in one call.
+  //
+  // `toSuggestion` is the whole outcome the shopper's phone decided: what was
+  // bought, plus what was left behind if they chose to discard it. The server is
+  // not asked to work any of that out — see the handler for why this is a
+  // statement and not a merge.
+  finishShopping: a
+    .mutation()
+    .arguments({
+      // Client-generated, so a retry of the same trip is recognisable.
+      tripId: a.string().required(),
+      householdId: a.id().required(),
+      toSuggestion: a.string().array(),
+      clearNotesFor: a.string().array(),
+      // Items added during the trip while offline, whole, with the status the
+      // client already decided. JSON because the shape is a GroceryItem.
+      created: a.json(),
+      // False when the trip was never announced — it started with no signal, so
+      // there is no household status to put back.
+      endTrip: a.boolean().required(),
+    })
+    .returns(a.customType({
+      tripId: a.string().required(),
+      alreadyApplied: a.boolean().required(),
+      itemsUpdated: a.integer().required(),
+      itemsCreated: a.integer().required(),
+      notesCleared: a.integer().required(),
+      householdEnded: a.boolean().required(),
+    }))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(finishShoppingFunction)),
 
   // Infer aisle for a single product using AI and existing store mappings
   inferProductAisle: a

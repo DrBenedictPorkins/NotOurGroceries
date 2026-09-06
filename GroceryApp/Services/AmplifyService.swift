@@ -50,9 +50,6 @@ class AmplifyService: ObservableObject {
             print("Amplify configured for PRODUCTION")
 
             isConfigured = true
-
-            // Check current auth session
-            await checkAuthSession()
         } catch {
             print("Failed to configure Amplify: \(error)")
         }
@@ -83,7 +80,13 @@ class AmplifyService: ObservableObject {
         print("[AUTH] groups: \(groups.isEmpty ? "none" : groups.joined(separator: ", "))")
     }
 
-    private func checkAuthSession() async {
+    /// Refreshes the session and loads this user's profile.
+    ///
+    /// Split out of `configure()` so the launch screen can time it and name it.
+    /// It is the slowest thing that happens at launch — a forced Cognito token
+    /// refresh followed by a `getUser` — and while it was buried inside
+    /// configuration there was no step to attribute a stall to.
+    func checkAuthSession() async {
         do {
             // Force-refreshed on purpose. Household membership is a Cognito group
             // claim, and a claim only exists in a token minted after it was
@@ -139,6 +142,58 @@ class AmplifyService: ObservableObject {
     /// rather than the credentials. Read by `RootView` so a blip does not present
     /// itself as a sign-out.
     @Published var sessionCheckFailedOffline = false
+
+    // MARK: - Off-grid
+
+    /// Shopping with no server at all.
+    ///
+    /// The session could not be checked, so there is no verified token — but
+    /// this device already holds the list, the stores and the aisle order from
+    /// the last time it was online, and standing in a shop with no signal is
+    /// precisely when that matters. Refusing to open the app because Cognito is
+    /// unreachable throws away everything already on the disk.
+    ///
+    /// This is deliberately not `PaperMode` coming back. That was a place you
+    /// went, entered by dialog, and it was deleted because it made offline
+    /// mutually exclusive with shopping. This is the answer to one question,
+    /// asked only after the network has already failed and only when there is
+    /// genuinely something to shop from. Everything inside the app behaves as it
+    /// does on any bad connection: writes queue in the `Outbox`, the header says
+    /// what you are looking at, and the moment a token can be refreshed this
+    /// drops away on its own.
+    @Published private(set) var isOffGrid = false
+
+    /// Whether going off-grid would show a list rather than an empty app. Asked
+    /// before the offer is made, so we never offer a door into nothing.
+    var canGoOffGrid: Bool {
+        guard !isAuthenticated else { return false }
+        guard let snapshot = LocalListStore.load(), !snapshot.items.isEmpty else { return false }
+        return UserDefaults.standard.string(forKey: "currentHouseholdId") != nil
+    }
+
+    func goOffGrid() {
+        guard canGoOffGrid else { return }
+        loadLocalHouseholdId()
+        isOffGrid = true
+        print("[AUTH] off-grid: no verified session, shopping from the local snapshot")
+    }
+
+    /// Called once a real session exists again. Nothing else clears this — the
+    /// point is that it ends by itself when the network comes back, not by the
+    /// person remembering to leave.
+    func leaveOffGrid() {
+        guard isOffGrid else { return }
+        isOffGrid = false
+        sessionCheckFailedOffline = false
+    }
+
+    /// Retries the session check and comes back on the grid if it works. Safe to
+    /// call repeatedly; it does nothing unless we are off-grid.
+    func retrySessionIfOffGrid() async {
+        guard isOffGrid, NetworkStatus.shared.pathIsSatisfied else { return }
+        await checkAuthSession()
+        if isAuthenticated { leaveOffGrid() }
+    }
 
     private static func looksLikeNetworkFailure(_ error: Error) -> Bool {
         if let authError = error as? AuthError {

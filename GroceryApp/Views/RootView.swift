@@ -5,42 +5,60 @@ struct RootView: View {
     @StateObject private var loadingState = AppLoadingState.shared
 
     var body: some View {
-        Group {
+        ZStack {
+            // The real screen is mounted underneath the splash rather than after
+            // it. The second half of the handshake — list, stores, trip,
+            // allowances — belongs to `ContentView`, because it owns the view
+            // model those calls write into, and it cannot run it if it does not
+            // exist yet. The splash sits on top until every step is done.
+            Group {
+                if !amplifyService.isAuthenticated && !amplifyService.isOffGrid {
+                    AuthGateView()
+                        // Says why you are looking at a sign-in screen when you were
+                        // signed in a minute ago. Without it a bad connection on
+                        // launch is indistinguishable from having been signed out,
+                        // and the natural response is to type your password again.
+                        .overlay(alignment: .top) {
+                            if amplifyService.sessionCheckFailedOffline {
+                                Text("Couldn't reach the server to check your sign-in. If you were already signed in, try again when you have signal.")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(DesignSystem.Colors.neonAmber)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(14)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .fill(DesignSystem.Colors.cardBackground)
+                                            .overlay(RoundedRectangle(cornerRadius: 14)
+                                                .stroke(DesignSystem.Colors.neonAmber.opacity(0.5), lineWidth: 1))
+                                    )
+                                    .padding(.horizontal, 24)
+                                    .padding(.top, 60)
+                            }
+                        }
+                } else if amplifyService.currentHouseholdId == nil {
+                    HouseholdSetupView()
+                } else {
+                    ContentView()
+                }
+            }
+            // Mounted, but not reachable. The splash covers it visually; without
+            // these it is still in the accessibility tree and still takes taps
+            // through the cover, so VoiceOver reads a list nobody can see and a
+            // stray tap lands on a row.
+            .allowsHitTesting(!loadingState.isLoading)
+            .accessibilityHidden(loadingState.isLoading)
+
             if loadingState.isLoading {
                 SplashView()
-            } else if !amplifyService.isAuthenticated {
-                AuthGateView()
-                    // Says why you are looking at a sign-in screen when you were
-                    // signed in a minute ago. Without it a bad connection on
-                    // launch is indistinguishable from having been signed out,
-                    // and the natural response is to type your password again.
-                    .overlay(alignment: .top) {
-                        if amplifyService.sessionCheckFailedOffline {
-                            Text("Couldn't reach the server to check your sign-in. If you were already signed in, try again when you have signal.")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(DesignSystem.Colors.neonAmber)
-                                .multilineTextAlignment(.center)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .fill(DesignSystem.Colors.cardBackground)
-                                        .overlay(RoundedRectangle(cornerRadius: 14)
-                                            .stroke(DesignSystem.Colors.neonAmber.opacity(0.5), lineWidth: 1))
-                                )
-                                .padding(.horizontal, 24)
-                                .padding(.top, 60)
-                        }
-                    }
-            } else if amplifyService.currentHouseholdId == nil {
-                HouseholdSetupView()
-            } else {
-                ContentView()
+                    .transition(.opacity)
+                    .zIndex(1000)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: loadingState.isLoading)
         .animation(.easeInOut(duration: 0.3), value: amplifyService.isAuthenticated)
         .animation(.easeInOut(duration: 0.3), value: amplifyService.currentHouseholdId)
+        .animation(.easeInOut(duration: 0.3), value: amplifyService.isOffGrid)
         .sheet(item: $loadingState.error) { error in
             ErrorModalView(error: error)
         }
@@ -49,53 +67,70 @@ struct RootView: View {
         }
     }
 
+    /// The first half of the launch handshake: configure, prove who this is, and
+    /// fetch the two caches that do not need a household. `ContentView` runs the
+    /// second half, which does.
     private func performInitialization() async {
-        // Step 1: Initializing
         loadingState.setStep(.initializing)
-        try? await Task.sleep(nanoseconds: 300_000_000)
 
-        // Step 2: Configure Amplify
+        // Local file read, not a call — no deadline worth showing.
         loadingState.setStep(.configuringServices)
-        do {
-            await amplifyService.configure()
-            if !amplifyService.isConfigured {
-                loadingState.reportError(
-                    title: "Connection Failed",
-                    message: "Could not connect to the server. Please check your internet connection and try again.",
-                    details: "Amplify configuration failed"
-                )
-                return
-            }
-        } catch {
+        await amplifyService.configure()
+        if !amplifyService.isConfigured {
             loadingState.reportError(
                 title: "Connection Failed",
-                message: "Could not connect to the server.",
-                details: error.localizedDescription
+                message: "Could not connect to the server. Please check your internet connection and try again.",
+                details: "Amplify configuration failed"
             )
+            loadingState.markPhaseOneComplete()
             return
         }
 
-        // Step 3: Validate Login
-        loadingState.setStep(.validatingLogin)
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        // The forced Cognito refresh plus the `getUser` that tells us which
+        // household this is. The slowest call at launch, and the one everything
+        // after it depends on.
+        await loadingState.perform(.validatingLogin) {
+            await amplifyService.checkAuthSession()
+        }
 
-        // If not authenticated, we're done loading - show auth screen
-        guard amplifyService.isAuthenticated else {
+        // Walking away from the session check used to leave the app looking
+        // exactly like a sign-out: the sign-in screen, with no idea why. The
+        // check has not failed — it is still in flight — so nothing else sets
+        // the banner that exists for precisely this situation.
+        //
+        // If there is a list on the disk, the honest answer is better than a
+        // banner: go off-grid and shop from it.
+        if loadingState.wasSkipped(.validatingLogin), !amplifyService.isAuthenticated {
+            if amplifyService.canGoOffGrid {
+                amplifyService.goOffGrid()
+            } else {
+                amplifyService.sessionCheckFailedOffline = true
+            }
+        }
+
+        // Off-grid still has a household and a list, so the second half runs —
+        // it will fail against the server and keep the snapshot, which is the
+        // whole point.
+        guard amplifyService.isAuthenticated || amplifyService.isOffGrid else {
+            loadingState.markPhaseOneComplete()
             loadingState.setStep(.ready)
             return
         }
 
-        // Step 4: Sync Products
-        loadingState.setStep(.syncingProducts)
-        await ProductCache.shared.fetchAllProducts()
-
-        // Step 5: Sync Lists (if user has a household)
-        if amplifyService.currentHouseholdId != nil {
-            loadingState.setStep(.syncingLists)
-            await UserCache.shared.fetchUsersForHousehold(amplifyService.currentHouseholdId!)
+        await loadingState.perform(.syncingProducts) {
+            await ProductCache.shared.fetchAllProducts()
         }
 
-        // Done
+        if let householdId = amplifyService.currentHouseholdId {
+            await loadingState.perform(.syncingMembers) {
+                await UserCache.shared.fetchUsersForHousehold(householdId)
+            }
+            // ContentView takes it from here and is the one that says `.ready`.
+            loadingState.markPhaseOneComplete()
+            return
+        }
+
+        loadingState.markPhaseOneComplete()
         loadingState.setStep(.ready)
     }
 }
@@ -116,6 +151,74 @@ struct SplashView: View {
         let fmt = DateFormatter()
         fmt.dateFormat = "yyyy-MM-dd HH:mm"
         return fmt.string(from: modDate)
+    }
+
+    /// The auth step is the one where "skip" does not mean skip. There is
+    /// nothing behind it but the sign-in screen — unless this phone is carrying
+    /// a list, in which case there is somewhere real to go.
+    private var stallStep: LoadingStep { loadingState.stalledStep ?? loadingState.currentStep }
+
+    private var stallIsAuthStep: Bool {
+        stallStep == .validatingLogin || stallStep == .configuringServices
+    }
+
+    private var stallSkipTitle: String {
+        guard stallIsAuthStep else { return stallStep.skipButtonTitle }
+        return AmplifyService.shared.canGoOffGrid ? "Go off-grid" : "Sign in instead"
+    }
+
+    private var stallConsequence: String {
+        guard stallIsAuthStep else { return stallStep.stallConsequence }
+        return AmplifyService.shared.canGoOffGrid
+            ? "Off-grid shops from your saved list. Changes stay on this phone and go up when you're back."
+            : stallStep.stallConsequence
+    }
+
+    private var stallPrompt: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 4) {
+                Text("Still waiting on the server. Your connection may be slow.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.neonAmber)
+                Text(stallConsequence)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 12) {
+                Button {
+                    loadingState.resolveStall(.retry)
+                } label: {
+                    Text("Retry")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(DesignSystem.Colors.accentGradient)
+                        )
+                }
+
+                Button {
+                    loadingState.resolveStall(.skip)
+                } label: {
+                    Text(stallSkipTitle)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.08))
+                        )
+                }
+            }
+        }
+        .padding(.top, 4)
+        .transition(.opacity)
     }
 
     var body: some View {
@@ -160,6 +263,17 @@ struct SplashView: View {
                 // Progress Section
                 VStack(spacing: 16) {
                     if loadingState.isReady {
+                        // What did not make it, said before the button rather
+                        // than discovered later as an empty list.
+                        if let missing = loadingState.skippedSummary {
+                            Text(missing)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.neonAmber)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.horizontal, 8)
+                        }
+
                         // Ready state - show button
                         Button(action: {
                             loadingState.dismissSplash()
@@ -207,15 +321,21 @@ struct SplashView: View {
                             .frame(height: 8)
 
                             // Step indicator
-                            HStack(spacing: 8) {
+                            HStack(spacing: 6) {
                                 ForEach(LoadingStep.allCases.filter { $0 != .ready }, id: \.rawValue) { step in
                                     Circle()
                                         .fill(step.rawValue <= loadingState.currentStep.rawValue
                                               ? DesignSystem.Colors.dillGreen
                                               : Color.white.opacity(0.2))
-                                        .frame(width: 8, height: 8)
+                                        .frame(width: 7, height: 7)
                                         .animation(.easeInOut, value: loadingState.currentStep)
                                 }
+                            }
+
+                            // A step past its deadline. Rather than a bar that
+                            // never moves again, say so and hand the choice over.
+                            if loadingState.stalledStep != nil {
+                                stallPrompt
                             }
                         }
                         .transition(.opacity)

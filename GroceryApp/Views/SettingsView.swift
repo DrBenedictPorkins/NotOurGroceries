@@ -618,7 +618,18 @@ struct SettingsView: View {
 
     private func signOut() {
         Task {
-            try? await amplifyService.signOut()
+            // `try?` meant a failed sign-out left the user signed in with no
+            // word of it, right after a warning that said their local data was
+            // about to be cleared.
+            do {
+                try await amplifyService.signOut()
+            } catch {
+                print("Sign out failed: \(error)")
+                viewModel.showToast(
+                    message: "Couldn't complete sign out. Check your signal and try again.",
+                    type: .error
+                )
+            }
         }
     }
 }

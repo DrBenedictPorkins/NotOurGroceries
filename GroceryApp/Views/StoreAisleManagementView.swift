@@ -447,7 +447,16 @@ struct StoreAisleManagementView: View {
         .task {
             // Load mappings if not already loaded
             if mappings.isEmpty {
-                try? await storeService.fetchMappings(storeId: storeId)
+                do {
+                    _ = try await storeService.fetchMappings(storeId: storeId)
+                } catch {
+                    // Used to fail silently via try?: mappings stayed empty, so
+                    // the screen understated how much was already assigned.
+                    print("Failed to fetch mappings for store \(storeId): \(error)")
+                    await MainActor.run {
+                        viewModel.showToast(message: "Couldn't load which items are already in aisles. Check your signal and reopen this screen.", type: .error)
+                    }
+                }
             }
         }
     }

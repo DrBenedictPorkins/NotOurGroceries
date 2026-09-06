@@ -10,6 +10,28 @@ struct RootView: View {
                 SplashView()
             } else if !amplifyService.isAuthenticated {
                 AuthGateView()
+                    // Says why you are looking at a sign-in screen when you were
+                    // signed in a minute ago. Without it a bad connection on
+                    // launch is indistinguishable from having been signed out,
+                    // and the natural response is to type your password again.
+                    .overlay(alignment: .top) {
+                        if amplifyService.sessionCheckFailedOffline {
+                            Text("Couldn't reach the server to check your sign-in. If you were already signed in, try again when you have signal.")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(DesignSystem.Colors.neonAmber)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .fill(DesignSystem.Colors.cardBackground)
+                                        .overlay(RoundedRectangle(cornerRadius: 14)
+                                            .stroke(DesignSystem.Colors.neonAmber.opacity(0.5), lineWidth: 1))
+                                )
+                                .padding(.horizontal, 24)
+                                .padding(.top, 60)
+                        }
+                    }
             } else if amplifyService.currentHouseholdId == nil {
                 HouseholdSetupView()
             } else {

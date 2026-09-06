@@ -9,6 +9,9 @@ struct HouseholdInviteView: View {
     @State private var isRegenerating = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    /// Why the last load failed. Separate from `errorMessage`, which lives
+    /// beside the regenerate button and only exists once a code has loaded.
+    @State private var loadError: String?
     @State private var showShareSheet = false
 
     var body: some View {
@@ -26,6 +29,13 @@ struct HouseholdInviteView: View {
                         if isLoading {
                             loadingView
                         } else if let details = householdDetails {
+                            if let loadError {
+                                Text(loadError)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(DesignSystem.Colors.neonPink)
+                                    .multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity)
+                            }
                             inviteCodeSection(details: details)
                             if isCodeLive(details) {
                                 shareSection(details: details)
@@ -77,9 +87,10 @@ struct HouseholdInviteView: View {
                 .font(.system(size: 50))
                 .foregroundColor(DesignSystem.Colors.neonPink)
 
-            Text("Failed to load household details")
+            Text(loadError ?? "Couldn't load your invite code. Check your signal and try again.")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
+                .multilineTextAlignment(.center)
 
             Button("Try Again") {
                 Task {
@@ -275,11 +286,16 @@ struct HouseholdInviteView: View {
     // MARK: - Actions
 
     private func loadHouseholdDetails() async {
+        // The catch used to print and fall through to `isLoading = false`, so a
+        // failed load looked exactly like a finished one: the spinner stopped
+        // and, if a code was already on screen, the stale one just stayed there.
         isLoading = true
         do {
             householdDetails = try await amplifyService.fetchHouseholdDetails()
+            loadError = nil
         } catch {
             print("Error loading household details: \(error)")
+            loadError = "Couldn't load your invite code. Check your signal and try again."
         }
         isLoading = false
     }

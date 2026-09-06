@@ -20,6 +20,10 @@ struct HouseholdView: View {
     /// none of it is undoable. A second tap, or wandering to another tab
     /// mid-flight, has nothing good to do.
     @State private var isLeaving = false
+    /// Anything that went wrong while loading or setting up the household.
+    /// `errorMessage` only renders on the create/join form, so once you have a
+    /// household there was nowhere for a failure to appear.
+    @State private var householdNotice: String?
 
     var body: some View {
         ZStack {
@@ -185,6 +189,14 @@ struct HouseholdView: View {
             .padding(24)
             .frame(maxWidth: .infinity)
             .background(glassCard)
+
+            if let notice = householdNotice {
+                Text(notice)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(DesignSystem.Colors.neonPink)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
 
             // Members Section
             if let details = householdDetails, !details.members.isEmpty {
@@ -548,6 +560,11 @@ struct HouseholdView: View {
                     ?? "Household created"
                 householdName = ""
                 await loadHouseholdDetails()
+                // Seeding the starting stores used to fail without a word, and
+                // it is never retried — the household would just have no stores.
+                if !result.startingStoresFailed.isEmpty {
+                    householdNotice = "Your household is ready, but its starting stores couldn't be created. You can add a store yourself from Select Store."
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -613,10 +630,14 @@ struct HouseholdView: View {
     }
 
     private func loadHouseholdDetails() async {
+        // This used to print and stop, so a failed load left the member list
+        // blank or showing whoever was in it last, with nothing to say why.
         do {
             householdDetails = try await amplifyService.fetchHouseholdDetails()
+            householdNotice = nil
         } catch {
             print("Error loading household details: \(error)")
+            householdNotice = "Couldn't load your household. Check your signal and pull down to refresh."
         }
     }
 

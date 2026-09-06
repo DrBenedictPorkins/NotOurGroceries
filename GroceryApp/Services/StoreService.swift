@@ -123,19 +123,36 @@ class StoreService: ObservableObject {
     /// renaming it impossible — the next launch would put it straight back, or
     /// add a second one beside the renamed one. Once, here, is what lets the
     /// store behave like any other store afterwards.
-    func seedStartingStores(householdId: String) async {
+    /// Both creates used to be `try?`, so a household that was seeded while the
+    /// network was down came up with no stores at all and nothing said so —
+    /// and because this runs once and is never retried, it stayed that way.
+    /// The names that failed come back so the caller can say something.
+    @discardableResult
+    func seedStartingStores(householdId: String) async -> [String] {
         print("[STORES] New household — seeding its starting stores")
-        _ = try? await createStore(
-            name: Self.defaultStoreName,
-            chain: nil,
-            householdId: householdId
-        )
-        _ = try? await createStore(
-            name: Self.deliStoreName,
-            chain: nil,
-            householdId: householdId,
-            seedDepartments: false
-        )
+        var failed: [String] = []
+        do {
+            _ = try await createStore(
+                name: Self.defaultStoreName,
+                chain: nil,
+                householdId: householdId
+            )
+        } catch {
+            print("[STORES] Could not seed \(Self.defaultStoreName): \(error)")
+            failed.append(Self.defaultStoreName)
+        }
+        do {
+            _ = try await createStore(
+                name: Self.deliStoreName,
+                chain: nil,
+                householdId: householdId,
+                seedDepartments: false
+            )
+        } catch {
+            print("[STORES] Could not seed \(Self.deliStoreName): \(error)")
+            failed.append(Self.deliStoreName)
+        }
+        return failed
     }
 
 

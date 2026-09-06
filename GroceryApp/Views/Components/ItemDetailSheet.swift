@@ -1104,7 +1104,12 @@ struct ItemDetailSheet: View {
                         }
                     }
                 } catch {
+                    // Used to fail silently: a photo that would not download left
+                    // the section looking exactly like an item with no photos.
                     print("Failed to load image \(itemImage.id): \(error)")
+                    await MainActor.run {
+                        viewModel.showToast(message: "Couldn't load the photos on this item. Check your signal and try again.", type: .error)
+                    }
                 }
             }
         }
@@ -1130,8 +1135,10 @@ struct ItemDetailSheet: View {
 
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch {
+                // Used to fail silently: the thumbnail was cleared below and the
+                // photo simply disappeared with nothing said about why.
                 print("Failed to upload image: \(error)")
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                viewModel.showToast(message: "Couldn't add that photo. Check your signal and try again.", type: .error)
             }
             pendingUploadImage = nil
             isUploadingImage = false
@@ -1145,8 +1152,10 @@ struct ItemDetailSheet: View {
                 loadedImages.removeValue(forKey: image.id)
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch {
+                // Used to fail silently: the photo stayed on screen and nothing
+                // said the delete had not gone through.
                 print("Failed to delete image: \(error)")
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                viewModel.showToast(message: "Couldn't remove that photo. Check your signal and try again.", type: .error)
             }
         }
     }

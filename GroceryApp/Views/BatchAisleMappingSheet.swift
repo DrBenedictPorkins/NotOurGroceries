@@ -486,11 +486,20 @@ struct BatchAisleMappingSheet: View {
                 )
             }
 
-            _ = try await AisleExtractionService.shared.saveBatchInferenceResults(
+            // The count was discarded and a success haptic fired regardless.
+            // `saveBatchInferenceResults` skips items it cannot write, one log
+            // line each, so twenty-five could be inferred — and paid for out of
+            // the allowance — with five saved and the sheet reporting done.
+            let saved = try await AisleExtractionService.shared.saveBatchInferenceResults(
                 items: inputs,
                 results: results,
                 storeId: store.id
             )
+            if saved < inputs.count {
+                viewModel.showToast(
+                    message: "Placed \(saved) of \(inputs.count). The rest didn't save — try those again when you have signal.",
+                    type: .warning)
+            }
 
             // Refresh mappings cache
             _ = try? await StoreService.shared.fetchMappings(storeId: store.id)

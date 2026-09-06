@@ -143,8 +143,22 @@ struct StoreSelectionSheet: View {
         isCheckingMappings = true
         selectedStore = store
 
-        // Fetch mappings for this store
-        _ = try? await storeService.fetchMappings(storeId: store.id)
+        // Fetch mappings for this store.
+        //
+        // Swallowed, this reads as a shop with no aisle data: every item computes
+        // as unmapped, and the person is offered the AI mapping sheet and charged
+        // allowance to re-map things that are already mapped.
+        do {
+            _ = try await storeService.fetchMappings(storeId: store.id)
+        } catch {
+            print("Failed to load mappings for \(store.name): \(error)")
+            viewModel.showToast(
+                message: "Couldn't load \(store.name)'s aisles. Items may look unsorted — try again when you have signal.",
+                type: .warning)
+            isCheckingMappings = false
+            selectedStore = nil
+            return
+        }
         // And where the household stands, so the warning below is current.
         await AllowanceService.shared.refresh()
 

@@ -310,10 +310,17 @@ struct StoreDetailView: View {
     private func refreshStoreData() {
         guard let householdId = viewModel.householdId else { return }
         Task {
-            let stores = try? await storeService.fetchStores(householdId: householdId)
-            await MainActor.run {
-                if let stores = stores {
+            do {
+                let stores = try await storeService.fetchStores(householdId: householdId)
+                await MainActor.run {
                     viewModel.householdStores = stores
+                }
+            } catch {
+                // Used to fail silently via try?: the screen kept showing stale
+                // store details with no sign the refresh had failed.
+                print("Failed to refresh store data: \(error)")
+                await MainActor.run {
+                    viewModel.showToast(message: "Couldn't refresh this store. Check your signal and try again.", type: .error)
                 }
             }
         }

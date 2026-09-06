@@ -84,6 +84,11 @@ class ShoppingListViewModel: ObservableObject {
     @Published var toastUserName: String = ""
     @Published var toastType: ToastType = .success
     @Published var isLoading: Bool = false
+    /// Kept for compatibility, but no longer the only record of a failure.
+    ///
+    /// Three code paths wrote to this and **no view in the app ever read it**, so
+    /// "your list did not load" was recorded and then discarded. Every writer now
+    /// also raises the persistent banner. Do not add a fourth writer without one.
     @Published var errorMessage: String?
     @Published var searchResults: [Product] = []
     @Published var currentSort: SortOption = .recentFirst
@@ -445,7 +450,12 @@ class ShoppingListViewModel: ObservableObject {
         }
 
         guard let householdId = householdId else {
+            // Reached after a two-second wait loop, and it used to end here in
+            // silence — an empty list that looked like an empty list, not like a
+            // failure to find out which household you are in.
             logger.error("loadShoppingList: No household ID available")
+            showToast(message: "Couldn't work out which household this is. Close the app and open it again.",
+                      type: .error)
             return
         }
 
@@ -525,6 +535,7 @@ class ShoppingListViewModel: ObservableObject {
                 case .failure(let error):
                     logger.error("Failed to fetch items: \(String(describing: error))")
                     self.errorMessage = error.localizedDescription
+                    showToast(message: "Couldn't load your list. Pull down to try again.", type: .error)
                     if AmplifyService.shared.isAuthError(error) {
                         try? await AmplifyService.shared.signOut()
                         return
@@ -579,6 +590,7 @@ class ShoppingListViewModel: ObservableObject {
         } catch {
             logger.error("Error loading shopping list: \(error)")
             errorMessage = error.localizedDescription
+            showToast(message: "Couldn't load your list. Pull down to try again.", type: .error)
             AmplifyService.shared.handleAuthError(error)
             handleServerUnreachable()
         }
@@ -1769,6 +1781,29 @@ class ShoppingListViewModel: ObservableObject {
 
         SubscriptionService.shared.subscribeToHousehold(householdId)
 
+        // `connectionState` and `lastError` were published and read by nothing.
+        // When the sockets drop, this phone stops hearing anything the rest of
+        // the household adds — which looks exactly like a household that has
+        // stopped adding. Said once per drop, not per retry, and worded as the
+        // thing the person can do about it.
+        SubscriptionService.shared.$connectionState
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self else { return }
+                switch state {
+                case .disconnected where !self.isOffline:
+                    self.showToast(message: "Live updates stopped. Pull down to refresh and see anyone else's changes.",
+                                   type: .warning)
+                case .connected:
+                    // Recovered; clear the warning rather than leave it standing.
+                    if self.activeError?.isWarning == true { self.activeError = nil }
+                default:
+                    break
+                }
+            }
+            .store(in: &subscriptionCancellables)
+
         // Observe created items
         SubscriptionService.shared.$lastCreatedItem
             .compactMap { $0 }
@@ -1824,6 +1859,7 @@ class ShoppingListViewModel: ObservableObject {
         shoppingStatus = .idle
         AmplifyService.shared.currentHouseholdId = nil
         errorMessage = "You're no longer in this household."
+        showToast(message: "You're no longer in this household.", type: .error)
         NotificationCenter.default.post(name: .householdChanged, object: nil)
     }
 
@@ -2288,7 +2324,13 @@ class ShoppingListViewModel: ObservableObject {
 
         // Fetch the full item from API
         guard let remoteItem = await fetchItem(id: itemId) else {
-            print("handleItemUpdated: Could not fetch item \(itemId)")
+            // Repaired rather than reported. A subscription telling us an item
+            // changed, followed by a failed fetch of that item, left the row
+            // showing the old values for ever — but it is not something the
+            // person did, so a banner would be noise. Refetching the list is
+            // both quieter and an actual fix.
+            print("handleItemUpdated: Could not fetch item \(itemId), refreshing the list instead")
+            await loadShoppingList(forceRefresh: true)
             return
         }
 
@@ -2421,12 +2463,21 @@ class ShoppingListViewModel: ObservableObject {
     func selectStore(_ store: HouseholdStore) {
         selectedHouseholdStore = store
         Task {
-            // Load mappings for this store
-            if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
+            // The success message used to fire regardless of this, so a shop
+            // whose aisle data had failed to load announced itself as selected
+            // and then behaved as though it had no layout at all — every item
+            // unmapped, and an offer to spend allowance re-mapping things that
+            // were already mapped.
+            do {
+                let mappings = try await StoreService.shared.fetchMappings(storeId: store.id)
                 productAisleMappings[store.id] = mappings
+                showToast(message: "Selected \(store.name)")
+            } catch {
+                logger.error("Failed to load mappings for \(store.name): \(error)")
+                showToast(message: "Loaded \(store.name), but not its aisles. Items may show as unsorted — try again when you have signal.",
+                          type: .warning)
             }
         }
-        showToast(message: "Selected \(store.name)")
         logger.info("Selected store: \(store.name)")
     }
 

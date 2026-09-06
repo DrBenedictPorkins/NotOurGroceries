@@ -115,9 +115,48 @@ class AmplifyService: ObservableObject {
                 isAuthenticated = false
             }
         } catch {
+            // A failed *refresh* is not the same as being signed out, and this
+            // treated them as the same thing: open the app on a bad connection
+            // and it dropped you at the sign-in screen as though your session
+            // had ended. The tokens on this device are still there.
+            //
+            // So only give up on the session when the refresh actually says the
+            // session is invalid. Anything that looks like the network is
+            // reported and the existing session is left alone; the next launch,
+            // or the next call, retries it.
             print("Failed to fetch auth session: \(error)")
-            isAuthenticated = false
+
+            if Self.looksLikeNetworkFailure(error) {
+                sessionCheckFailedOffline = true
+                logWarning("auth.sessionRefreshFailed", "kept the existing session")
+            } else {
+                isAuthenticated = false
+            }
         }
+    }
+
+    /// True when the session check failed for reasons that look like the network
+    /// rather than the credentials. Read by `RootView` so a blip does not present
+    /// itself as a sign-out.
+    @Published var sessionCheckFailedOffline = false
+
+    private static func looksLikeNetworkFailure(_ error: Error) -> Bool {
+        if let authError = error as? AuthError {
+            switch authError {
+            case .service(_, _, let underlying):
+                return underlying is URLError || "\(underlying as Any)".localizedCaseInsensitiveContains("network")
+            default:
+                break
+            }
+        }
+        if error is URLError { return true }
+        let text = "\(error)".lowercased()
+        return text.contains("network") || text.contains("offline")
+            || text.contains("connection") || text.contains("timed out")
+    }
+
+    private func logWarning(_ event: String, _ detail: String) {
+        print("[AUTH] \(event): \(detail)")
     }
 
     // MARK: - AWSDateTime
@@ -1098,6 +1137,9 @@ class AmplifyService: ObservableObject {
         let householdDeleted: Bool
         let remainingMembers: Int
         let inviteCode: String?
+        /// Starting stores that could not be created for a brand-new household.
+        /// Empty on every other membership action.
+        var startingStoresFailed: [String] = []
     }
 
     /// Membership is a Cognito group claim, and a claim only exists in a token
@@ -1135,13 +1177,18 @@ class AmplifyService: ObservableObject {
     /// owner, the invite code, and the Cognito group the creator needs in order
     /// to read what they just made.
     func createHouseholdRemotely(name: String) async throws -> MembershipResult {
-        let result = try await manageMembership(action: "create", name: name)
+        var result = try await manageMembership(action: "create", name: name)
         await refreshSessionForNewClaims()
         currentHouseholdId = result.householdId
         // Once, here. A household starts with a plain supermarket and a small
         // shop with no aisles; both are then ordinary stores it can rename or
         // delete, which is only true because nothing puts them back.
-        await StoreService.shared.seedStartingStores(householdId: result.householdId)
+        //
+        // Seeding used to swallow its own failures, which left a new household
+        // permanently with no stores and told nobody. The household itself is
+        // fine either way, so this is carried back to the caller as something
+        // to say rather than thrown.
+        result.startingStoresFailed = await StoreService.shared.seedStartingStores(householdId: result.householdId)
         NotificationCenter.default.post(name: .householdChanged, object: nil)
         return result
     }

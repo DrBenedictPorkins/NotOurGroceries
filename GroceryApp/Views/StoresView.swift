@@ -55,10 +55,17 @@ struct StoresView: View {
     private func refreshStores() {
         guard let householdId = viewModel.householdId else { return }
         Task {
-            let stores = try? await storeService.fetchStores(householdId: householdId)
-            await MainActor.run {
-                if let stores = stores {
+            do {
+                let stores = try await storeService.fetchStores(householdId: householdId)
+                await MainActor.run {
                     viewModel.householdStores = stores
+                }
+            } catch {
+                // Used to fail silently via try?: the list kept showing whatever
+                // was last loaded, so a failed refresh looked like no change.
+                print("Failed to refresh stores: \(error)")
+                await MainActor.run {
+                    viewModel.showToast(message: "Couldn't load your stores. Check your signal and try again.", type: .error)
                 }
             }
         }

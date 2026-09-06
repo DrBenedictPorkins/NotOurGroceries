@@ -284,8 +284,16 @@ struct HouseholdSetupView: View {
                 // Goes through the Lambda: it owns the invite code, the owner,
                 // and the Cognito group without which the creator cannot read
                 // the household they just made.
-                _ = try await amplifyService.createHouseholdRemotely(name: householdName)
+                let result = try await amplifyService.createHouseholdRemotely(name: householdName)
                 // RootView will automatically navigate to ContentView when householdId is set
+
+                // Seeding runs once and is never retried, so a household created
+                // while the network was flaky comes up with no shops at all. This
+                // is the path most households are created on, so it is the one
+                // that most needs to say so.
+                if !result.startingStoresFailed.isEmpty {
+                    errorMessage = "Your household is ready, but its starting shops couldn't be created. Add one yourself from Select Store."
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }

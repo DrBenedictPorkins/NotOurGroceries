@@ -249,12 +249,38 @@ class AmplifyService: ObservableObject {
     }
 
     func signOut() async throws {
-        _ = await Amplify.Auth.signOut()
+        // The result was discarded, so this function could not fail and the
+        // `catch` around its call site was decorative. Local state is still
+        // cleared either way — the warning card has already promised that, and
+        // leaving a half-signed-out phone would be worse — but a failed sign-out
+        // is now reported rather than swallowed.
+        let result = await Amplify.Auth.signOut()
+        var signOutFailure: Error?
+        if let cognito = result as? AWSCognitoSignOutResult {
+            switch cognito {
+            case .complete:
+                break
+            case .partial(_, _, let hostedUIError):
+                // The associated values here are Cognito's own error types, not
+                // `Error`, so they need wrapping before they can be thrown.
+                signOutFailure = hostedUIError.map { AmplifyError.unknown("Sign out incomplete: \($0)") }
+            case .failed(let error):
+                signOutFailure = error
+            @unknown default:
+                break
+            }
+        }
+
         isAuthenticated = false
         currentUser = nil
         currentHouseholdId = nil
         UserCache.shared.clear()
         Self.clearLocalUserData()
+
+        if let signOutFailure {
+            print("[AUTH] sign out incomplete: \(signOutFailure)")
+            throw signOutFailure
+        }
     }
 
     /// Everything this account left on the device.

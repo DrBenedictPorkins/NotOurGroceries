@@ -1,4 +1,4 @@
-import { defineAuth, defineFunction } from '@aws-amplify/backend';
+import { defineAuth, defineFunction, secret } from '@aws-amplify/backend';
 
 /**
  * Puts an invite code in the sign-up confirmation email.
@@ -10,6 +10,12 @@ import { defineAuth, defineFunction } from '@aws-amplify/backend';
 export const customMessageFunction = defineFunction({
   name: 'customMessageFunction',
   entry: './customMessageFunction/handler.ts',
+  // The only thing it needs. Resolved from SSM at runtime, so it creates no
+  // CloudFormation dependency on another stack — which is the entire reason this
+  // function derives codes instead of reading a table.
+  environment: {
+    COMP_CODE_SECRET: secret('COMP_CODE_SECRET'),
+  },
 });
 
 /**

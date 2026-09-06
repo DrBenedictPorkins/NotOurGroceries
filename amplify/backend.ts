@@ -332,9 +332,10 @@ allowanceTable.grantReadData(joinHouseholdLambda);
 // to bind them to. Both reach the table over IAM; no client can read it.
 const compCodeTable = backend.data.resources.tables['CompCode'];
 
-const customMessageLambda = backend.customMessageFunction.resources.lambda as Function;
-addEnvVars(customMessageLambda, { COMP_CODE_TABLE_NAME: compCodeTable.tableName });
-compCodeTable.grantReadWriteData(customMessageLambda);
+// Nothing is wired to the custom-message trigger on purpose. It derives codes
+// from the address with an HMAC and touches no table — granting it one made the
+// auth and data stacks depend on each other and CloudFormation refused the
+// deployment outright.
 
 const redeemCompCodeLambda = backend.redeemCompCodeFunction.resources.lambda as Function;
 addEnvVars(redeemCompCodeLambda, {

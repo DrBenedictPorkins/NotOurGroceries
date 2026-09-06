@@ -1,13 +1,18 @@
 import { logEvent, logWarning, logFailure } from '../telemetry';
-import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
-import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { DynamoDBClient, UpdateItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { marshall } from '@aws-sdk/util-dynamodb';
 import { requireHousehold } from '../requireHousehold';
+import { codeFor } from '../../auth/customMessageFunction/handler';
 import { loadAllowance, isEntitled, setEntitlement } from '../allowance';
 import type { Schema } from '../resource';
 
 const client = new DynamoDBClient({});
 
 const COMP_CODE_TABLE_NAME = process.env.COMP_CODE_TABLE_NAME!;
+
+/** How many households get comped. The cap is on redemption, which is the thing
+ *  that actually costs anything. */
+export const FOUNDER_COMP_LIMIT = 100;
 
 type Handler = Schema['redeemCompCode']['functionHandler'];
 
@@ -32,13 +37,19 @@ export const handler: Handler = async (event) => {
   const householdId = households[0];
   const code = normalize(event.arguments.code);
 
+  const identity = (event as { identity?: { claims?: Record<string, unknown> } }).identity;
+  const email = String(identity?.claims?.email ?? '');
+  if (!email) {
+    logWarning('comp.rejected', { reason: 'no_email_claim' });
+    return { status: 'INVALID', message: "We couldn't read your account's email address." };
+  }
+
   if (!code) {
     return { status: 'INVALID', message: "That doesn't look like a code. Check it and try again." };
   }
 
-  // Refuse before burning anything. Somebody who is already comped — or who has
-  // paid — spending a code would take a slot out of the hundred and get nothing
-  // for it.
+  // Refuse before recording anything. Somebody already comped, or paying,
+  // redeeming a code would take a slot out of the hundred and get nothing.
   const allowance = await loadAllowance(householdId);
   if (isEntitled(allowance)) {
     logEvent('comp.alreadyEntitled', { householdId, entitlement: allowance.entitlement });
@@ -50,40 +61,54 @@ export const handler: Handler = async (event) => {
     };
   }
 
-  // Burn first, comp second.
-  //
-  // A comp without a burnt code means a code that can be spent again; a burnt
-  // code without a comp means one person to fix by hand. The second is strictly
-  // better, so the write that can fail goes first.
-  //
-  // The condition is the whole mechanism: `attribute_not_exists` on a single
-  // item is atomic, so two people racing the same code produce exactly one
-  // winner without a lock, a counter or a transaction.
+  // The code is an HMAC of the address it was mailed to, recomputed here from
+  // the caller's own token. No list of codes exists to be stolen, and a code
+  // that leaks is worth nothing to whoever finds it — they cannot sign in as the
+  // address it belongs to.
+  if (codeFor(email) !== code) {
+    logWarning('comp.codeInvalid', { householdId });
+    return { status: 'INVALID', message: "That code isn't for this account. Check it and try again." };
+  }
+
+  // Claim it. The row is keyed by the code, so this is also what makes it
+  // single-use: a second household typing the same code loses the condition.
   try {
     await client.send(new UpdateItemCommand({
       TableName: COMP_CODE_TABLE_NAME,
       Key: marshall({ code }),
-      UpdateExpression: 'SET redeemedByHouseholdId = :hid, redeemedAt = :now, updatedAt = :now',
-      ConditionExpression: 'attribute_exists(code) AND attribute_not_exists(redeemedByHouseholdId)',
-      ExpressionAttributeValues: marshall({ ':hid': householdId, ':now': new Date().toISOString() }),
+      UpdateExpression:
+        'SET redeemedByHouseholdId = :hid, redeemedAt = :now, issuedToEmail = :e, '
+        + 'createdAt = if_not_exists(createdAt, :now), updatedAt = :now, #t = :type',
+      ConditionExpression: 'attribute_not_exists(redeemedByHouseholdId)',
+      ExpressionAttributeNames: { '#t': '__typename' },
+      ExpressionAttributeValues: marshall({
+        ':hid': householdId,
+        ':e': email.trim().toLowerCase(),
+        ':now': new Date().toISOString(),
+        ':type': 'CompCode',
+      }),
     }));
   } catch (error) {
     if (isConditionFailure(error)) {
-      // Either there is no such code or it is already spent, and the two need
-      // different words. One extra read, only on the failure path.
-      const existing = await readCode(code);
-      if (!existing) {
-        logWarning('comp.codeInvalid', { householdId });
-        return { status: 'INVALID', message: "That code isn't one of ours. Check it and try again." };
-      }
       logWarning('comp.codeSpent', { householdId });
       return {
         status: 'SPENT',
         message: "That code has already been used. Everything still works — you're on the free plan.",
       };
     }
-    logFailure('comp.burnFailed', error, { householdId });
+    logFailure('comp.claimFailed', error, { householdId });
     throw error;
+  }
+
+  // The cap, checked after the claim so the row that proves it exists. Over the
+  // limit, the claim stands as a record and the household stays free — better a
+  // spent code with no comp than a comp with no record of who has one.
+  if (!(await underCap())) {
+    logWarning('comp.overCap', { householdId });
+    return {
+      status: 'SPENT',
+      message: "The first hundred places have all gone. Everything still works — you're on the free plan.",
+    };
   }
 
   await setEntitlement(householdId, 'COMPED');
@@ -96,6 +121,27 @@ export const handler: Handler = async (event) => {
 };
 
 /**
+ * How many codes have been redeemed. A Scan over at most a hundred rows, which
+ * is the cap: an index to avoid reading a hundred items would cost more to keep
+ * than the read it saves.
+ */
+async function underCap(): Promise<boolean> {
+  let redeemed = 0;
+  let lastKey: Record<string, any> | undefined;
+  do {
+    const page = await client.send(new ScanCommand({
+      TableName: COMP_CODE_TABLE_NAME,
+      FilterExpression: 'attribute_exists(redeemedByHouseholdId)',
+      ProjectionExpression: 'code',
+      ExclusiveStartKey: lastKey,
+    }));
+    redeemed += page.Count ?? 0;
+    lastKey = page.LastEvaluatedKey;
+  } while (lastKey);
+  return redeemed <= FOUNDER_COMP_LIMIT;
+}
+
+/**
  * Codes get read aloud and typed by hand, so the alphabet already excludes O, 0,
  * I and 1. Casing, spaces and the dashes people add themselves are not part of
  * the code.
@@ -104,13 +150,6 @@ export function normalize(raw: string): string {
   return (raw ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-async function readCode(code: string): Promise<Record<string, any> | null> {
-  const result = await client.send(new GetItemCommand({
-    TableName: COMP_CODE_TABLE_NAME,
-    Key: marshall({ code }),
-  }));
-  return result.Item ? unmarshall(result.Item) : null;
-}
 
 function isConditionFailure(error: unknown): boolean {
   return (error as { name?: string })?.name === 'ConditionalCheckFailedException';

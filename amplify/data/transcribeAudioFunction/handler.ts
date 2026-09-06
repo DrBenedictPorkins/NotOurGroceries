@@ -77,12 +77,16 @@ async function resolveAmplifySecrets(): Promise<void> {
 }
 
 export const handler: Handler = async (event) => {
-  requireHousehold(event);
+  // Kept, so voice usage is attributable. Every other AI handler records which
+  // household spent the money; this one logged bytes and milliseconds against
+  // nobody, which made cost per household uncomputable for dictation — the one
+  // number the first hundred households exist to produce.
+  const [householdId] = requireHousehold(event);
   await resolveAmplifySecrets();
   const { audioData } = event.arguments;
 
   if (!audioData || audioData.length === 0) {
-    logEvent('ai.transcribe', { outcome: 'empty_audio', bytes: 0, chars: 0, ms: 0 });
+    logEvent('ai.transcribe', { householdId, outcome: 'empty_audio', bytes: 0, chars: 0, ms: 0 });
     return '';
   }
 
@@ -130,7 +134,7 @@ export const handler: Handler = async (event) => {
   if (!response.ok) {
     const errText = await response.text();
     logFailure('ai.transcribe', new Error(`Whisper API error: ${response.status}`), {
-      outcome: 'upstream_error', status: response.status, bytes: buffer.byteLength, ms: elapsedMs,
+      householdId, outcome: 'upstream_error', status: response.status, bytes: buffer.byteLength, ms: elapsedMs,
     });
     throw new Error(`Whisper API error: ${response.status}`);
   }
@@ -138,7 +142,7 @@ export const handler: Handler = async (event) => {
   const raw = (await response.text()).trim();
   const transcript = stripHallucinatedTail(raw);
   logEvent('ai.transcribe', {
-    outcome: 'ok', model: MODEL, bytes: buffer.byteLength,
+    householdId, outcome: 'ok', model: MODEL, bytes: buffer.byteLength,
     chars: transcript.length, strippedChars: raw.length - transcript.length, ms: elapsedMs,
   });
 

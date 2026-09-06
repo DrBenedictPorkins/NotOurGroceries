@@ -21,8 +21,12 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            if isAtStoreMode {
-                // Direct to AtStoreModeView when shopping is active
+            // Everyone in the household watches the same screen while a trip is
+            // running. It used to be the shopper's alone: the others stayed on
+            // the plain list, in a different order, with no sign of what had been
+            // ticked off — same data, two pictures, and the person at home could
+            // not tell what was already in the trolley.
+            if isAtStoreMode || viewModel.shoppingStatus == .atStore {
                 AtStoreModeView(isPresented: $isAtStoreMode)
                     .environmentObject(viewModel)
                     .environmentObject(amplifyService)
@@ -59,6 +63,7 @@ struct ContentView: View {
             if showAllowanceNudge, let summary = allowances.summary {
                 AllowanceNudgeModal(
                     summary: summary,
+                    itemsUsed: viewModel.totalItemCount,
                     onSeeAllowances: {
                         withAnimation(.easeOut(duration: 0.2)) { showAllowanceNudge = false }
                         showAllowances = true
@@ -80,6 +85,13 @@ struct ContentView: View {
                     onDismiss: {
                         withAnimation(.easeOut(duration: 0.2)) {
                             showInfoModal = false
+                        }
+                    },
+                    onTakeOver: {
+                        withAnimation(.easeOut(duration: 0.2)) { showInfoModal = false }
+                        Task {
+                            await viewModel.takeOverShopping()
+                            if viewModel.isCurrentUserShopping { isAtStoreMode = true }
                         }
                     }
                 )
@@ -142,6 +154,22 @@ struct ContentView: View {
             AllowancesView()
                 .environmentObject(viewModel)
         }
+        // On every tab and inside a shopping trip, because a failure is not a
+        // property of the screen you happened to be on.
+        //
+        // `safeAreaInset` rather than an overlay: it pushes the content down
+        // instead of covering it. As an overlay the banner landed on top of the
+        // heading and the two were unreadable through each other.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let error = viewModel.activeError {
+                ErrorBanner(error: error) {
+                    withAnimation(.easeOut(duration: 0.2)) { viewModel.activeError = nil }
+                }
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: viewModel.activeError)
         .allowanceRefusal($viewModel.allowanceRefusal, viewModel: viewModel)
         // Attached here, not on the list screen, so it is seen whichever tab is
         // open. A list that has stopped tracking the household is not something
@@ -185,7 +213,7 @@ struct ContentView: View {
         guard let summary = allowances.summary, !summary.entitled else { return }
         let freshSignIn = allowances.showOnNextAppearance
         allowances.showOnNextAppearance = false
-        if freshSignIn || summary.warrantsNudge {
+        if freshSignIn || summary.warrantsNudge(itemCount: viewModel.totalItemCount) {
             withAnimation(.easeIn(duration: 0.3)) { showAllowanceNudge = true }
         }
     }
@@ -204,6 +232,15 @@ struct ContentView: View {
         let shouldRestoreShoppingMode = await viewModel.fetchHouseholdShoppingStatus()
 
         await MainActor.run {
+            // AT_STORE with nobody holding the slot is not somebody else's trip,
+            // it is a wedged household: the button is hidden because a trip is
+            // running, and no one can end a trip they do not own. Treat it as
+            // over so the app can always be used.
+            if viewModel.shoppingStatus == .atStore, viewModel.activeShopperId == nil {
+                viewModel.shoppingStatus = .idle
+                return
+            }
+
             if viewModel.shoppingStatus == .atStore {
                 // Shopping is active - show info modal
                 if shouldRestoreShoppingMode {

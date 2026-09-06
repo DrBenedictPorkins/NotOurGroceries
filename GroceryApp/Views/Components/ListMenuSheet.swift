@@ -1,11 +1,17 @@
 import SwiftUI
 
-/// What opens when you tap the list title: how you want to shop. Nothing else.
+/// Everything you can do with the list that is not adding to it or going shopping.
 ///
 /// It used to also carry your name and avatar, the version and build, and a Sign
 /// Out button — which made it a second, worse copy of the Settings tab. All of
-/// that still lives in Settings, where someone looking for it would go. You tap
-/// the list title to pick a mode, so a mode is all this offers.
+/// that still lives in Settings, where someone looking for it would go.
+///
+/// Reached from a labelled "More" pill in the header. It used to be the list
+/// title itself, marked with a small chevron, and somebody who uses the app
+/// daily did not know it was there — which meant Quick Trip, restoring a trip
+/// and handing the list to a guest were all invisible. The share icon that sat
+/// beside the title came in here at the same time, for the same reason: a bare
+/// glyph does not say "share", and sharing belongs with the rest of these.
 struct ListMenuSheet: View {
     @Binding var isPresented: Bool
     @EnvironmentObject var viewModel: ShoppingListViewModel
@@ -34,18 +40,7 @@ struct ListMenuSheet: View {
             ScrollView {
                 VStack(spacing: 18) {
                     section("Start shopping") {
-                        row(
-                            icon: "cart.fill",
-                            tint: DesignSystem.Colors.dillGreen,
-                            title: "At Store",
-                            detail: viewModel.shoppingList.isEmpty
-                                ? "Add something to the list first."
-                                : "Full trip, sorted by aisle. Everyone sees you're shopping.",
-                            disabled: !canStartShopping
-                        ) {
-                            isPresented = false
-                            onAtStore()
-                        }
+                        atStoreRow
 
                         row(
                             icon: "list.bullet.rectangle.portrait",
@@ -89,6 +84,77 @@ struct ListMenuSheet: View {
         }
     }
 
+    /// The reason the app exists, so it does not look like the other four rows.
+    ///
+    /// Everything else here is an occasional thing — a scratch list, undoing a
+    /// trip, handing the list to a guest. This is the weekly shop. Given the same
+    /// tinted card as the rest it read as one option among several, which is a
+    /// fair description of the menu and a poor description of the app.
+    @ViewBuilder
+    private var atStoreRow: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            isPresented = false
+            onAtStore()
+        } label: {
+            HStack(alignment: .center, spacing: 16) {
+                Image(systemName: "cart.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(DesignSystem.Colors.dillGreen.opacity(0.18)))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("At Store")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.white)
+                    Text(viewModel.shoppingList.isEmpty
+                         ? "Add something to the list first."
+                         : "Sorted by this shop's aisles. Everyone sees you're shopping.")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.72))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(DesignSystem.Colors.dillGreen.opacity(0.65))
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity)
+            // A green that falls away into the dark rather than a solid block of
+            // it. Filled edge to edge in neon the row was the only thing anyone
+            // could look at, which overshot "make it stand out" by some way.
+            // Starting green and fading to the card colour keeps it first without
+            // shouting, and lets the text go back to white.
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(DesignSystem.Colors.cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(LinearGradient(
+                                colors: [DesignSystem.Colors.dillGreen.opacity(0.42),
+                                         DesignSystem.Colors.dillGreen.opacity(0.12),
+                                         DesignSystem.Colors.dillGreen.opacity(0.02)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(DesignSystem.Colors.dillGreen.opacity(0.55), lineWidth: 1.5)
+                    )
+                    .shadow(color: DesignSystem.Colors.dillGreen.opacity(0.18),
+                            radius: 12, x: 0, y: 5)
+            )
+            .opacity(canStartShopping ? 1 : 0.45)
+        }
+        .buttonStyle(.plain)
+        .disabled(!canStartShopping)
+    }
+
     // MARK: - Handing the list to another phone
 
     /// For the guest who offers to do the shop and is not in the household.
@@ -103,14 +169,39 @@ struct ListMenuSheet: View {
     /// anything is not worth the code.
     @ViewBuilder
     private var handoffSection: some View {
-        section("Someone else is going") {
+        // Named by direction, because that is the only thing a person needs to
+        // decide here: am I giving my list away or taking someone else's?
+        //
+        // "Someone else is going" described the *occasion*, not the action, and
+        // "Show the list" and "Scan a list" described the mechanism without
+        // saying which way anything moved — you could not tell from either which
+        // phone ended up with the list.
+        section("Give or get a list") {
+            // First, because messaging is the familiar one and nobody has to be
+            // taught it. The two QR rows then read as a pair beneath it.
+            if !viewModel.shoppingList.isEmpty || !viewModel.inCart.isEmpty {
+                ShareLink(item: ShareText.shoppingList(
+                    active: viewModel.shoppingList,
+                    inCart: viewModel.inCart,
+                    storeName: viewModel.selectedHouseholdStore?.name
+                )) {
+                    rowLabel(
+                        icon: "square.and.arrow.up",
+                        tint: DesignSystem.Colors.neonBlue,
+                        title: "Send as a message",
+                        detail: "Plain text, to anyone. They do not need the app."
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
             row(
                 icon: "qrcode",
                 tint: DesignSystem.Colors.dillGreen,
-                title: "Show the list",
+                title: "Hand your list to someone here",
                 detail: viewModel.shoppingList.isEmpty
                     ? "Nothing on the list to hand over."
-                    : "A square for a guest to scan. Up to \(ListHandoff.maxItems) items, names only.",
+                    : "They install the app, scan your QR code, and off they go.",
                 disabled: viewModel.shoppingList.isEmpty
             ) {
                 showListQR = true
@@ -119,8 +210,8 @@ struct ListMenuSheet: View {
             row(
                 icon: "qrcode.viewfinder",
                 tint: DesignSystem.Colors.neonPurple,
-                title: "Scan a list",
-                detail: "Take someone's list into a Quick Trip. This phone only.",
+                title: "Pick up someone's list",
+                detail: "Scan their QR code and it lands here as a Quick Trip.",
                 disabled: false
             ) {
                 showListScanner = true
@@ -157,15 +248,64 @@ struct ListMenuSheet: View {
                 isPresented: $showRestoreConfirmation,
                 titleVisibility: .visible
             ) {
-                Button("Put it back") {
+                Button(restorePlan.toAdd.isEmpty ? "Nothing to put back" : "Put it back") {
                     isPresented = false
-                    Task { await viewModel.restoreLastTrip() }
+                    if !restorePlan.toAdd.isEmpty {
+                        Task { await viewModel.restoreLastTrip() }
+                    }
                 }
+                .disabled(restorePlan.toAdd.isEmpty)
                 Button("Cancel", role: .cancel) { }
             } message: {
-                Text("Adds the \(trip.everythingOnTheList.count) items from \(trip.storeName) back to the list. Anything already there is left alone.")
+                Text(restoreMessage(trip))
             }
         }
+    }
+
+    /// What restoring would actually do, worked out before anyone taps.
+    ///
+    /// The dialog used to promise "adds the 9 items" and then quietly skip the
+    /// ones already on the list, so the number in the question was rarely the
+    /// number that happened. Splitting them here means the question can name both.
+    private var restorePlan: (toAdd: [String], alreadyThere: Int) {
+        guard let trip = TripStats.shared.restorableTrip else { return ([], 0) }
+        var toAdd: [String] = []
+        var alreadyThere = 0
+        for name in trip.everythingOnTheList {
+            let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if viewModel.shoppingList.contains(where: { $0.normalizedName == key })
+                || viewModel.inCart.contains(where: { $0.normalizedName == key }) {
+                alreadyThere += 1
+            } else {
+                toAdd.append(name)
+            }
+        }
+        return (toAdd, alreadyThere)
+    }
+
+    private func restoreMessage(_ trip: TripRecord) -> String {
+        let plan = restorePlan
+
+        guard !plan.toAdd.isEmpty else {
+            return "Everything from \(trip.storeName) is already on your list."
+        }
+
+        // Named, not just counted. "Adds 6 items" is a number to agree to;
+        // "Adds Milk, Bread, Eggs and 3 more" is something you can actually check.
+        let shown = plan.toAdd.prefix(4).joined(separator: ", ")
+        let rest = plan.toAdd.count - min(4, plan.toAdd.count)
+        let names = rest > 0 ? "\(shown) and \(rest) more" : shown
+
+        var line = plan.toAdd.count == 1
+            ? "Puts 1 item back from \(trip.storeName): \(names)."
+            : "Puts \(plan.toAdd.count) items back from \(trip.storeName): \(names)."
+
+        if plan.alreadyThere > 0 {
+            line += plan.alreadyThere == 1
+                ? " 1 other is already on your list and is left alone."
+                : " \(plan.alreadyThere) others are already on your list and are left alone."
+        }
+        return line
     }
 
     private func restoreDetail(_ trip: TripRecord) -> String {
@@ -176,6 +316,13 @@ struct ListMenuSheet: View {
         formatter.unitsStyle = .full
         let when = formatter.localizedString(for: trip.endedAt, relativeTo: Date())
 
+        let plan = restorePlan
+        if plan.toAdd.isEmpty {
+            return "\(items) from \(trip.storeName), \(when) — all already on your list."
+        }
+        if plan.alreadyThere > 0 {
+            return "\(items) from \(trip.storeName), \(when) · \(plan.toAdd.count) not on your list yet."
+        }
         return "\(items) from \(trip.storeName), \(when)."
     }
 
@@ -460,7 +607,22 @@ struct ListMenuSheet: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
         }) {
-            HStack(alignment: .top, spacing: 14) {
+            rowLabel(icon: icon, tint: tint, title: title, detail: detail)
+                .opacity(disabled ? 0.5 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+    }
+
+    /// The row's appearance, without a Button around it — `ShareLink` brings its
+    /// own, and nesting one inside a Button swallows the tap.
+    private func rowLabel(
+        icon: String,
+        tint: Color,
+        title: String,
+        detail: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: 14) {
                 Image(systemName: icon)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(tint)
@@ -478,15 +640,11 @@ struct ListMenuSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(card)
-            .opacity(disabled ? 0.5 : 1)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .disabled(disabled)
+        .padding(14)
+        .frame(maxWidth: .infinity)
+        .background(card)
     }
 
     private var card: some View {

@@ -909,13 +909,37 @@ struct BulkImportSheet: View {
         }
 
         Task {
+            // Counted from the list, not from the loop. `addItem` returns nothing
+            // and can decline — the list is at its cap, the write is refused,
+            // there is no signal — so counting iterations closed this sheet
+            // announcing twenty items when three had landed. Same lie that
+            // "Restore last trip" was telling.
+            let before = await MainActor.run { Set(viewModel.items.map(\.id)) }
+
             for (i, item) in selected.enumerated() {
                 await viewModel.addItem(name: item.name, notes: item.notes, productId: item.productId)
                 await MainActor.run {
                     phase = .adding(done: i + 1, total: total)
                 }
+                // The cap refuses every remaining item too, and raises its own
+                // card. Carrying on would stack another nineteen refusals behind
+                // it.
+                if await MainActor.run(body: { viewModel.allowanceRefusal != nil }) { break }
             }
+
             await MainActor.run {
+                let added = viewModel.items.filter { !before.contains($0.id) }.count
+
+                if viewModel.allowanceRefusal != nil {
+                    // Its card is already on screen and says the list is full.
+                } else if added == 0 {
+                    viewModel.showToast(message: "Nothing was added. Check your signal and try again.",
+                                        type: .error)
+                } else if added < total {
+                    viewModel.showToast(message: "Added \(added) of \(total) — the rest didn't save",
+                                        type: .warning)
+                }
+
                 rawText = ""
                 isPresented = false
             }

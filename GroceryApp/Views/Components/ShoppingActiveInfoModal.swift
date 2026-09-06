@@ -7,6 +7,10 @@ struct ShoppingActiveInfoModal: View {
     let shopperName: String?
     let storeName: String?
     let onDismiss: () -> Void
+    /// Claim the trip. Present whenever somebody else holds the shopper slot,
+    /// because "someone else is shopping" and a lone OK button is a dead end when
+    /// the person reading it is the one actually in the shop.
+    var onTakeOver: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
@@ -54,6 +58,24 @@ struct ShoppingActiveInfoModal: View {
                     .padding(.horizontal, 8)
 
                 // OK Button
+                if !isCurrentUserShopping, let onTakeOver {
+                    Button(action: onTakeOver) {
+                        Text("I'm the one shopping")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundColor(.black)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(DesignSystem.Colors.dillGreen)
+                            )
+                    }
+                    Text("Takes the trip over on this phone. \(shopperName ?? "They") will be told.")
+                        .font(.system(size: 12))
+                        .foregroundColor(DesignSystem.Colors.textTertiary)
+                        .multilineTextAlignment(.center)
+                }
+
                 Button(action: {
                     onDismiss()
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()

@@ -77,6 +77,9 @@ class ShoppingListViewModel: ObservableObject {
     /// this phone has stopped tracking everyone else's, and the person is told
     /// rather than left to work it out.
     @Published var stuckSyncNames: [String] = []
+
+    /// The last thing that went wrong, held until the person dismisses it.
+    @Published var activeError: SurfacedError?
     @Published var toastMessage: String = ""
     @Published var toastUserName: String = ""
     @Published var toastType: ToastType = .success
@@ -552,13 +555,19 @@ class ShoppingListViewModel: ObservableObject {
             // it did to a real list for a day and a half. `flushOutbox` fills in
             // `stuckSyncNames`, the person is told what cannot be saved, and they
             // decide. The server is the golden source and nothing is merged.
-            if !Outbox.shared.isEmpty {
+            // A flag, never a `return` — the comment on `loadFailed` above says why
+            // and this path ignored it. Returning here skips the tail of the
+            // function, and the tail is where `setupSubscriptions()` runs, so
+            // holding the list for one queued change also killed realtime sync
+            // for the rest of the session. That is how a phone stops seeing what
+            // anyone else adds and never recovers on its own.
+            let holdingForOutbox = !Outbox.shared.isEmpty
+            if holdingForOutbox {
                 logger.info("Holding local list — \(Outbox.shared.count) change(s) still pending")
                 noteServerReachable()
-                return
             }
 
-            if !parseFailed && !loadFailed {
+            if !parseFailed && !loadFailed && !holdingForOutbox {
                 self.items = fetched
                 applySorting()
                 isShowingLocalSnapshot = false
@@ -1048,7 +1057,15 @@ class ShoppingListViewModel: ObservableObject {
 
         guard let trip = TripStats.shared.restorableTrip else { return 0 }
 
-        var restored = 0
+        // Counted from the list itself, before and after, rather than from the
+        // number of times round the loop. `addItem` and `restoreItem` both return
+        // nothing and can decline — an allowance refusal, a rejected write, no
+        // signal — so incrementing per iteration reported "Put 38 items back"
+        // for a restore that had added none of them. The list is the only honest
+        // source for what actually landed.
+        let before = Set(shoppingList.map(\.id))
+        var attempted = 0
+
         for name in trip.everythingOnTheList {
             let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
@@ -1058,21 +1075,43 @@ class ShoppingListViewModel: ObservableObject {
                 continue
             }
 
+            attempted += 1
             if let suggestion = suggestions.first(where: { $0.normalizedName == key }) {
                 await restoreItem(suggestion)
             } else {
                 await addItem(name: name)
             }
-            restored += 1
+
+            // `addItem` refuses when the list is at its cap, and it refuses by
+            // setting this rather than throwing. Without the check, a restore of
+            // 38 items ran 38 refusals, added nothing, and then reported a
+            // network problem — which is what a real user saw, on Wi-Fi, and
+            // reasonably called an incorrect error.
+            if allowanceRefusal != nil { break }
         }
 
-        if restored > 0 {
+        let restored = shoppingList.filter { !before.contains($0.id) }.count
+
+        if attempted == 0 {
+            showToast(message: "Everything from that trip is already on the list", type: .info)
+        } else if allowanceRefusal != nil {
+            // The refusal card is already on screen and says the list is full.
+            // Saying it twice, in two different words, is worse than saying it
+            // once — and blaming the network for it is worse still.
+            logger.info("Restore stopped at the item cap after \(restored) of \(attempted)")
+        } else if restored == 0 {
+            // Asked for work, got none, and it was not the cap. Silence here is
+            // what made a broken restore look like a button that does nothing.
+            showToast(message: "Couldn't put anything back. Check your signal and try again.",
+                      type: .error)
+        } else if restored < attempted {
+            showToast(message: "Put \(restored) of \(attempted) items back — the rest didn't save",
+                      type: .warning)
+        } else {
             showToast(message: restored == 1
                       ? "Put 1 item back on the list"
                       : "Put \(restored) items back on the list",
                       type: .success)
-        } else {
-            showToast(message: "Everything from that trip is already on the list", type: .info)
         }
 
         return restored
@@ -2341,6 +2380,20 @@ class ShoppingListViewModel: ObservableObject {
         // nothing did — and it would fire on essentially every tap.
         if isOffline && type == .error { return }
 
+        // Errors and warnings do not get three seconds and a fade.
+        //
+        // A toast that has gone is a message the person never read, and the only
+        // way to see it again is to repeat whatever failed — which is the last
+        // thing anyone should be encouraged to do after a failure. These stay on
+        // screen until they are dismissed. Successes still fade, because nobody
+        // needs to acknowledge that something worked.
+        if type == .error || type == .warning {
+            print("error surfaced: '\(message)'")
+            activeError = SurfacedError(message: message, isWarning: type == .warning)
+            UINotificationFeedbackGenerator().notificationOccurred(type == .error ? .error : .warning)
+            return
+        }
+
         print("showToast called: '\(message)' userName: '\(userName)' type: \(type)")
         toastMessage = message
         toastUserName = userName
@@ -2926,13 +2979,76 @@ class ShoppingListViewModel: ObservableObject {
 
             _ = try await apiMutate(request)
         } catch {
+            // Queued, not just logged. This runs for every in-cart item when a
+            // trip is finished, and a log line was its entire failure handling —
+            // so ending a trip on a weak checkout signal left those items as
+            // suggestions on this phone and still IN_CART on the server, while
+            // the completion sheet reported them all picked up. The local state
+            // has already been changed optimistically above, which is exactly
+            // what the outbox exists to push.
             logger.error("Failed to update item status: \(error)")
+            await queueOrRevert(
+                itemId: item.id,
+                kind: .update,
+                error: error,
+                failureMessage: "Couldn't save \(item.name) — it has been put back"
+            )
         }
     }
 
     /// Fetch current household shopping status and restore state if current user was shopping
     /// Returns true if the current user is the active shopper and UI should show AtStoreModeView
     @discardableResult
+    /// Take an in-progress trip over.
+    ///
+    /// There is one shopper slot and, until now, no way to claim it. If the slot
+    /// was held by anybody else — including you on a phone that had lost its
+    /// state — the app hid the At Store button because "someone else is
+    /// shopping", offered a modal with a single OK, and left you standing in a
+    /// shop with no way in and no way to end it. That happened for real.
+    func takeOverShopping() async {
+        guard let householdId, let me = AmplifyService.shared.currentUser?.userId else { return }
+
+        let document = """
+        mutation UpdateHousehold($input: UpdateHouseholdInput!) {
+            updateHousehold(input: $input) { id shoppingStatus activeShopperId shoppingStoreId }
+        }
+        """
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var input: [String: Any] = [
+            "id": householdId,
+            "shoppingStatus": "AT_STORE",
+            "activeShopperId": me,
+            "shoppingStartedAt": iso.string(from: shoppingStartedAt ?? Date())
+        ]
+        // Keep whatever shop the trip was already against; only the shopper moves.
+        if let storeId = shoppingStoreId { input["shoppingStoreId"] = storeId }
+
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: ["input": input],
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+
+        do {
+            switch try await apiMutate(request) {
+            case .success:
+                activeShopperId = me
+                shoppingStatus = .atStore
+                isAtStoreMode = true
+                logger.info("Took over the shopping trip")
+            case .failure(let error):
+                logger.error("Take over failed: \(String(describing: error))")
+                showToast(message: "Couldn't take over — check your signal and try again", type: .error)
+            }
+        } catch {
+            logger.error("Take over threw: \(error)")
+            showToast(message: "Couldn't take over — check your signal and try again", type: .error)
+        }
+    }
+
     func fetchHouseholdShoppingStatus() async -> Bool {
         guard let householdId = householdId else {
             logger.error("fetchHouseholdShoppingStatus: No household ID available")

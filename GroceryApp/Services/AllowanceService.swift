@@ -43,9 +43,19 @@ struct AllowanceSummary: Equatable {
     /// The launch pop-up threshold: half or more of any recurring allowance gone.
     /// Early in the period the number is noise, and this app is opened several
     /// times a day to add one thing.
-    var warrantsNudge: Bool {
+    /// The item count is not on this summary — items are written straight to the
+    /// table and counted on the client — so it is passed in.
+    ///
+    /// Items were missing from this check entirely, and from the card. The only
+    /// thing anyone ever saw about the 150-item cap was the refusal at the
+    /// moment they hit it, with no earlier hint that it existed or that
+    /// subscribing lifts it. Somebody restoring a trip met it as "nothing
+    /// happened".
+    func warrantsNudge(itemCount: Int) -> Bool {
         guard !entitled else { return false }
-        return placementsUsed * 2 >= placementsCap || parsesUsed * 2 >= parsesCap
+        return placementsUsed * 2 >= placementsCap
+            || parsesUsed * 2 >= parsesCap
+            || itemCount * 2 >= itemsCap
     }
 }
 

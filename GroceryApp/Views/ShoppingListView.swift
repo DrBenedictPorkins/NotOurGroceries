@@ -329,54 +329,41 @@ struct ShoppingListView: View {
 
     // MARK: - Header View
 
-    /// Title only. It is also the control — everything that used to crowd this
-    /// row now lives one tap away, behind the chevron.
+    /// Title, then a labelled way in, then the primary action.
+    ///
+    /// The title used to be the control, marked only by a small chevron beside
+    /// it. Nobody found it — tested on somebody who uses the app daily and did
+    /// not know the panel existed — and a chevron cannot say that a trip, a
+    /// scratch list, restoring yesterday's shop and handing the list to a guest
+    /// all live behind it. So the tap target says what it opens, in words.
+    ///
+    /// The share icon that used to sit here is gone with it. It was a bare glyph
+    /// competing with At Store for the same corner, and sharing is one of the
+    /// things the panel is for; it now sits inside with the rest.
     private var headerView: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                hasOpenedListMenu = true
-                showListMenu = true
-            } label: {
-                HStack(spacing: 7) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(headline)
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(headlineStyle)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(headline)
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(headlineStyle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
 
-                        statusLine
-                    }
-
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(DesignSystem.Colors.textTertiary)
-                        .padding(.top, 4)
+                // Omitted when it has nothing to say, rather than rendered as an
+                // empty row — an empty `Text` still takes a line's height.
+                if !idleStatusText.isEmpty {
+                    statusLine
+                        .padding(.top, 1)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(DesignSystem.Colors.dillGreen.opacity(hintOn ? 0.16 : 0))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(DesignSystem.Colors.dillGreen.opacity(hintOn ? 0.5 : 0), lineWidth: 1.5)
-                        )
-                )
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
 
             Spacer(minLength: 0)
 
-            shareButton
-
-            // Primary action stays visible. The other modes live in the title
-            // panel — nothing here for a thumb to confuse it with.
-            if canStartShopping {
-                atStoreButton
-            }
+            // One control, not two. At Store used to sit here on its own with a
+            // separate, smaller way into everything else — so the most-used
+            // action and the panel that contains it were different buttons in
+            // different places, and the panel kept losing.
+            listMenuPill
         }
         .padding(.horizontal, 12)
         .padding(.top, 60)
@@ -385,56 +372,39 @@ struct ShoppingListView: View {
         .onAppear(perform: runHintIfNeeded)
     }
 
-    /// Nobody mid-session, and something to actually go and buy. Starting a trip
-    /// with an empty list puts you in aisle-sorted shopping mode with no aisles
-    /// and nothing to cross off.
-    private var canStartShopping: Bool {
-        viewModel.shoppingStatus == .idle && !viewModel.shoppingList.isEmpty
-    }
-
-    /// Hand the list to someone who is not in the household.
+    /// The single way into shopping and everything around it.
     ///
-    /// Sits between the title and At Store, and simply is not there when there
-    /// is nothing to send — the title is left-anchored and At Store is pinned
-    /// right, so it appearing and disappearing moves neither of them.
-    @ViewBuilder
-    private var shareButton: some View {
-        if !viewModel.shoppingList.isEmpty || !viewModel.inCart.isEmpty {
-            ShareLink(
-                item: ShareText.shoppingList(
-                    active: viewModel.shoppingList,
-                    inCart: viewModel.inCart,
-                    storeName: viewModel.selectedHouseholdStore?.name
-                )
-            ) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.textSecondary)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-        }
-    }
-
-    private var atStoreButton: some View {
-        Button(action: {
+    /// This replaced two controls: a prominent At Store button, and separately a
+    /// small marker leading to the panel that also contains At Store. Splitting
+    /// them meant the panel — which holds Quick Trip, restoring a trip and
+    /// handing the list to a guest — was permanently the quieter of the two, and
+    /// somebody who uses the app daily never found it.
+    ///
+    /// Names the first thing behind it and then trails off, because the rest does
+    /// not fit and an ellipsis is the honest way to say there is more.
+    private var listMenuPill: some View {
+        Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                showStoreSelection = true
-            }
-        }) {
-            HStack(spacing: 6) {
+            hasOpenedListMenu = true
+            showListMenu = true
+        } label: {
+            HStack(spacing: 7) {
                 Image(systemName: "cart.fill")
                     .font(.system(size: 14, weight: .semibold))
-                Text("At Store")
+                Text("At Store, Quick trip…")
                     .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(1)
+                    // Demands its full width so the pill stays one line and the
+                    // heading, which already scales, gives way instead. Wrapped
+                    // across two lines it stopped reading as a button.
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundColor(.white)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(
                 Capsule()
-                    .fill(DesignSystem.Colors.dillGreen.opacity(0.15))
+                    .fill(DesignSystem.Colors.dillGreen.opacity(hintOn ? 0.28 : 0.15))
                     .overlay(
                         Capsule().stroke(
                             LinearGradient(
@@ -448,10 +418,20 @@ struct ShoppingListView: View {
                     )
                     .shadow(color: DesignSystem.Shadows.dillGreenGlow, radius: 8, x: 0, y: 4)
             )
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Shopping options: At Store, Quick Trip, and more")
     }
 
-    /// Pulses the title a few times the first time you land here, so the chevron
+    /// Nobody mid-session, and something to actually go and buy. Starting a trip
+    /// with an empty list puts you in aisle-sorted shopping mode with no aisles
+    /// and nothing to cross off.
+    private var canStartShopping: Bool {
+        viewModel.shoppingStatus == .idle && !viewModel.shoppingList.isEmpty
+    }
+
+    /// Pulses the pill a few times the first time you land here, so its border
     /// isn't the only thing telling you it's tappable. Stops for good once used.
     private func runHintIfNeeded() {
         guard !hasOpenedListMenu, !hasHinted else { return }

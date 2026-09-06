@@ -7,6 +7,8 @@ import SwiftUI
 /// knowing before you start, then out of the way.
 struct AllowanceNudgeModal: View {
     let summary: AllowanceSummary
+    /// Counted on the client, so it arrives separately from the summary.
+    let itemsUsed: Int
     let onSeeAllowances: () -> Void
     let onDismiss: () -> Void
 
@@ -35,6 +37,7 @@ struct AllowanceNudgeModal: View {
                 VStack(spacing: 12) {
                     row("Aisle placements", used: summary.placementsUsed, cap: summary.placementsCap)
                     row("Imports", used: summary.parsesUsed, cap: summary.parsesCap)
+                    row("Items on the list", used: itemsUsed, cap: summary.itemsCap)
                 }
                 .padding(.vertical, 4)
 
@@ -106,6 +109,7 @@ struct AllowanceNudgeModal: View {
             plan: .free, entitled: false, periodResetsAt: Date().addingTimeInterval(12 * 86_400),
             placementsUsed: 99, placementsCap: 100, parsesUsed: 2, parsesCap: 3, membersCap: 2, itemsCap: 150
         ),
+        itemsUsed: 138,
         onSeeAllowances: {}, onDismiss: {}
     )
 }

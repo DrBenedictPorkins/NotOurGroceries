@@ -15,6 +15,14 @@ struct AtStoreModeView: View {
     /// The import gate's card. The plan link hides itself while shopping.
     @State private var refusal: AllowanceRefusal?
 
+    /// Watching somebody else's trip rather than running your own.
+    ///
+    /// One person shops; the rest see exactly what the shopper sees, in the same
+    /// aisle order, updating as things are ticked off — and can change none of
+    /// it. Two people editing one trip from two places is how a list ends up
+    /// contradicting itself in a shop.
+    private var isObserver: Bool { !viewModel.isCurrentUserShopping }
+
     // Get the currently selected household store (using shoppingStoreId when in shopping mode)
     private var selectedHouseholdStore: HouseholdStore? {
         if let shoppingStoreId = viewModel.shoppingStoreId {
@@ -156,17 +164,48 @@ struct AtStoreModeView: View {
                 // Progress indicator
                 progressView
 
+                // The offline line lives in ShoppingListView, and ContentView
+                // swaps this whole screen in during a trip — so the one person
+                // who most needs to know the phone has stopped syncing, the one
+                // standing in the shop crossing things off, was the only person
+                // never shown it. An entire trip could go into the outbox in
+                // silence.
+                if viewModel.isOffline {
+                    HStack(spacing: 7) {
+                        Image(systemName: "wifi.slash")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Offline · ticking off is saved on this phone")
+                            .font(.system(size: 12, weight: .medium))
+                        Spacer()
+                    }
+                    .foregroundColor(DesignSystem.Colors.neonAmber)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(DesignSystem.Colors.neonAmber.opacity(0.12))
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                }
+
                 // Search Bar - active shopper can add items directly
-                SearchBar(
-                    text: $searchText,
-                    isFocused: $searchFieldFocused,
-                    onSubmit: addItemFromSearch,
-                    onProductSelected: addProductFromSearch,
-                    onVoice: toggleVoiceCapture,
-                    isListening: dictation.isRecording
-                )
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+                if !isObserver {
+                    SearchBar(
+                        text: $searchText,
+                        isFocused: $searchFieldFocused,
+                        onSubmit: addItemFromSearch,
+                        onProductSelected: addProductFromSearch,
+                        onVoice: toggleVoiceCapture,
+                        isListening: dictation.isRecording
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
+                } else {
+                    watchingBanner
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                }
 
                 // Store layout list
                 List {
@@ -176,6 +215,7 @@ struct AtStoreModeView: View {
                             ForEach(unmappedItems) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
+                                    .allowsHitTesting(!isObserver)
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -193,6 +233,7 @@ struct AtStoreModeView: View {
                             ForEach(aisleGroup.items) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
+                                    .allowsHitTesting(!isObserver)
                             }
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -214,6 +255,7 @@ struct AtStoreModeView: View {
                             ForEach(viewModel.inCart) { item in
                                 GroceryItemRow(item: item)
                                     .environmentObject(viewModel)
+                                    .allowsHitTesting(!isObserver)
                             }
                             .listRowBackground(inCartSectionBackground)
                             .listRowSeparator(.hidden)
@@ -287,7 +329,7 @@ struct AtStoreModeView: View {
                 HStack(spacing: 12) {
                     // Hidden for a shop with no aisles or departments — there is
                     // no layout behind it. Reappears once the store has one.
-                    if selectedHouseholdStore?.aisleLayout.isEmpty == false {
+                    if selectedHouseholdStore?.aisleLayout.isEmpty == false, !isObserver {
                         // Gear icon for aisle management
                         Button(action: {
                             showAisleManagement = true
@@ -319,6 +361,7 @@ struct AtStoreModeView: View {
                 }
 
                 // Done Shopping button - prominent with accent color
+                if !isObserver {
                 Button(action: {
                     if !viewModel.shoppingList.isEmpty {
                         showDoneShoppingAlert = true
@@ -348,11 +391,34 @@ struct AtStoreModeView: View {
                     )
                     .shadow(color: DesignSystem.Colors.success.opacity(0.3), radius: 8, x: 0, y: 4)
                 }
+                }
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 60)
         .padding(.bottom, 16)
+    }
+
+    /// Says whose trip this is, in the slot the shopper's add field occupies, so
+    /// the screen never looks like one you can type into.
+    private var watchingBanner: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "eye.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(DesignSystem.Colors.neonAmber)
+            Text("\(viewModel.activeShopperDisplayName ?? "Someone") is shopping. You are watching.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(DesignSystem.Colors.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(DesignSystem.Colors.neonAmber.opacity(0.10))
+                .overlay(RoundedRectangle(cornerRadius: 14)
+                    .stroke(DesignSystem.Colors.neonAmber.opacity(0.30), lineWidth: 1))
+        )
     }
 
     // MARK: - Progress View
@@ -392,7 +458,7 @@ struct AtStoreModeView: View {
 
                 Spacer()
 
-                if let undoItem = viewModel.undoCartItem {
+                if let undoItem = viewModel.undoCartItem, !isObserver {
                     Button {
                         Task { await viewModel.undoMoveToCart() }
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()

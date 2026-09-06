@@ -84,6 +84,7 @@
 		AA0000000000000000000089 /* StoreDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000089 /* StoreDetailView.swift */; };
 		AA0000000000000000000090 /* SpeechDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000090 /* SpeechDictationService.swift */; };
 		AA0000000000000000000098 /* AllowanceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000098 /* AllowanceService.swift */; };
+		AA00000000000000000000A7 /* SyncStuckModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A7 /* SyncStuckModal.swift */; };
 		AA00000000000000000000A6 /* ResendThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A6 /* ResendThrottle.swift */; };
 		AA00000000000000000000A5 /* SignOutWarningModal.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A5 /* SignOutWarningModal.swift */; };
 		AA00000000000000000000A4 /* ListHandoffSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB00000000000000000000A4 /* ListHandoffSheets.swift */; };
@@ -192,6 +193,7 @@
 		BB0000000000000000000089 /* StoreDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreDetailView.swift; sourceTree = "<group>"; };
 		BB0000000000000000000090 /* SpeechDictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechDictationService.swift; sourceTree = "<group>"; };
 		BB0000000000000000000098 /* AllowanceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AllowanceService.swift; sourceTree = "<group>"; };
+		BB00000000000000000000A7 /* SyncStuckModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStuckModal.swift; sourceTree = "<group>"; };
 		BB00000000000000000000A6 /* ResendThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResendThrottle.swift; sourceTree = "<group>"; };
 		BB00000000000000000000A5 /* SignOutWarningModal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignOutWarningModal.swift; sourceTree = "<group>"; };
 		BB00000000000000000000A4 /* ListHandoffSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListHandoffSheets.swift; sourceTree = "<group>"; };
@@ -390,6 +392,7 @@
 				BB00000000000000000000A2 /* AllowanceRefusalModal.swift */,
 				BB00000000000000000000A4 /* ListHandoffSheets.swift */,
 				BB00000000000000000000A5 /* SignOutWarningModal.swift */,
+				BB00000000000000000000A7 /* SyncStuckModal.swift */,
 				BB0000000000000000000087 /* StatusSubtitleView.swift */,
 				BB0000000000000000000033 /* ToastView.swift */,
 				BB0000000000000000000912 /* StoreCard.swift */,
@@ -555,6 +558,7 @@
 				AA0000000000000000000056 /* AppLoadingState.swift in Sources */,
 				AA0000000000000000000090 /* SpeechDictationService.swift in Sources */,
 				AA0000000000000000000098 /* AllowanceService.swift in Sources */,
+				AA00000000000000000000A7 /* SyncStuckModal.swift in Sources */,
 				AA00000000000000000000A6 /* ResendThrottle.swift in Sources */,
 				AA00000000000000000000A5 /* SignOutWarningModal.swift in Sources */,
 				AA00000000000000000000A4 /* ListHandoffSheets.swift in Sources */,

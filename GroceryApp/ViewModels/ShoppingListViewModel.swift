@@ -72,6 +72,11 @@ class ShoppingListViewModel: ObservableObject {
     /// A closed gate the list itself hit — the item cap. Shown by whichever
     /// screen is attached with `.allowanceRefusal`.
     @Published var allowanceRefusal: AllowanceRefusal?
+
+    /// Names of changes the server keeps refusing. Non-empty means the list on
+    /// this phone has stopped tracking everyone else's, and the person is told
+    /// rather than left to work it out.
+    @Published var stuckSyncNames: [String] = []
     @Published var toastMessage: String = ""
     @Published var toastUserName: String = ""
     @Published var toastType: ToastType = .success
@@ -534,12 +539,21 @@ class ShoppingListViewModel: ObservableObject {
                 }
             } while nextToken != nil && !parseFailed && !loadFailed
 
-            // Refusing to overwrite while the outbox has work is the whole point
-            // of the outbox: a successful fetch here would replace the local copy
-            // with the server's, discarding exactly the changes waiting to be
-            // pushed. The reconnect path flushes first and then refetches.
+            // Two states, and no cleverness between them.
+            //
+            // Work still queued and still plausibly sendable: hold the local copy,
+            // because publishing the server's older list here is what would throw
+            // away everything crossed off in a dead zone. That is the whole reason
+            // the outbox exists.
+            //
+            // Work the server has refused repeatedly: the queue is not going to
+            // drain, so holding the list back is no longer protecting anything —
+            // it is freezing this phone against the rest of the household, which
+            // it did to a real list for a day and a half. `flushOutbox` fills in
+            // `stuckSyncNames`, the person is told what cannot be saved, and they
+            // decide. The server is the golden source and nothing is merged.
             if !Outbox.shared.isEmpty {
-                logger.info("Skipping list overwrite — \(Outbox.shared.count) change(s) still pending")
+                logger.info("Holding local list — \(Outbox.shared.count) change(s) still pending")
                 noteServerReachable()
                 return
             }
@@ -1943,13 +1957,39 @@ class ShoppingListViewModel: ObservableObject {
                     Outbox.shared.remove(entry.id)
                 } else {
                     allSucceeded = false
-                    print("[OUTBOX] \(kind.rawValue) failed for \(entry.id), keeping it queued")
+                    // Count it, and give up once it is clearly never going to be
+                    // accepted. An entry that retries for ever used to freeze the
+                    // whole list, because the fetch above refused to publish while
+                    // anything was queued.
+                    if Outbox.shared.recordFailure(entry.id) {
+                        print("[OUTBOX] dropped \(kind.rawValue) for \(entry.id) — the server kept refusing it")
+                    } else {
+                        print("[OUTBOX] \(kind.rawValue) failed for \(entry.id), keeping it queued")
+                    }
                 }
             }
         }
 
         print("[OUTBOX] flush \(allSucceeded ? "complete" : "incomplete — \(Outbox.shared.count) left")")
+
+        // Surface anything the server has now refused more than once. Retrying in
+        // silence is what let one bad row freeze a household's list for a day and
+        // a half with no way back.
+        let stuck = Outbox.shared.stuckEntries
+        stuckSyncNames = stuck.map { entry in
+            items.first(where: { $0.id == entry.id })?.name ?? "An item you removed"
+        }
+
         return allSucceeded
+    }
+
+    /// Throw away what will not save and take the server's copy.
+    func discardStuckChangesAndReload() async {
+        let dropped = Outbox.shared.count
+        Outbox.shared.clear()
+        stuckSyncNames = []
+        logger.warning("Discarded \(dropped) unsendable change(s) at the user's request; reloading from the server")
+        await loadShoppingList(forceRefresh: true)
     }
 
     /// An item created offline: the server has never seen it, so this is a create
@@ -1981,7 +2021,15 @@ class ShoppingListViewModel: ObservableObject {
         if let productId = item.productId { input["productId"] = productId }
         input["notesEphemeral"] = item.notesEphemeral
 
-        return await runOutboxMutation(document, ["input": input])
+        if await runOutboxMutation(document, ["input": input]) { return true }
+
+        // The write may well have landed and only the reply been lost — a
+        // timeout on a mutation the server committed. Retrying the create then
+        // fails for ever on the duplicate id, which is exactly how a queue gets
+        // permanently stuck. If the row is already there, an update succeeds and
+        // the entry is done; that is both the repair and the test for it.
+        print("[OUTBOX] create rejected for \(itemId), trying update in case the row already exists")
+        return await pushUpdate(itemId)
     }
 
     /// The server has this item; the local copy is newer. Pushes the whole

@@ -143,6 +143,22 @@ struct ContentView: View {
                 .environmentObject(viewModel)
         }
         .allowanceRefusal($viewModel.allowanceRefusal, viewModel: viewModel)
+        // Attached here, not on the list screen, so it is seen whichever tab is
+        // open. A list that has stopped tracking the household is not something
+        // to mention quietly on one screen.
+        .overlay {
+            if !viewModel.stuckSyncNames.isEmpty {
+                SyncStuckModal(
+                    stuckNames: viewModel.stuckSyncNames,
+                    onDiscardAndReload: {
+                        Task { await viewModel.discardStuckChangesAndReload() }
+                    },
+                    onKeepTrying: { viewModel.stuckSyncNames = [] }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                .zIndex(98)
+            }
+        }
         .onChange(of: isAtStoreMode) { _, newValue in
             // When exiting shopping mode, sync the viewModel state
             if !newValue {

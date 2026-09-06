@@ -33,7 +33,21 @@ final class Outbox: ObservableObject {
         let id: String          // itemId — one entry per item, by construction
         var kind: Kind
         var queuedAt: Date
+        /// How many times pushing this has failed.
+        ///
+        /// Without it an entry the server will *never* accept — a create whose
+        /// row already exists, an update for a row somebody deleted — stays
+        /// queued for ever. That used to freeze the whole list, because
+        /// `loadShoppingList` discards every fetch while the queue is non-empty.
+        /// One poisoned entry silently cost a household every update from every
+        /// other member, permanently, with pull-to-refresh doing nothing.
+        var attempts: Int = 0
     }
+
+    /// Give up after this many. Generous, because the common case is a real
+    /// outage and those recover; anything still failing after five separate
+    /// flushes is not coming back.
+    static let maxAttempts = 5
 
     @Published private(set) var entries: [Entry] = [] {
         didSet { save() }
@@ -93,6 +107,31 @@ final class Outbox: ObservableObject {
     func remove(_ itemId: String) {
         entries.removeAll { $0.id == itemId }
     }
+
+    /// Record a failed push. Returns true if the entry was given up on, so the
+    /// caller can say so out loud rather than dropping a change in silence.
+    @discardableResult
+    func recordFailure(_ itemId: String) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.id == itemId }) else { return false }
+        entries[index].attempts += 1
+        if entries[index].attempts >= Self.maxAttempts {
+            print("[OUTBOX] giving up on \(entries[index].kind.rawValue) for \(itemId) after \(entries[index].attempts) attempts")
+            entries.remove(at: index)
+            return true
+        }
+        return false
+    }
+
+    /// Item ids with work pending, for the merge in `loadShoppingList`.
+    var pendingIds: Set<String> { Set(entries.map(\.id)) }
+
+    /// Entries the server has already refused more than once.
+    ///
+    /// One failure is a bad moment on a train. Two or more, with the server
+    /// reachable, means this change is not going to be accepted and the person
+    /// should be told rather than left watching a list that never updates.
+    var stuckEntries: [Entry] { entries.filter { $0.attempts >= 2 } }
+    var hasStuckWork: Bool { !stuckEntries.isEmpty }
 
     func clear() {
         entries = []

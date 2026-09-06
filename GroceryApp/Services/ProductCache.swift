@@ -146,9 +146,13 @@ class ProductCache: ObservableObject {
             self.isLoaded = true
             saveToDisk()
             print("ProductCache: Cached \(allProducts.count) products")
+        } catch let failure as ServiceFailure {
+            // Opportunistic warm. The catalogue on disk from the last good fetch
+            // still answers every search, so a failure here changes nothing a
+            // person would see.
+            print("ProductCache: couldn't refresh products — \(failure.errorDescription ?? "unknown")")
         } catch {
-            print("ProductCache: Error fetching products: \(error)")
-            // Keep using existing cache if fetch fails
+            print("ProductCache: couldn't refresh products — \(error)")
         }
     }
 
@@ -188,31 +192,39 @@ class ProductCache: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.query(request: request)
+        let json = try await API.query(request)
 
-        switch response {
-        case .success(let json):
-            guard case .object(let root) = json,
-                  case .object(let listResult) = root["listProducts"],
-                  case .array(let items) = listResult["items"] else {
-                return ([], nil)
-            }
-
-            let products = items.compactMap { parseProduct($0) }
-
-            var token: String? = nil
-            if case .string(let t) = listResult["nextToken"] {
-                token = t
-            }
-
-            return (products, token)
-
-        case .failure(let error):
-            throw error
+        guard case .object(let root) = json,
+              case .object(let listResult) = root["listProducts"],
+              case .array(let items) = listResult["items"] else {
+            return ([], nil)
         }
+
+        let products = items.compactMap { parseProduct($0) }
+
+        var token: String? = nil
+        if case .string(let t) = listResult["nextToken"] {
+            token = t
+        }
+
+        return (products, token)
     }
 
-    private func parseProduct(_ json: JSONValue) -> Product? {
+    /// The catalogue from the launch handshake.
+    ///
+    /// Sent on every launch on purpose: a new client build does not imply a new
+    /// server deployment, and at 48KB asking is cheaper than any scheme for
+    /// deciding whether to ask. Writes the disk copy and the timestamp, so the
+    /// old 24-hour TTL path finds it fresh and stays out of the way.
+    func apply(products json: [JSONValue]) {
+        let parsed = json.compactMap { parseProduct($0) }
+        guard !parsed.isEmpty else { return }
+        products = parsed
+        isLoaded = true
+        saveToDisk()
+    }
+
+    func parseProduct(_ json: JSONValue) -> Product? {
         guard case .object(let obj) = json,
               case .string(let id) = obj["id"],
               case .string(let name) = obj["name"],

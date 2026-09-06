@@ -634,7 +634,7 @@ struct ItemDetailSheet: View {
                 targetAisle = created
             } catch {
                 print("Failed to create aisle: \(error)")
-                reportAisleFailure("Couldn't add aisle \(aisleName). Check your connection and try again.")
+                reportAisleFailure(ServiceFailure.from(error).sentence("Couldn't add aisle \(aisleName)"))
                 return
             }
 
@@ -674,14 +674,20 @@ struct ItemDetailSheet: View {
                 sightedByUser: true
             )
 
-            // Refresh mappings and notify observers
+            // `assignProductToAisle` has already moved the item locally, with an
+            // animation. This picks up anything else the store gained since, and
+            // publishes it the same way rather than snapping.
             _ = try await StoreService.shared.fetchMappings(storeId: store.id)
-            StoreService.shared.objectWillChange.send()
 
             // Stays open. Picking an aisle is one tap in a screen you may have
             // opened to do something else, and closing on it takes away both the
             // Undo and the chance to correct a mis-tap. Done is how you leave.
-            viewModel.toastMessage = "Aisle saved: \(aisleName)"
+            // Names the item and where it went, not just the aisle. The row moves
+            // under a different heading the moment this saves, and "Aisle saved:
+            // Dairy" does not explain why the thing you were looking at is no
+            // longer where you left it — that was reported as the item being
+            // deleted.
+            viewModel.toastMessage = "Moved \(item.name) to \(aisleName)"
             viewModel.toastType = .success
             viewModel.showToast = true
         } catch {
@@ -690,7 +696,7 @@ struct ItemDetailSheet: View {
             // carries item changes only — so this is lost unless she retries,
             // and she can only know to retry if we say so. Sheet stays open on
             // purpose, with what she typed still in the field.
-            reportAisleFailure("Couldn't save aisle \(aisleName). Nothing was changed — try again when you have signal.")
+            reportAisleFailure(ServiceFailure.from(error).sentence("Couldn't save aisle \(aisleName). Nothing was changed"))
         }
     }
 
@@ -867,7 +873,7 @@ struct ItemDetailSheet: View {
             // before this runs, so without a message the aisle looks removed and
             // comes back on the next refresh.
             print("Failed to clear aisle assignment: \(error)")
-            reportAisleFailure("Couldn't clear the aisle. It's still set — try again when you have signal.")
+            reportAisleFailure(ServiceFailure.from(error).sentence("Couldn't clear the aisle. It's still set"))
         }
     }
 
@@ -1108,7 +1114,7 @@ struct ItemDetailSheet: View {
                     // the section looking exactly like an item with no photos.
                     print("Failed to load image \(itemImage.id): \(error)")
                     await MainActor.run {
-                        viewModel.showToast(message: "Couldn't load the photos on this item. Check your signal and try again.", type: .error)
+                        viewModel.showToast(message: ServiceFailure.from(error).sentence("Couldn't load the photos on this item"), type: .error)
                     }
                 }
             }
@@ -1138,7 +1144,7 @@ struct ItemDetailSheet: View {
                 // Used to fail silently: the thumbnail was cleared below and the
                 // photo simply disappeared with nothing said about why.
                 print("Failed to upload image: \(error)")
-                viewModel.showToast(message: "Couldn't add that photo. Check your signal and try again.", type: .error)
+                viewModel.showToast(message: ServiceFailure.from(error).sentence("Couldn't add that photo"), type: .error)
             }
             pendingUploadImage = nil
             isUploadingImage = false
@@ -1155,7 +1161,7 @@ struct ItemDetailSheet: View {
                 // Used to fail silently: the photo stayed on screen and nothing
                 // said the delete had not gone through.
                 print("Failed to delete image: \(error)")
-                viewModel.showToast(message: "Couldn't remove that photo. Check your signal and try again.", type: .error)
+                viewModel.showToast(message: ServiceFailure.from(error).sentence("Couldn't remove that photo"), type: .error)
             }
         }
     }

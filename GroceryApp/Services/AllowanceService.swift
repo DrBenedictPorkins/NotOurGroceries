@@ -96,14 +96,105 @@ final class AllowanceService: ObservableObject {
     static let exhaustedPrefix = "ALLOWANCE_EXHAUSTED:"
 
     static func isExhausted(_ error: Error) -> Bool {
+        // `ServiceFailure.refused` is produced for exactly this prefix and
+        // nothing else, so the case *is* the answer — no reading of error text.
+        if let failure = error as? ServiceFailure, case .refused = failure { return true }
         if let graphQL = error as? GraphQLResponseError<JSONValue>,
            case .error(let errors) = graphQL {
             return errors.contains { $0.message.contains(exhaustedPrefix) }
         }
-        return "\(error)".contains(exhaustedPrefix)
+        return false
     }
 
     private init() {}
+
+    struct CompCodeResult {
+        let succeeded: Bool
+        let message: String
+    }
+
+    /// Spend a comp code on this household.
+    ///
+    /// The server owns every outcome including the wording — invalid, already
+    /// spent, already entitled — so the sheet shows what it is told rather than
+    /// guessing from a status. A network failure is the only case the client has
+    /// to phrase itself.
+    func redeemCompCode(_ code: String) async -> CompCodeResult {
+        let document = """
+        mutation RedeemCompCode($code: String!) {
+            redeemCompCode(code: $code) {
+                status
+                message
+            }
+        }
+        """
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: ["code": code],
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+        do {
+            let json = try await API.mutate(request)
+            guard case .object(let root) = json,
+                  case .object(let node) = root["redeemCompCode"],
+                  case .string(let status) = node["status"],
+                  case .string(let message) = node["message"] else {
+                return CompCodeResult(succeeded: false, message: "Couldn't redeem that code. Try again.")
+            }
+            if status == "COMPED" { await refresh() }
+            return CompCodeResult(succeeded: status == "COMPED", message: message)
+        } catch let failure as ServiceFailure {
+            // The sheet needs a sentence, not an exception; the failure itself
+            // says whether a second attempt is worth anything.
+            print("AllowanceService: redeemCompCode failed — \(failure.errorDescription ?? "unknown")")
+            return CompCodeResult(succeeded: false, message: failure.sentence("Couldn't redeem that code"))
+        } catch {
+            let failure = ServiceFailure.from(error)
+            print("AllowanceService: redeemCompCode failed — \(failure)")
+            return CompCodeResult(succeeded: false, message: failure.sentence("Couldn't redeem that code"))
+        }
+    }
+
+    /// Hand a signed App Store transaction to the server, which verifies Apple's
+    /// signature and marks the *household* subscribed.
+    ///
+    /// Returns whether the server accepted it. A false is not a failed purchase —
+    /// Apple has already taken the money — it means the household is not yet
+    /// unlocked and the next launch should try again.
+    @discardableResult
+    func redeemSubscription(signedTransaction: String) async -> Bool {
+        let document = """
+        mutation RedeemSubscription($signedTransaction: String!) {
+            redeemSubscription(signedTransaction: $signedTransaction) {
+                entitlement
+                subscriptionExpiresAt
+            }
+        }
+        """
+        let request = GraphQLRequest<JSONValue>(
+            document: document,
+            variables: ["signedTransaction": signedTransaction],
+            responseType: JSONValue.self,
+            authMode: AWSAuthorizationType.amazonCognitoUserPools
+        )
+        do {
+            let json = try await API.mutate(request)
+            guard case .object(let root) = json,
+                  case .object = root["redeemSubscription"] else { return false }
+            // The balances and the plan label are both stale now.
+            await refresh()
+            return true
+        } catch let failure as ServiceFailure {
+            // A false here means "not unlocked yet, ask again next launch" — the
+            // purchase already happened, so there is nothing to throw at anyone.
+            print("AllowanceService: redeemSubscription failed — \(failure.errorDescription ?? "unknown")")
+            return false
+        } catch {
+            print("AllowanceService: redeemSubscription failed — \(error)")
+            return false
+        }
+    }
 
     func refresh() async {
         let document = """
@@ -129,21 +220,30 @@ final class AllowanceService: ObservableObject {
         )
 
         do {
-            let response = try await Amplify.API.query(request: request)
-            guard case .success(let json) = response,
-                  case .object(let root) = json,
+            let json = try await API.query(request)
+            guard case .object(let root) = json,
                   case .object(let node) = root["householdAllowances"],
                   let parsed = Self.decode(node) else { return }
             summary = parsed
             lastRefreshed = Date()
-        } catch {
+        } catch let failure as ServiceFailure {
             // Nothing gates on a stale value that the server does not gate on
             // again. Worth a line, not an alert.
+            print("Could not load allowances: \(failure.errorDescription ?? "unknown")")
+        } catch {
             print("Could not load allowances: \(error)")
         }
     }
 
-    private static func decode(_ node: [String: JSONValue]) -> AllowanceSummary? {
+    /// Allowances from the launch handshake, already `summarize`d server-side
+    /// into the same shape the standalone query returns.
+    func apply(allowances node: [String: JSONValue]) {
+        guard let parsed = Self.decode(node) else { return }
+        summary = parsed
+        lastRefreshed = Date()
+    }
+
+    static func decode(_ node: [String: JSONValue]) -> AllowanceSummary? {
         func int(_ key: String) -> Int? {
             if case .number(let n) = node[key] { return Int(n) }
             return nil

@@ -63,6 +63,11 @@ struct ToastView: View {
     @State private var isVisible = false
     @State private var dismissTimer: Timer?
 
+    /// How long a toast stays up before it starts fading.
+    static let visibleDuration: TimeInterval = 5.0
+    /// The fade itself, which the owner has to outlast before removing the view.
+    static let fadeDuration: TimeInterval = 0.35
+
     var body: some View {
         HStack(spacing: 12) {
             // User avatar or type icon
@@ -81,8 +86,12 @@ struct ToastView: View {
                 }
 
                 Text(message)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(type == .error ? type.accentColor.opacity(0.9) : .white)
+                    // The type's own colour rather than white, and heavier. A
+                    // toast on a dark list in white medium text is the same
+                    // treatment as every row it floats over, so it reads as part
+                    // of the list instead of as something that just happened.
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(type.accentColor)
                     .lineLimit(2)
             }
 
@@ -101,10 +110,14 @@ struct ToastView: View {
                 isVisible = true
             }
 
-            // Auto-dismiss after 3 seconds (longer for errors)
-            let duration: TimeInterval = type == .error ? 4.0 : 3.0
-            dismissTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { _ in
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            // Five seconds. Three was long enough to notice and too short to
+            // read a sentence naming an item and where it went.
+            //
+            // `ShoppingListViewModel.showToast` clears the flag a beat later, so
+            // this fade always finishes before the view is torn out from under
+            // it — the two used to be set to the same three seconds and raced.
+            dismissTimer = Timer.scheduledTimer(withTimeInterval: Self.visibleDuration, repeats: false) { _ in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                     isVisible = false
                 }
             }

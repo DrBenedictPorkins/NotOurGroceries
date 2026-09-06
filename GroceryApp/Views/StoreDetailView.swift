@@ -320,7 +320,7 @@ struct StoreDetailView: View {
                 // store details with no sign the refresh had failed.
                 print("Failed to refresh store data: \(error)")
                 await MainActor.run {
-                    viewModel.showToast(message: "Couldn't refresh this store. Check your signal and try again.", type: .error)
+                    viewModel.showToast(message: ServiceFailure.from(error).sentence("Couldn't refresh this store"), type: .error)
                 }
             }
         }
@@ -363,8 +363,9 @@ struct StoreDetailView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         } catch {
+            let failure = ServiceFailure.from(error)
             await MainActor.run {
-                viewModel.toastMessage = "Failed to save: \(error.localizedDescription)"
+                viewModel.toastMessage = failure.sentence("Failed to save: \(failure.errorDescription ?? "Something went wrong")")
                 viewModel.toastType = .error
                 viewModel.showToast = true
             }
@@ -387,8 +388,9 @@ struct StoreDetailView: View {
                 dismiss()
             }
         } catch {
+            let failure = ServiceFailure.from(error)
             await MainActor.run {
-                viewModel.toastMessage = "Failed to delete: \(error.localizedDescription)"
+                viewModel.toastMessage = failure.sentence("Failed to delete: \(failure.errorDescription ?? "Something went wrong")")
                 viewModel.toastType = .error
                 viewModel.showToast = true
             }

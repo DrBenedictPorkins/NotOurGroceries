@@ -39,15 +39,14 @@ class AisleExtractionService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success:
-            logger.info("Updated user override for mapping \(mappingId)")
-        case .failure(let error):
-            logger.error("Failed to update user override: \(error)")
-            throw error
+        do {
+            _ = try await API.mutate(request)
+        } catch let failure as ServiceFailure {
+            logger.error("Failed to update user override: \(failure.errorDescription ?? "")")
+            throw failure
         }
+
+        logger.info("Updated user override for mapping \(mappingId)")
     }
 
     // MARK: - Private: Database Operations
@@ -104,28 +103,22 @@ class AisleExtractionService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.query(request: request)
+        let json = try await API.query(request)
 
-        switch response {
-        case .success(let json):
-            guard case .object(let root) = json,
-                  case .object(let listResult) = root["listProductAisleMappingsByStore"],
-                  case .array(let items) = listResult["items"] else {
-                return ([], nil)
-            }
-
-            let mappings = items.compactMap { parseMapping($0) }
-
-            var token: String? = nil
-            if case .string(let t) = listResult["nextToken"] {
-                token = t
-            }
-
-            return (mappings, token)
-
-        case .failure(let error):
-            throw error
+        guard case .object(let root) = json,
+              case .object(let listResult) = root["listProductAisleMappingsByStore"],
+              case .array(let items) = listResult["items"] else {
+            return ([], nil)
         }
+
+        let mappings = items.compactMap { parseMapping($0) }
+
+        var token: String? = nil
+        if case .string(let t) = listResult["nextToken"] {
+            token = t
+        }
+
+        return (mappings, token)
     }
 
     /// Parse a single mapping from JSON
@@ -235,11 +228,7 @@ class AisleExtractionService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        if case .failure(let error) = response {
-            throw error
-        }
+        _ = try await API.mutate(request)
     }
 
     /// Update an existing mapping
@@ -276,11 +265,7 @@ class AisleExtractionService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        if case .failure(let error) = response {
-            throw error
-        }
+        _ = try await API.mutate(request)
     }
 
     // MARK: - Single Product Aisle Inference
@@ -349,77 +334,100 @@ class AisleExtractionService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success(let json):
-            // Parse the response - it's a JSON string that we need to decode
-            guard case .object(let root) = json,
-                  case .string(let resultString) = root["inferProductAisleBatch"] else {
-                throw AisleExtractionError.parseFailed("Invalid response format")
-            }
-
-            // Parse the JSON string response
-            guard let resultData = resultString.data(using: .utf8) else {
-                throw AisleExtractionError.parseFailed("Could not parse response data")
-            }
-
-            struct BatchResponse: Decodable {
-                let success: Bool
-                let error: String?
-                let results: [BatchResult]?
-            }
-
-            struct BatchResult: Decodable {
-                let productName: String
-                let normalizedName: String?
-                let productId: String?
-                let suggestedAisle: String
-                let confidence: Double
-                let reasoning: String
-            }
-
-            let batchResponse = try JSONDecoder().decode(BatchResponse.self, from: resultData)
-
-            guard batchResponse.success, let results = batchResponse.results else {
-                let errorMsg = batchResponse.error ?? "Batch inference failed"
-                // Check if this is an API key configuration error
-                if AisleExtractionError.isApiKeyError(errorMsg) {
-                    throw AisleExtractionError.apiKeyNotConfigured
-                }
-                throw AisleExtractionError.processingFailed(errorMsg)
-            }
-
-            // Map results back to item IDs
-            var resultDict: [String: AisleInferenceResult] = [:]
-            for result in results {
-                // Find matching input item by productName
-                if let item = items.first(where: { $0.productName == result.productName }) {
-                    resultDict[item.id] = AisleInferenceResult(
-                        suggestedAisle: result.suggestedAisle,
-                        confidence: result.confidence,
-                        reasoning: result.reasoning
-                    )
-                }
-            }
-
-            logger.info("[INFER-BATCH] Got \(resultDict.count) results")
-            return resultDict
-
-        case .failure(let error):
-            logger.error("[INFER-BATCH] GraphQL error: \(error)")
-            throw error
+        let json: JSONValue
+        do {
+            json = try await API.mutate(request)
+        } catch let failure as ServiceFailure {
+            logger.error("[INFER-BATCH] GraphQL error: \(failure.errorDescription ?? "")")
+            throw failure
         }
+
+        // Parse the response - it's a JSON string that we need to decode
+        guard case .object(let root) = json,
+              case .string(let resultString) = root["inferProductAisleBatch"] else {
+            throw AisleExtractionError.parseFailed("Invalid response format")
+        }
+
+        // Parse the JSON string response
+        guard let resultData = resultString.data(using: .utf8) else {
+            throw AisleExtractionError.parseFailed("Could not parse response data")
+        }
+
+        struct BatchResponse: Decodable {
+            let success: Bool
+            let error: String?
+            let results: [BatchResult]?
+        }
+
+        struct BatchResult: Decodable {
+            let productName: String
+            let normalizedName: String?
+            let productId: String?
+            let suggestedAisle: String
+            let confidence: Double
+            let reasoning: String
+        }
+
+        let batchResponse = try JSONDecoder().decode(BatchResponse.self, from: resultData)
+
+        guard batchResponse.success, let results = batchResponse.results else {
+            let errorMsg = batchResponse.error ?? "Batch inference failed"
+            // Check if this is an API key configuration error
+            if AisleExtractionError.isApiKeyError(errorMsg) {
+                throw AisleExtractionError.apiKeyNotConfigured
+            }
+            throw AisleExtractionError.processingFailed(errorMsg)
+        }
+
+        // Map results back to item IDs
+        var resultDict: [String: AisleInferenceResult] = [:]
+        for result in results {
+            // Find matching input item by productName
+            if let item = items.first(where: { $0.productName == result.productName }) {
+                resultDict[item.id] = AisleInferenceResult(
+                    suggestedAisle: result.suggestedAisle,
+                    confidence: result.confidence,
+                    reasoning: result.reasoning
+                )
+            }
+        }
+
+        logger.info("[INFER-BATCH] Got \(resultDict.count) results")
+        return resultDict
     }
 
     /// Save batch inference results to database
     /// Reuses existing createMappingFromInference for each item
+    /// What actually happened to a batch, in three separate numbers.
+    ///
+    /// It used to return one count, and the caller subtracted it from the input
+    /// count and called the difference "didn't save". Two of the three ways an
+    /// item can end up unplaced are not failures at all — the model returned
+    /// nothing for it, or it invented an aisle the store does not have — so a
+    /// batch where the model simply could not place two items reported "Placed 1
+    /// of 3. The rest didn't save", on a working connection, having saved
+    /// everything it was given. Observed 2026-09-06.
+    struct BatchSaveOutcome {
+        /// Written to the server.
+        var placed = 0
+        /// The model had no aisle for these, or named one the store does not
+        /// have. Nothing was attempted and nothing was charged.
+        var unplaced = 0
+        /// Attempted and threw. The only number that means "try again".
+        var failed = 0
+        /// Why the first failure failed, so the sheet can say something true
+        /// instead of asking a global network probe what it thinks. Nil when
+        /// nothing failed.
+        var firstFailure: ServiceFailure?
+    }
+
+    @discardableResult
     func saveBatchInferenceResults(
         items: [BatchInferenceInput],
         results: [String: AisleInferenceResult],
         storeId: String
-    ) async throws -> Int {
-        var savedCount = 0
+    ) async throws -> BatchSaveOutcome {
+        var outcome = BatchSaveOutcome()
 
         // Only persist an aisle the store actually declares. Inference used to be
         // able to invent one ("Not mapped (likely Baking/Dry Goods aisle)") and it
@@ -435,9 +443,13 @@ class AisleExtractionService: ObservableObject {
         ).subtracting([""])
 
         for item in items {
-            guard let result = results[item.id] else { continue }
+            guard let result = results[item.id] else {
+                outcome.unplaced += 1
+                continue
+            }
             guard validAisleIds.isEmpty || validAisleIds.contains(result.suggestedAisle) else {
                 print("[INFER] Discarding invented aisle \(result.suggestedAisle) for \(item.productName)")
+                outcome.unplaced += 1
                 continue
             }
 
@@ -449,15 +461,17 @@ class AisleExtractionService: ObservableObject {
                     storeId: storeId,
                     inference: result
                 )
-                savedCount += 1
+                outcome.placed += 1
             } catch {
-                logger.error("[INFER-BATCH] Failed to save mapping for '\(item.productName)': \(error)")
-                // Continue with other items
+                let failure = ServiceFailure.from(error)
+                logger.error("[INFER-BATCH] Failed to save mapping for '\(item.productName)': \(failure)")
+                outcome.failed += 1
+                if outcome.firstFailure == nil { outcome.firstFailure = failure }
             }
         }
 
-        logger.info("[INFER-BATCH] Saved \(savedCount) of \(items.count) mappings")
-        return savedCount
+        logger.info("[INFER-BATCH] Placed \(outcome.placed), unplaced \(outcome.unplaced), failed \(outcome.failed) of \(items.count)")
+        return outcome
     }
 
 
@@ -520,11 +534,7 @@ class AisleExtractionService: ObservableObject {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        if case .failure(let error) = response {
-            throw error
-        }
+        _ = try await API.mutate(request)
 
         logger.info("[INFER] Upserted mapping for '\(productName)' -> aisle \(inference.suggestedAisle)")
     }

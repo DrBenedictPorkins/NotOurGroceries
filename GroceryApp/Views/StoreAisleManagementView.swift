@@ -356,8 +356,9 @@ struct StoreAisleManagementView: View {
                 applyStoreUpdate(updated)
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             } catch {
+                let failure = ServiceFailure.from(error)
                 await MainActor.run {
-                    viewModel.toastMessage = "Couldn't save the new order: \(error.localizedDescription)"
+                    viewModel.toastMessage = failure.sentence("Couldn't save the new order: \(failure.errorDescription ?? "Something went wrong")")
                     viewModel.toastType = .error
                     viewModel.showToast = true
                 }
@@ -390,7 +391,8 @@ struct StoreAisleManagementView: View {
                     viewModel.toastType = .success
                     viewModel.showToast = true
                 } catch {
-                    viewModel.toastMessage = "Couldn't remove \(aisle.displayName): \(error.localizedDescription)"
+                    let failure = ServiceFailure.from(error)
+                    viewModel.toastMessage = failure.sentence("Couldn't remove \(aisle.displayName): \(failure.errorDescription ?? "Something went wrong")")
                     viewModel.toastType = .error
                     viewModel.showToast = true
                 }
@@ -454,7 +456,7 @@ struct StoreAisleManagementView: View {
                     // the screen understated how much was already assigned.
                     print("Failed to fetch mappings for store \(storeId): \(error)")
                     await MainActor.run {
-                        viewModel.showToast(message: "Couldn't load which items are already in aisles. Check your signal and reopen this screen.", type: .error)
+                        viewModel.showToast(message: ServiceFailure.from(error).sentence("Couldn't load which items are already in aisles"), type: .error)
                     }
                 }
             }
@@ -548,8 +550,9 @@ struct StoreAisleManagementView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         } catch {
+            let failure = ServiceFailure.from(error)
             await MainActor.run {
-                viewModel.toastMessage = "Cleanup failed: \(error.localizedDescription)"
+                viewModel.toastMessage = failure.sentence("Cleanup failed: \(failure.errorDescription ?? "Something went wrong")")
                 viewModel.toastType = .error
                 viewModel.showToast = true
             }

@@ -65,7 +65,7 @@ struct StoresView: View {
                 // was last loaded, so a failed refresh looked like no change.
                 print("Failed to refresh stores: \(error)")
                 await MainActor.run {
-                    viewModel.showToast(message: "Couldn't load your stores. Check your signal and try again.", type: .error)
+                    viewModel.showToast(message: ServiceFailure.from(error).sentence("Couldn't load your stores"), type: .error)
                 }
             }
         }

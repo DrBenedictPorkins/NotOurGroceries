@@ -566,7 +566,8 @@ struct HouseholdView: View {
                     householdNotice = "Your household is ready, but its starting stores couldn't be created. You can add a store yourself from Select Store."
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
             }
             isLoading = false
         }
@@ -594,7 +595,8 @@ struct HouseholdView: View {
                 inviteCode = ""
                 await loadHouseholdDetails()
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
             }
             isLoading = false
         }
@@ -624,7 +626,8 @@ struct HouseholdView: View {
                 successMessage = "\(member.displayName) was removed"
                 await loadHouseholdDetails()
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
             }
         }
     }
@@ -637,7 +640,7 @@ struct HouseholdView: View {
             householdNotice = nil
         } catch {
             print("Error loading household details: \(error)")
-            householdNotice = "Couldn't load your household. Check your signal and pull down to refresh."
+            householdNotice = ServiceFailure.from(error).sentence("Couldn't load your household")
         }
     }
 
@@ -652,7 +655,8 @@ struct HouseholdView: View {
                 // nobody in it.
                 _ = try await amplifyService.leaveHouseholdRemotely()
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
                 return
             }
             householdDetails = nil
@@ -766,7 +770,8 @@ struct JoinHouseholdSheet: View {
                 _ = try await amplifyService.joinHouseholdWithCode(inviteCode.uppercased())
                 isPresented = false
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
             }
             isLoading = false
         }

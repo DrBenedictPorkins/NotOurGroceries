@@ -212,19 +212,17 @@ final class SpeechDictationService: ObservableObject {
         )
 
         do {
-            let response = try await Amplify.API.mutate(request: request)
-            switch response {
-            case .success(let json):
-                if let text = extractTranscript(from: json), !text.isEmpty {
-                    onCommit?(text)
-                } else {
-                    errorMessage = "No speech detected."
-                }
-            case .failure(let error):
-                errorMessage = "Transcription failed: \(error.errorDescription)"
+            let json = try await API.mutate(request)
+            if let text = extractTranscript(from: json), !text.isEmpty {
+                onCommit?(text)
+            } else {
+                errorMessage = "No speech detected."
             }
         } catch {
-            errorMessage = "Transcription failed: \(error.localizedDescription)"
+            // Was `error.localizedDescription`, which put raw Amplify text in
+            // front of somebody who had just spoken into their phone in a shop.
+            let failure = ServiceFailure.from(error)
+            errorMessage = failure.sentence("Couldn't transcribe that")
         }
         state = .idle
     }

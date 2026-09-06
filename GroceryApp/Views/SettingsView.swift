@@ -494,7 +494,8 @@ struct SettingsView: View {
             // Nothing to dismiss — the session is gone, so the app returns to
             // the sign-in screen on its own.
         } catch {
-            deleteError = "Could not delete your account: \(error.localizedDescription)"
+            let failure = ServiceFailure.from(error)
+            deleteError = failure.sentence("Could not delete your account: \(failure.errorDescription ?? "Something went wrong")")
             print("Delete account failed: \(error)")
         }
         isDeletingAccount = false
@@ -626,7 +627,7 @@ struct SettingsView: View {
             } catch {
                 print("Sign out failed: \(error)")
                 viewModel.showToast(
-                    message: "Couldn't complete sign out. Check your signal and try again.",
+                    message: ServiceFailure.from(error).sentence("Couldn't complete sign out"),
                     type: .error
                 )
             }

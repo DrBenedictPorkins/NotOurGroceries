@@ -153,7 +153,7 @@ struct StoreSelectionSheet: View {
         } catch {
             print("Failed to load mappings for \(store.name): \(error)")
             viewModel.showToast(
-                message: "Couldn't load \(store.name)'s aisles. Items may look unsorted — try again when you have signal.",
+                message: ServiceFailure.from(error).sentence("Couldn't load \(store.name)'s aisles. Items may look unsorted"),
                 type: .warning)
             isCheckingMappings = false
             selectedStore = nil

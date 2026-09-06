@@ -93,6 +93,28 @@ SKU keeps the entitlement a boolean. Review once there is conversion data.
 The price is derived in *The economics*, below. Short version: at $0.99 the free
 tier loses money at any realistic conversion rate; at $1.99 it does not.
 
+### Household-hopping is not worth closing — 2026-09-06
+
+Signing out, leaving a household and creating a new one produces a fresh
+`HouseholdAllowance` row with `periodStartedAt` set to now, so the allowances
+reset. This is a real hole and it stays open.
+
+What it costs the person doing it is the point: every aisle mapping for every
+store, the suggestion pool, and the trip history. Mappings are the front-loaded
+AI spend the allowance exists to meter and the thing that makes the app good, so
+the exploit re-pays the expensive part to dodge $1.99 — and has to be repeated
+every period. Anyone willing to do that repeatedly was never going to convert.
+
+No device fingerprint, no per-Apple-ID ledger, no rate limit on household
+creation. Do not propose one.
+
+### Refunds are not chased — 2026-09-06
+
+There is no webhook and there will not be one. A refunded subscriber keeps the
+entitlement until `subscriptionExpiresAt` passes, at which point the server reads
+them as `FREE` like any lapse. Same mechanism, same code path, nothing extra to
+build or monitor.
+
 ### Small Business Program
 
 Enrol. Commission drops from 30% to 15%, which every figure in this document

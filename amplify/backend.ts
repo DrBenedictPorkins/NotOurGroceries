@@ -7,6 +7,9 @@ import {
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
   finishShoppingFunction,
+  redeemCompCodeFunction,
+  claimDeviceFunction,
+  handshakeFunction,
   householdMembershipFunction,
   inferProductAisleFunction,
   parseIngredientsFunction,
@@ -33,6 +36,9 @@ const backend = defineBackend({
   regenerateInviteCodeFunction,
   joinHouseholdFunction,
   finishShoppingFunction,
+  redeemCompCodeFunction,
+  claimDeviceFunction,
+  handshakeFunction,
   householdMembershipFunction,
   inferProductAisleFunction,
   parseIngredientsFunction,
@@ -319,6 +325,62 @@ for (const fn of [inferProductAisleLambda, parseIngredientsLambda, householdAllo
 // Joining only reads: the member cap is checked, never spent.
 addEnvVars(joinHouseholdLambda, { ALLOWANCE_TABLE_NAME: allowanceTable.tableName });
 allowanceTable.grantReadData(joinHouseholdLambda);
+
+// Comp codes. The function needs the code table to burn a row and the allowance
+// table to lift the household — `setEntitlement` writes the latter. Placed here,
+// after `allowanceTable` exists.
+const compCodeTable = backend.data.resources.tables['CompCode'];
+const redeemCompCodeLambda = backend.redeemCompCodeFunction.resources.lambda as Function;
+addEnvVars(redeemCompCodeLambda, {
+  COMP_CODE_TABLE_NAME: compCodeTable.tableName,
+  ALLOWANCE_TABLE_NAME: allowanceTable.tableName,
+});
+compCodeTable.grantReadWriteData(redeemCompCodeLambda);
+allowanceTable.grantReadWriteData(redeemCompCodeLambda);
+
+// The launch handshake. Reads six tables and their GSIs; writes nothing.
+const handshakeLambda = backend.handshakeFunction.resources.lambda as Function;
+addEnvVars(handshakeLambda, {
+  USER_TABLE_NAME: userTable.tableName,
+  HOUSEHOLD_TABLE_NAME: householdTable.tableName,
+  GROCERY_ITEM_TABLE_NAME: groceryItemTable.tableName,
+  HOUSEHOLD_STORE_TABLE_NAME: backend.data.resources.tables['HouseholdStore'].tableName,
+  PRODUCT_TABLE_NAME: productTable.tableName,
+  ALLOWANCE_TABLE_NAME: allowanceTable.tableName,
+});
+for (const table of [userTable, householdTable, groceryItemTable,
+                     backend.data.resources.tables['HouseholdStore'], productTable]) {
+  table.grantReadData(handshakeLambda);
+}
+// `loadAllowance` lazily creates the row for households older than the table,
+// so this one is read *and* write.
+allowanceTable.grantReadWriteData(handshakeLambda);
+// The grant helpers do not reach indexes, and every read but the catalogue is a
+// GSI query. Without this the handshake fails at runtime and nowhere else —
+// `tsc` and the tests cannot see it.
+handshakeLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['dynamodb:Query'],
+  resources: [
+    `${userTable.tableArn}/index/*`,
+    `${householdTable.tableArn}/index/*`,
+    `${groceryItemTable.tableArn}/index/*`,
+    `${backend.data.resources.tables['HouseholdStore'].tableArn}/index/*`,
+  ],
+}));
+
+// One account, one device. Writes the registration onto the User row (which is
+// allow.owner(), so a client must not be able to write it) and globally signs
+// out the account's other devices.
+const claimDeviceLambda = backend.claimDeviceFunction.resources.lambda as Function;
+addEnvVars(claimDeviceLambda, {
+  USER_TABLE_NAME: userTable.tableName,
+  USER_POOL_ID: backend.auth.resources.userPool.userPoolId,
+});
+userTable.grantReadWriteData(claimDeviceLambda);
+claimDeviceLambda.addToRolePolicy(new PolicyStatement({
+  actions: ['cognito-idp:AdminUserGlobalSignOut'],
+  resources: [backend.auth.resources.userPool.userPoolArn],
+}));
 
 // ========================================
 // ADMIN MCP FUNCTION (Database Management)

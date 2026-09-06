@@ -16,6 +16,7 @@ struct AllowancesView: View {
     /// be an hour old, and a page that shows them and then swaps in new ones
     /// looks like it changed its mind.
     @State private var loaded = false
+    @State private var showRedeemCode = false
 
     var body: some View {
         NavigationView {
@@ -29,6 +30,10 @@ struct AllowancesView: View {
                             planCard(summary)
                             recurringCard(summary)
                             structuralCard(summary)
+                            // Only when there is something to redeem against. A
+                            // comped or subscribed household typing a code would
+                            // spend one of the hundred for nothing.
+                            if !summary.entitled { redeemRow }
                         } else {
                             VStack(spacing: 12) {
                                 ProgressView()
@@ -57,6 +62,9 @@ struct AllowancesView: View {
             await allowances.refresh()
             withAnimation(.easeOut(duration: 0.2)) { loaded = true }
         }
+        .sheet(isPresented: $showRedeemCode) {
+            RedeemCompCodeSheet()
+        }
     }
 
     // MARK: - Plan
@@ -73,6 +81,35 @@ struct AllowancesView: View {
         }
         .padding(20)
         .background(glassCard)
+    }
+
+    /// The way in for the first hundred households: they arrive with a code and
+    /// nowhere obvious to type it. Sits under the limits, which is where
+    /// somebody looking at their limits is already looking.
+    private var redeemRow: some View {
+        Button {
+            showRedeemCode = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "ticket.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.dillGreen)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Redeem a code")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(DesignSystem.Colors.textPrimary)
+                    Text("Lifts every limit for your household")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(DesignSystem.Colors.textSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.textTertiary)
+            }
+            .padding(20)
+            .background(glassCard)
+        }
     }
 
     // MARK: - Recurring

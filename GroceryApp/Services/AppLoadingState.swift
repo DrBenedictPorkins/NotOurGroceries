@@ -13,25 +13,16 @@ enum LoadingStep: Int, CaseIterable {
     case initializing = 0
     case configuringServices = 1
     case validatingLogin = 2
-    case syncingProducts = 3
-    case syncingMembers = 4
-    case syncingList = 5
-    case syncingStores = 6
-    case checkingTrip = 7
-    case checkingAllowances = 8
-    case ready = 9
+    /// One call now, not six. See `HandshakeService` for why.
+    case syncing = 3
+    case ready = 4
 
     var description: String {
         switch self {
         case .initializing: return "Starting up..."
         case .configuringServices: return "Connecting to servers..."
         case .validatingLogin: return "Checking your sign-in..."
-        case .syncingProducts: return "Syncing product catalog..."
-        case .syncingMembers: return "Syncing household members..."
-        case .syncingList: return "Syncing your list..."
-        case .syncingStores: return "Syncing your stores..."
-        case .checkingTrip: return "Checking for an active trip..."
-        case .checkingAllowances: return "Checking your allowances..."
+        case .syncing: return "Getting your list..."
         case .ready: return "Ready!"
         }
     }
@@ -44,12 +35,7 @@ enum LoadingStep: Int, CaseIterable {
         case .initializing, .ready: return "part of the startup"
         case .configuringServices: return "the connection to the server"
         case .validatingLogin: return "your sign-in"
-        case .syncingProducts: return "the product catalogue"
-        case .syncingMembers: return "who else is in your household"
-        case .syncingList: return "your shopping list"
-        case .syncingStores: return "your stores"
-        case .checkingTrip: return "whether anyone is out shopping"
-        case .checkingAllowances: return "your allowances"
+        case .syncing: return "your list"
         }
     }
 
@@ -61,18 +47,8 @@ enum LoadingStep: Int, CaseIterable {
         switch self {
         case .configuringServices, .validatingLogin:
             return "Without this you'll be asked to sign in again."
-        case .syncingProducts:
-            return "Without this, item suggestions may be out of date."
-        case .syncingMembers:
-            return "Without this, names on items may be missing."
-        case .syncingList:
+        case .syncing:
             return "Without this you'll see your last saved list, not the current one."
-        case .syncingStores:
-            return "Without this you'll see your last saved stores."
-        case .checkingTrip:
-            return "Without this the app won't know if anyone is out shopping."
-        case .checkingAllowances:
-            return "Without this your allowances may be out of date."
         case .initializing, .ready:
             return ""
         }
@@ -142,6 +118,13 @@ class AppLoadingState: ObservableObject {
     /// waits on this so the two halves do not run at once and fight over the
     /// step label.
     @Published private(set) var phaseOneComplete: Bool = false
+
+    /// Set when the session check has failed and this phone is carrying a list.
+    /// Not a stall — the common failure is fast, not slow, and hanging the offer
+    /// off the eight-second deadline meant it never appeared at all.
+    @Published private(set) var offeringOffGrid = false
+
+    var isAskingSomething: Bool { stalledStep != nil || offeringOffGrid }
 
     enum StallDecision { case retry, skip }
     private var stallDecision: CheckedContinuation<StallDecision, Never>?
@@ -221,6 +204,17 @@ class AppLoadingState: ObservableObject {
         }
     }
 
+    /// Offer off-grid and wait. `.skip` means go off-grid, `.retry` means try
+    /// the session check again.
+    func askAboutOffGrid() async -> StallDecision {
+        offeringOffGrid = true
+        let decision = await withCheckedContinuation { (c: CheckedContinuation<StallDecision, Never>) in
+            stallDecision = c
+        }
+        offeringOffGrid = false
+        return decision
+    }
+
     func resolveStall(_ decision: StallDecision) {
         guard let c = stallDecision else { return }
         stallDecision = nil
@@ -244,7 +238,7 @@ class AppLoadingState: ObservableObject {
         // "Pull down on your list" is useless advice to somebody who is about to
         // be shown a sign-in screen, because there is no list to pull down on.
         if skippedSteps.contains(.validatingLogin) || skippedSteps.contains(.configuringServices) {
-            return "Couldn't reach the server to check \(joined). Try again when you have signal."
+            return "Couldn't check \(joined). \(FailureAdvice.tryAgain)"
         }
         return "Couldn't load \(joined). Pull down on your list to try again."
     }

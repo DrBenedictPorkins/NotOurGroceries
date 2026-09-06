@@ -16,6 +16,8 @@ struct ContentView: View {
     @ObservedObject private var allowances = AllowanceService.shared
     @State private var backgroundedAt: Date?
     @State private var showAllowanceNudge = false
+    @ObservedObject private var devices = DeviceRegistry.shared
+    @State private var isFlushingForEviction = false
     @State private var showAllowances = false
     private static let longBackground: TimeInterval = 90 * 60
 
@@ -74,6 +76,22 @@ struct ContentView: View {
                 )
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 .zIndex(99)
+            }
+
+            // The account has moved to another phone. Above everything, because
+            // nothing on the screen underneath belongs to this device any more.
+            if let other = devices.supersededBy {
+                DeviceSupersededModal(
+                    otherDeviceName: other,
+                    stuck: viewModel.stuckSyncNames,
+                    isFlushing: isFlushingForEviction,
+                    onSignOut: {
+                        devices.clearSuperseded()
+                        Task { try? await amplifyService.signOut() }
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(200)
             }
 
             // Info modal overlay
@@ -154,6 +172,7 @@ struct ContentView: View {
                 Task {
                     await comeBackOnTheGridIfPossible()
                     await flushPendingFinish()
+                    await standDownIfSuperseded()
                     await refreshAllowancesAndMaybeNudge(showCard: longEnough)
                 }
             default:
@@ -235,6 +254,29 @@ struct ContentView: View {
         }
     }
 
+    /// Has another phone taken this account?
+    ///
+    /// Checked on launch and on every return to the foreground, because Cognito's
+    /// own eviction only bites when the access token lapses — up to an hour, all
+    /// of it spent as a second shopper the household cannot see.
+    ///
+    /// Anything this phone still owes the server is pushed first. A superseded
+    /// device is about to become unreachable, so this is the last chance those
+    /// changes have; whatever will not go is named before it is lost.
+    private func standDownIfSuperseded(askServer: Bool = true) async {
+        // The launch handshake already answered this in the same round trip that
+        // rebuilt the screen, so asking again there would be a second call for a
+        // question we hold the answer to.
+        if askServer { await devices.verify() }
+        guard devices.supersededBy != nil else { return }
+        guard !isFlushingForEviction else { return }
+
+        isFlushingForEviction = true
+        await viewModel.sendPendingFinish()
+        _ = await viewModel.flushOutbox()
+        isFlushingForEviction = false
+    }
+
     /// Off-grid ends by itself, not by the person remembering to leave it.
     ///
     /// Tried whenever the app comes forward and whenever an interface appears —
@@ -275,32 +317,41 @@ struct ContentView: View {
         guard !hasCheckedShoppingStatus else { return }
         hasCheckedShoppingStatus = true
 
-        // Off-grid means the server has already been shown not to answer. Making
-        // the person sit through four more eight-second deadlines to be told the
-        // same thing four more times is not resilience, it is a punishment. The
-        // snapshot is already on screen; go straight in.
+        // Off-grid means the server has already been shown not to answer. The
+        // snapshot is on screen; asking again would only cost a deadline.
         if amplifyService.isOffGrid {
             loading.setStep(.ready)
             return
         }
 
-        await loading.perform(.syncingList) {
-            await viewModel.loadShoppingList()
-        }
-        await loading.perform(.syncingStores) {
-            await viewModel.loadStores()
+        // One call for everything: profile, household, members, items, stores,
+        // allowances, the catalogue, and whether this device still holds the
+        // account. Eight round trips became one, and eight ways of being half
+        // loaded became none.
+        var restoreShopping = false
+        await loading.perform(.syncing) {
+            do {
+                let result = try await HandshakeService.run(deviceId: DeviceRegistry.shared.deviceId)
+                viewModel.apply(handshake: result)
+                restoreShopping = viewModel.isCurrentUserShopping
+                if !result.deviceStillOurs {
+                    DeviceRegistry.shared.noteSuperseded(by: result.activeDeviceName)
+                }
+            } catch {
+                let failure = ServiceFailure.from(error)
+                print("Handshake failed: \(failure)")
+                // The local snapshot is already on screen from the view model's
+                // init, so there is a list to shop from either way. Say what
+                // happened rather than leaving it looking loaded.
+                viewModel.showToast(message: failure.sentence("Couldn't get the latest list"),
+                                    type: .error)
+            }
         }
 
-        var shouldRestoreShoppingMode = false
-        await loading.perform(.checkingTrip) {
-            shouldRestoreShoppingMode = await viewModel.fetchHouseholdShoppingStatus()
-        }
-        await loading.perform(.checkingAllowances) {
-            await allowances.refresh()
-        }
-
+        let shouldRestoreShoppingMode = restoreShopping
         loading.setStep(.ready)
 
+        await standDownIfSuperseded(askServer: false)
         applyShoppingStatusOnLaunch(shouldRestoreShoppingMode)
         maybeShowAllowanceNudge()
     }

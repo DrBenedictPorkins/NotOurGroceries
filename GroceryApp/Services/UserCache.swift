@@ -98,24 +98,23 @@ class UserCache: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.query(request: request)
+            let json = try await API.query(request)
 
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let listResult) = root["listUserByHouseholdId"],
-                   case .array(let items) = listResult["items"] {
-                    for item in items {
-                        if let user = parseUser(item) {
-                            users[user.id] = user
-                        }
+            if case .object(let root) = json,
+               case .object(let listResult) = root["listUserByHouseholdId"],
+               case .array(let items) = listResult["items"] {
+                for item in items {
+                    if let user = parseUser(item) {
+                        users[user.id] = user
                     }
                 }
-            case .failure(let error):
-                print("UserCache: Failed to fetch users: \(error)")
             }
+        } catch let failure as ServiceFailure {
+            // Display names only: a miss renders as "User" and `resolveLater`
+            // asks again, so a failed warm costs nothing and is not worth an alert.
+            print("UserCache: couldn't fetch users — \(failure.errorDescription ?? "unknown")")
         } catch {
-            print("UserCache: Error fetching users: \(error)")
+            print("UserCache: couldn't fetch users — \(error)")
         }
     }
 
@@ -142,21 +141,20 @@ class UserCache: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.query(request: request)
+            let json = try await API.query(request)
 
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   let userData = root["getUser"],
-                   let user = parseUser(userData) {
-                    users[user.id] = user
-                    print("UserCache: Cached user \(user.displayName)")
-                }
-            case .failure(let error):
-                print("UserCache: Failed to fetch user \(userId): \(error)")
+            if case .object(let root) = json,
+               let userData = root["getUser"],
+               let user = parseUser(userData) {
+                users[user.id] = user
+                print("UserCache: Cached user \(user.displayName)")
             }
+        } catch let failure as ServiceFailure {
+            // Same no-op as above, and `resolveLater` clears the id so the next
+            // render of that row asks once more.
+            print("UserCache: couldn't fetch user \(userId) — \(failure.errorDescription ?? "unknown")")
         } catch {
-            print("UserCache: Error fetching user \(userId): \(error)")
+            print("UserCache: couldn't fetch user \(userId) — \(error)")
         }
     }
 
@@ -172,7 +170,16 @@ class UserCache: ObservableObject {
 
     // MARK: - Parsing
 
-    private func parseUser(_ json: JSONValue) -> CachedUser? {
+    /// Take a whole household's members from the launch handshake.
+    ///
+    /// Same parser as the standalone query, so the two paths cannot drift.
+    func apply(members: [JSONValue]) {
+        for item in members {
+            if let user = parseUser(item) { users[user.id] = user }
+        }
+    }
+
+    func parseUser(_ json: JSONValue) -> CachedUser? {
         guard case .object(let obj) = json,
               case .string(let id) = obj["id"],
               case .string(let displayName) = obj["displayName"] else {

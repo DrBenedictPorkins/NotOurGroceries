@@ -238,19 +238,14 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        let json = try await API.mutate(request)
 
-        switch response {
-        case .success(let json):
-            if let store = parseHouseholdStore(json, key: "createHouseholdStore") {
-                // Update local cache
-                householdStores.append(store)
-                return store
-            }
+        guard let store = parseHouseholdStore(json, key: "createHouseholdStore") else {
             throw StoreServiceError.parseFailed("Failed to parse created store")
-        case .failure(let error):
-            throw error
         }
+        // Update local cache
+        householdStores.append(store)
+        return store
     }
 
     /// Update an existing store
@@ -312,20 +307,14 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        let json = try await API.mutate(request)
 
-        switch response {
-        case .success(let json):
-            if let updatedStore = parseHouseholdStore(json, key: "updateHouseholdStore") {
-                // Update local cache
-                if let index = householdStores.firstIndex(where: { $0.id == updatedStore.id }) {
-                    householdStores[index] = updatedStore
-                }
-            } else {
-                throw StoreServiceError.parseFailed("Failed to parse updated store")
-            }
-        case .failure(let error):
-            throw error
+        guard let updatedStore = parseHouseholdStore(json, key: "updateHouseholdStore") else {
+            throw StoreServiceError.parseFailed("Failed to parse updated store")
+        }
+        // Update local cache
+        if let index = householdStores.firstIndex(where: { $0.id == updatedStore.id }) {
+            householdStores[index] = updatedStore
         }
     }
 
@@ -350,16 +339,11 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        _ = try await API.mutate(request)
 
-        switch response {
-        case .success:
-            // Remove from local cache
-            householdStores.removeAll { $0.id == storeId }
-            productMappings.removeValue(forKey: storeId)
-        case .failure(let error):
-            throw error
-        }
+        // Remove from local cache
+        householdStores.removeAll { $0.id == storeId }
+        productMappings.removeValue(forKey: storeId)
     }
 
     /// Fetch all stores for a household
@@ -386,22 +370,17 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.query(request: request)
+        let json = try await API.query(request)
 
-        switch response {
-        case .success(let json):
-            if case .object(let root) = json,
-               case .object(let listResult) = root["storesByHousehold"],
-               case .array(let items) = listResult["items"] {
+        if case .object(let root) = json,
+           case .object(let listResult) = root["storesByHousehold"],
+           case .array(let items) = listResult["items"] {
 
-                let stores = items.compactMap { parseHouseholdStore($0) }
-                householdStores = stores
-                return stores
-            }
-            return []
-        case .failure(let error):
-            throw error
+            let stores = items.compactMap { parseHouseholdStore($0) }
+            householdStores = stores
+            return stores
         }
+        return []
     }
 
     // MARK: - Aisle Management
@@ -649,19 +628,25 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        let json = try await API.mutate(request)
 
-        switch response {
-        case .success(let json):
-            if let mapping = parseProductAisleMapping(json, key: "upsertProductAisleMapping") {
+        if let mapping = parseProductAisleMapping(json, key: "upsertProductAisleMapping") {
+            // Animated, because this is what moves an item from one aisle
+            // heading to another on the At Store screen. Without it the row
+            // vanishes from where you were looking and reappears somewhere
+            // else in the same frame, which reads as the item being deleted —
+            // it was reported as exactly that. Same spring as moving an item
+            // to suggestions, so the two transitions feel like one app.
+            //
+            // Here rather than at the call sites: typing an aisle, saying one
+            // out loud and the batch mapper all come through this function.
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 if productMappings[storeId] == nil {
                     productMappings[storeId] = []
                 }
                 productMappings[storeId]?.removeAll { $0.id == mapping.id }
                 productMappings[storeId]?.append(mapping)
             }
-        case .failure(let error):
-            throw error
         }
     }
 
@@ -696,15 +681,10 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        _ = try await API.mutate(request)
 
-        switch response {
-        case .success:
-            // Update local cache
-            productMappings[storeId]?.removeAll { $0.id == mapping.id }
-        case .failure(let error):
-            throw error
-        }
+        // Update local cache
+        productMappings[storeId]?.removeAll { $0.id == mapping.id }
     }
 
     /// Delete a mapping by ID directly
@@ -728,14 +708,9 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        _ = try await API.mutate(request)
 
-        switch response {
-        case .success:
-            productMappings[storeId]?.removeAll { $0.id == id }
-        case .failure(let error):
-            throw error
-        }
+        productMappings[storeId]?.removeAll { $0.id == id }
     }
 
     /// Clean up mappings with invalid aisleIds (UUIDs instead of real aisle names)
@@ -831,32 +806,31 @@ class StoreService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.query(request: request)
+            let json = try await API.query(request)
 
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let listResult) = root["mappingsByStore"],
-                   case .array(let items) = listResult["items"] {
+            if case .object(let root) = json,
+               case .object(let listResult) = root["mappingsByStore"],
+               case .array(let items) = listResult["items"] {
 
-                    let mappings = items.compactMap { parseProductAisleMapping($0) }
-                    allMappings.append(contentsOf: mappings)
+                let mappings = items.compactMap { parseProductAisleMapping($0) }
+                allMappings.append(contentsOf: mappings)
 
-                    // Check for next page
-                    if case .string(let token) = listResult["nextToken"] {
-                        nextToken = token
-                    } else {
-                        nextToken = nil
-                    }
+                // Check for next page
+                if case .string(let token) = listResult["nextToken"] {
+                    nextToken = token
                 } else {
                     nextToken = nil
                 }
-            case .failure(let error):
-                throw error
+            } else {
+                nextToken = nil
             }
         } while nextToken != nil
 
-        productMappings[storeId] = allMappings
+        // Animated for the same reason as the upsert above: this lands right
+        // after a save and would otherwise snap the row into place a second time.
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            productMappings[storeId] = allMappings
+        }
         return allMappings
     }
 
@@ -957,15 +931,30 @@ class StoreService: ObservableObject {
 
     /// Refresh all store data for a household (stores and their mappings)
     func refreshAllForHousehold(_ householdId: String) async {
-        _ = try? await fetchStores(householdId: householdId)
+        do {
+            _ = try await fetchStores(householdId: householdId)
+        } catch {
+            print("[STORES] Refresh of stores failed: \(ServiceFailure.from(error).errorDescription ?? "")")
+        }
         for store in householdStores {
-            _ = try? await fetchMappings(storeId: store.id)
+            do {
+                _ = try await fetchMappings(storeId: store.id)
+            } catch {
+                print("[STORES] Refresh of mappings for \(store.id) failed: \(ServiceFailure.from(error).errorDescription ?? "")")
+            }
         }
     }
 
     // MARK: - Parsing Helpers
 
-    private func parseHouseholdStore(_ json: JSONValue, key: String? = nil) -> HouseholdStore? {
+    /// Stores from the launch handshake.
+    func apply(stores json: [JSONValue]) {
+        let parsed = json.compactMap { parseHouseholdStore($0) }
+        guard !parsed.isEmpty else { return }
+        householdStores = parsed
+    }
+
+    func parseHouseholdStore(_ json: JSONValue, key: String? = nil) -> HouseholdStore? {
         let storeData: JSONValue
         if let key = key {
             guard case .object(let root) = json,

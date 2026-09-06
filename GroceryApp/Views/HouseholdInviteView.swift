@@ -87,7 +87,7 @@ struct HouseholdInviteView: View {
                 .font(.system(size: 50))
                 .foregroundColor(DesignSystem.Colors.neonPink)
 
-            Text(loadError ?? "Couldn't load your invite code. Check your signal and try again.")
+            Text(loadError ?? "Couldn't load your invite code. Try again.")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(DesignSystem.Colors.textPrimary)
                 .multilineTextAlignment(.center)
@@ -295,7 +295,7 @@ struct HouseholdInviteView: View {
             loadError = nil
         } catch {
             print("Error loading household details: \(error)")
-            loadError = "Couldn't load your invite code. Check your signal and try again."
+            loadError = ServiceFailure.from(error).sentence("Couldn't load your invite code")
         }
         isLoading = false
     }
@@ -323,7 +323,8 @@ struct HouseholdInviteView: View {
                     successMessage = nil
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
             }
             isRegenerating = false
         }

@@ -295,7 +295,8 @@ struct HouseholdSetupView: View {
                     errorMessage = "Your household is ready, but its starting shops couldn't be created. Add one yourself from Select Store."
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
             }
             isLoading = false
         }
@@ -320,7 +321,8 @@ struct HouseholdSetupView: View {
                 _ = try await amplifyService.joinHouseholdWithCode(inviteCode.uppercased())
                 // RootView will automatically navigate to ContentView when householdId is set
             } catch {
-                errorMessage = error.localizedDescription
+                let failure = ServiceFailure.from(error)
+                errorMessage = failure.sentence
             }
             isLoading = false
         }

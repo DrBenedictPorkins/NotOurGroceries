@@ -79,7 +79,7 @@ struct RootView: View {
         if !amplifyService.isConfigured {
             loadingState.reportError(
                 title: "Connection Failed",
-                message: "Could not connect to the server. Please check your internet connection and try again.",
+                message: "The app couldn't start up. Close it and open it again.",
                 details: "Amplify configuration failed"
             )
             loadingState.markPhaseOneComplete()
@@ -93,18 +93,20 @@ struct RootView: View {
             await amplifyService.checkAuthSession()
         }
 
-        // Walking away from the session check used to leave the app looking
-        // exactly like a sign-out: the sign-in screen, with no idea why. The
-        // check has not failed — it is still in flight — so nothing else sets
-        // the banner that exists for precisely this situation.
+        // No session, and this phone is carrying a list. Offer to shop from it
+        // rather than demand a password nobody can verify.
         //
-        // If there is a list on the disk, the honest answer is better than a
-        // banner: go off-grid and shop from it.
-        if loadingState.wasSkipped(.validatingLogin), !amplifyService.isAuthenticated {
-            if amplifyService.canGoOffGrid {
+        // Keyed off the outcome, not off the eight-second deadline. The check
+        // usually fails *fast* — no route to Cognito answers in about a second —
+        // so an offer that only appeared after a stall never appeared at all,
+        // and the sign-in screen came up exactly as it did before any of this.
+        while !amplifyService.isAuthenticated && amplifyService.canGoOffGrid {
+            if await loadingState.askAboutOffGrid() == .skip {
                 amplifyService.goOffGrid()
-            } else {
-                amplifyService.sessionCheckFailedOffline = true
+                break
+            }
+            await loadingState.perform(.validatingLogin) {
+                await amplifyService.checkAuthSession()
             }
         }
 
@@ -117,21 +119,20 @@ struct RootView: View {
             return
         }
 
-        await loadingState.perform(.syncingProducts) {
-            await ProductCache.shared.fetchAllProducts()
-        }
-
-        if let householdId = amplifyService.currentHouseholdId {
-            await loadingState.perform(.syncingMembers) {
-                await UserCache.shared.fetchUsersForHousehold(householdId)
-            }
-            // ContentView takes it from here and is the one that says `.ready`.
+        // Off-grid never reaches the server, so there is nothing to ask it for.
+        // The snapshot is already on screen.
+        guard !amplifyService.isOffGrid else {
             loadingState.markPhaseOneComplete()
+            loadingState.setStep(.ready)
             return
         }
 
+        // One call. `ContentView` says `.ready` once it has applied the result,
+        // because the view model it writes into is ContentView's to own.
         loadingState.markPhaseOneComplete()
-        loadingState.setStep(.ready)
+        if amplifyService.currentHouseholdId == nil {
+            loadingState.setStep(.ready)
+        }
     }
 }
 
@@ -159,7 +160,16 @@ struct SplashView: View {
     private var stallStep: LoadingStep { loadingState.stalledStep ?? loadingState.currentStep }
 
     private var stallIsAuthStep: Bool {
-        stallStep == .validatingLogin || stallStep == .configuringServices
+        loadingState.offeringOffGrid
+            || stallStep == .validatingLogin || stallStep == .configuringServices
+    }
+
+    /// A failed check reads differently from a slow one, and the person is about
+    /// to be asked a different question.
+    private var stallHeadline: String {
+        loadingState.offeringOffGrid
+            ? "Couldn't reach the server."
+            : "Still waiting on the server. Your connection may be slow."
     }
 
     private var stallSkipTitle: String {
@@ -177,7 +187,7 @@ struct SplashView: View {
     private var stallPrompt: some View {
         VStack(spacing: 12) {
             VStack(spacing: 4) {
-                Text("Still waiting on the server. Your connection may be slow.")
+                Text(stallHeadline)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(DesignSystem.Colors.neonAmber)
                 Text(stallConsequence)
@@ -334,7 +344,7 @@ struct SplashView: View {
 
                             // A step past its deadline. Rather than a bar that
                             // never moves again, say so and hand the choice over.
-                            if loadingState.stalledStep != nil {
+                            if loadingState.isAskingSomething {
                                 stallPrompt
                             }
                         }

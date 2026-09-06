@@ -397,8 +397,8 @@ class ShoppingListViewModel: ObservableObject {
     // MARK: - Network Gate
 
     /// Every network call in this view model goes through these two wrappers.
-    private func apiMutate(_ request: GraphQLRequest<JSONValue>) async throws -> GraphQLResponse<JSONValue> {
-        return try await Amplify.API.mutate(request: request)
+    private func apiMutate(_ request: GraphQLRequest<JSONValue>) async throws -> JSONValue {
+        try await API.mutate(request)
     }
 
     /// Every read goes through here, and it retries.
@@ -411,28 +411,11 @@ class ShoppingListViewModel: ObservableObject {
     ///
     /// Retrying here rather than at the call sites means every caller gets it,
     /// and the layers above only ever see failures that survived three attempts.
-    private func apiQuery(_ request: GraphQLRequest<JSONValue>) async throws -> GraphQLResponse<JSONValue> {
-        let delays: [UInt64] = [400_000_000, 1_200_000_000]  // 0.4s, then 1.2s
-        var lastError: Error?
-
-        for attempt in 0...delays.count {
-            do {
-                return try await Amplify.API.query(request: request)
-            } catch {
-                // A bad token will fail identically forever. Retrying it wastes
-                // the user's time and delays the sign-out they actually need.
-                if AmplifyService.shared.isAuthError(error) { throw error }
-
-                lastError = error
-                if attempt < delays.count {
-                    logger.info("apiQuery attempt \(attempt + 1) failed, retrying")
-                    try? await Task.sleep(nanoseconds: delays[attempt])
-                }
-            }
-        }
-
-        logger.error("apiQuery failed after \(delays.count + 1) attempts")
-        throw lastError ?? URLError(.cannotConnectToHost)
+    /// Both now live in `API`, which owns the retry and turns Amplify's two
+    /// failure channels into one thrown `ServiceFailure`. Kept as thin wrappers
+    /// so the nineteen call sites below read the same as they always did.
+    private func apiQuery(_ request: GraphQLRequest<JSONValue>) async throws -> JSONValue {
+        try await API.query(request)
     }
 
     // MARK: - Data Loading
@@ -515,40 +498,18 @@ class ShoppingListViewModel: ObservableObject {
                     authMode: AWSAuthorizationType.amazonCognitoUserPools
                 )
 
-                let response = try await apiQuery(request)
-
-                switch response {
-                case .success(let json):
-                    guard case .object(let root) = json,
-                          case .object(let listResult) = root["listItemsByHouseholdAndStatus"],
-                          case .array(let itemsJson) = listResult["items"] else {
-                        logger.error("Failed to parse items response structure")
-                        parseFailed = true
-                        break
-                    }
-                    fetched.append(contentsOf: itemsJson.compactMap { parseGroceryItem($0) })
-                    if case .string(let token) = listResult["nextToken"] {
-                        nextToken = token
-                    } else {
-                        nextToken = nil
-                    }
-                case .failure(let error):
-                    logger.error("Failed to fetch items: \(String(describing: error))")
-                    self.errorMessage = error.localizedDescription
-                    showToast(message: "Couldn't load your list. Pull down to try again.", type: .error)
-                    if AmplifyService.shared.isAuthError(error) {
-                        try? await AmplifyService.shared.signOut()
-                        return
-                    }
-                    handleServerUnreachable()
-                    // Stop paging and leave `items` alone rather than publishing
-                    // a half-fetched list, which would look like someone deleted
-                    // the rest of it. Deliberately a flag and not a `return` —
-                    // returning here would skip the tail of this function, and
-                    // the tail is where subscriptions get re-established. One
-                    // failed load would silently kill realtime sync for the rest
-                    // of the session.
-                    loadFailed = true
+                let json = try await apiQuery(request)
+                guard case .object(let root) = json,
+                      case .object(let listResult) = root["listItemsByHouseholdAndStatus"],
+                      case .array(let itemsJson) = listResult["items"] else {
+                    logger.error("Failed to parse items response structure")
+                    parseFailed = true
+                    break
+                }
+                fetched.append(contentsOf: itemsJson.compactMap { parseGroceryItem($0) })
+                if case .string(let token) = listResult["nextToken"] {
+                    nextToken = token
+                } else {
                     nextToken = nil
                 }
             } while nextToken != nil && !parseFailed && !loadFailed
@@ -588,11 +549,12 @@ class ShoppingListViewModel: ObservableObject {
             }
 
         } catch {
-            logger.error("Error loading shopping list: \(error)")
-            errorMessage = error.localizedDescription
-            showToast(message: "Couldn't load your list. Pull down to try again.", type: .error)
+            let failure = ServiceFailure.from(error)
+            logger.error("Error loading shopping list: \(failure)")
+            errorMessage = failure.errorDescription
+            showToast(message: failure.sentence("Couldn't load your list"), type: .error)
             AmplifyService.shared.handleAuthError(error)
-            handleServerUnreachable()
+            handleServerUnreachable(error)
         }
 
         // Populate caches in parallel
@@ -602,6 +564,38 @@ class ShoppingListViewModel: ObservableObject {
         _ = await (userCacheFetch, productCacheFetch, storesFetch)
 
         // Setup subscriptions for real-time sync
+        setupSubscriptions()
+    }
+
+    /// Take the list and the trip status from the launch handshake.
+    ///
+    /// The same hold-or-tell rule as `loadShoppingList`: queued work means this
+    /// phone knows something the server does not, so the server's answer is not
+    /// applied until the queue drains. Nothing is merged.
+    @MainActor
+    func apply(handshake: HandshakeService.Result) {
+        // `householdId` is a computed read of AmplifyService, which the
+        // handshake has already populated through the session — nothing to set.
+        shoppingStatus = ShoppingStatus(rawValue: handshake.shoppingStatus ?? "") ?? .idle
+        activeShopperId = handshake.activeShopperId
+        shoppingStoreId = handshake.shoppingStoreId
+        shoppingStartedAt = handshake.shoppingStartedAt
+
+        guard Outbox.shared.isEmpty else {
+            logger.info("Handshake list held — \(Outbox.shared.count) change(s) still pending")
+            noteServerReachable()
+            hasLoadedInitialData = true
+            return
+        }
+
+        let fetched = handshake.items.compactMap { parseGroceryItem($0) }
+        items = fetched
+        applySorting()
+        isShowingLocalSnapshot = false
+        hasLoadedInitialData = true
+        noteServerReachable()
+        logger.info("Handshake: \(self.items.count) items, \(self.shoppingList.count) active")
+
         setupSubscriptions()
     }
 
@@ -805,46 +799,43 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   let itemJson = root["createGroceryItem"],
-                   let newItem = parseGroceryItem(itemJson) {
-                    // Replace optimistic item with real item
-                    if let index = items.firstIndex(where: { $0.id == itemId }) {
-                        items[index] = newItem
-                    }
-                    pendingOptimisticIds.remove(itemId)
-                } else {
-                    // Parsing failed - reload list
-                    await loadShoppingList()
-                    pendingOptimisticIds.remove(itemId)
+            let json = try await apiMutate(request)
+            if case .object(let root) = json,
+               let itemJson = root["createGroceryItem"],
+               let newItem = parseGroceryItem(itemJson) {
+                // Replace optimistic item with real item
+                if let index = items.firstIndex(where: { $0.id == itemId }) {
+                    items[index] = newItem
                 }
-            case .failure(let error):
-                // Remove optimistic item on error
-                items.removeAll { $0.id == itemId }
                 pendingOptimisticIds.remove(itemId)
-
-                let errorMsg = error.localizedDescription
-                if errorMsg.contains("DUPLICATE_ITEM") || errorMsg.contains("already exists") {
-                    showToast(message: "\(name) is already on the list", type: .warning)
-                } else {
-                    showToast(message: "Error: \(errorMsg.prefix(100))", type: .error)
-                }
+            } else {
+                // Parsing failed - reload list
+                await loadShoppingList()
+                pendingOptimisticIds.remove(itemId)
             }
         } catch {
             pendingOptimisticIds.remove(itemId)
+            let failure = ServiceFailure.from(error)
+
+            // Our own Lambda's answer, not a guess about somebody else's error
+            // text: the item is already there, so the optimistic row is the
+            // duplicate and removing it is the whole fix. Nothing to retry and
+            // nothing to queue.
+            if failure.saysDuplicate {
+                items.removeAll { $0.id == itemId }
+                showToast(message: "\(name) is already on the list", type: .warning)
+                return
+            }
+
             // Deleting what the user just typed because we could not reach a
             // server would be the worst bug in the app. Offline it stays and is
             // queued; only a genuine rejection removes it.
             let queued = await queueOrRevert(itemId: itemId, kind: .create, error: error,
-                                             failureMessage: "Failed to add item")
+                                             failureMessage: "Couldn't add \(name)")
             if !queued {
                 items.removeAll { $0.id == itemId }
             }
-            print("Add item error: \(error)")
+            print("Add item error: \(failure)")
         }
     }
 
@@ -924,15 +915,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                break
-            case .failure(let error):
-                await queueOrRevert(itemId: item.id, kind: .update, error: error,
-                                    failureMessage: "Failed to add item to cart")
-            }
+            _ = try await apiMutate(request)
         } catch {
             await queueOrRevert(itemId: item.id, kind: .update, error: error,
                                 failureMessage: "Failed to add item to cart")
@@ -1033,16 +1016,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                break
-            case .failure(let error):
-                logger.error("Move to suggestion failed: \(error)")
-                await loadShoppingList()
-                showToast(message: "Failed to move item", type: .error)
-            }
+            _ = try await apiMutate(request)
         } catch {
             await queueOrRevert(itemId: item.id, kind: .update, error: error,
                                 failureMessage: "Failed to move item")
@@ -1084,7 +1058,13 @@ class ShoppingListViewModel: ObservableObject {
         var attempted = 0
 
         for name in trip.everythingOnTheList {
-            let key = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            // Through the same normaliser the items were stored with, not a bare
+            // lowercase. `normalizedName` is singularised and article-stripped —
+            // "Crackers" is stored as "cracker" — so comparing the raw name
+            // matched nothing, ever. Every item looked missing, was "restored"
+            // onto a list it was already on, nothing new landed, and the count
+            // of zero was reported as a network problem to somebody on 5G.
+            let key = normalizeName(name)
 
             // Already on the list — nothing to do, and nothing to duplicate.
             if shoppingList.contains(where: { $0.normalizedName == key })
@@ -1119,10 +1099,19 @@ class ShoppingListViewModel: ObservableObject {
         } else if restored == 0 {
             // Asked for work, got none, and it was not the cap. Silence here is
             // what made a broken restore look like a button that does nothing.
-            showToast(message: "Couldn't put anything back. Check your signal and try again.",
+            //
+            // The cause is only named when it is actually known. This used to say
+            // "check your signal" for every zero result, which is what somebody
+            // standing outside on 5G was told — the app blaming their network for
+            // its own bug is worse than admitting it does not know why.
+            showToast(message: isOffline
+                      ? "Couldn't put anything back while you're offline — try again when you have signal."
+                      : "Couldn't put anything back.",
                       type: .error)
         } else if restored < attempted {
-            showToast(message: "Put \(restored) of \(attempted) items back — the rest didn't save",
+            showToast(message: isOffline
+                      ? "Put \(restored) of \(attempted) items back — the rest will save when you're back online"
+                      : "Put \(restored) of \(attempted) items back — the rest didn't save",
                       type: .warning)
         } else {
             showToast(message: restored == 1
@@ -1209,16 +1198,7 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                break
-            case .failure(let error):
-                await queueOrRevert(itemId: item.id, kind: .update, error: error,
-                                    failureMessage: "Failed to restore item")
-                print("Restore error: \(error)")
-            }
+            _ = try await apiMutate(request)
         } catch {
             await queueOrRevert(itemId: item.id, kind: .update, error: error,
                                 failureMessage: "Failed to restore item")
@@ -1277,16 +1257,8 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                showToast(message: "Deleted \(item.name)")
-            case .failure(let error):
-                await queueOrRevert(itemId: item.id, kind: .delete, error: error,
-                                    failureMessage: "Failed to delete item")
-                print("Delete error: \(error)")
-            }
+            _ = try await apiMutate(request)
+            showToast(message: "Deleted \(item.name)")
         } catch {
             await queueOrRevert(itemId: item.id, kind: .delete, error: error,
                                 failureMessage: "Failed to delete item")
@@ -1367,12 +1339,8 @@ class ShoppingListViewModel: ObservableObject {
         )
 
         do {
-            switch try await apiMutate(request) {
-            case .success:  return true
-            case .failure(let error):
-                logger.error("Failed to delete suggestion \(item.name): \(error)")
-                return false
-            }
+            _ = try await apiMutate(request)
+            return true
         } catch {
             logger.error("Failed to delete suggestion \(item.name): \(error)")
             return false
@@ -1427,19 +1395,8 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                logger.info("Updated notes for \(item.name)")
-            case .failure(let error):
-                if await !queueOrRevert(itemId: item.id, kind: .update, error: error,
-                                        failureMessage: "Failed to update notes"),
-                   let index = items.firstIndex(where: { $0.id == item.id }) {
-                    items[index] = item
-                }
-                logger.error("Update notes failed: \(error)")
-            }
+            _ = try await apiMutate(request)
+            logger.info("Updated notes for \(item.name)")
         } catch {
             // On paper the local edit stands — it's the whole point of the mode.
             if await !queueOrRevert(itemId: item.id, kind: .update, error: error,
@@ -1505,26 +1462,18 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
+            let json = try await apiMutate(request)
+            if case .object(let root) = json,
+               let itemJson = root["updateGroceryItem"],
+               let updatedItem = parseGroceryItem(itemJson) {
+                let hasLock = updatedItem.lockedBy != nil
+                let message = hasLock ? "Locked \(item.name)" : "Unlocked \(item.name)"
+                showToast(message: message)
 
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   let itemJson = root["updateGroceryItem"],
-                   let updatedItem = parseGroceryItem(itemJson) {
-                    let hasLock = updatedItem.lockedBy != nil
-                    let message = hasLock ? "Locked \(item.name)" : "Unlocked \(item.name)"
-                    showToast(message: message)
-
-                    // Update local state
-                    if let index = items.firstIndex(where: { $0.id == item.id }) {
-                        items[index] = updatedItem
-                    }
+                // Update local state
+                if let index = items.firstIndex(where: { $0.id == item.id }) {
+                    items[index] = updatedItem
                 }
-            case .failure(let error):
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
-                showToast(message: "Failed to toggle lock", type: .error)
-                print("Lock error: \(error)")
             }
         } catch {
             UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -1593,30 +1542,18 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   let itemJson = root["updateGroceryItem"],
-                   let updatedItem = parseGroceryItem(itemJson) {
-                    // Update local state with server response
-                    if let index = items.firstIndex(where: { $0.id == item.id }) {
-                        items[index] = updatedItem
-                    }
-                    showToast(message: "Notes updated")
-                } else {
-                    // Parsing failed but mutation succeeded
-                    showToast(message: "Notes updated")
-                }
-            case .failure(let error):
-                // Rollback on failure
+            let json = try await apiMutate(request)
+            if case .object(let root) = json,
+               let itemJson = root["updateGroceryItem"],
+               let updatedItem = parseGroceryItem(itemJson) {
+                // Update local state with server response
                 if let index = items.firstIndex(where: { $0.id == item.id }) {
-                    items[index] = originalItem
+                    items[index] = updatedItem
                 }
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
-                showToast(message: "Failed to update notes", type: .error)
-                logger.error("Update notes error: \(error)")
+                showToast(message: "Notes updated")
+            } else {
+                // Parsing failed but mutation succeeded
+                showToast(message: "Notes updated")
             }
         } catch {
             // Rollback on error
@@ -1767,6 +1704,33 @@ class ShoppingListViewModel: ObservableObject {
 
     // MARK: - Subscriptions
 
+    /// A dropped socket is only worth telling somebody about if it stays dropped.
+    ///
+    /// This used to warn the instant `connectionState` went `.disconnected`, and
+    /// that state is reached on every backgrounding, every Wi-Fi-to-cellular
+    /// handover and every wake from suspension. Because the message is a
+    /// `.warning` it went to the persistent banner, so an ordinary app switch
+    /// left "Live updates stopped" sitting on screen on a perfectly good
+    /// connection until it was dismissed by hand. Reported as exactly that.
+    ///
+    /// AppSync reconnects on its own in a second or two, so the fix is to wait
+    /// and see. Ten seconds still disconnected is a real outage; anything
+    /// shorter was never worth a word.
+    private func noteSubscriptionsDropped() {
+        guard socketDropTask == nil else { return }
+        socketDropTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.socketDropTask = nil
+            guard SubscriptionService.shared.connectionState == .disconnected else { return }
+            // Already saying it another way; two notices for one outage is worse
+            // than one.
+            guard !self.isOffline else { return }
+            self.showToast(message: "Live updates stopped. Pull down to refresh and see anyone else's changes.",
+                           type: .warning)
+        }
+    }
+
     func setupSubscriptions() {
         // A GraphQL socket retrying its handshake forever is exactly the hang
         // paper mode exists to prevent, so don't open one.
@@ -1788,11 +1752,12 @@ class ShoppingListViewModel: ObservableObject {
             .sink { [weak self] state in
                 guard let self else { return }
                 switch state {
-                case .disconnected where !self.isOffline:
-                    self.showToast(message: "Live updates stopped. Pull down to refresh and see anyone else's changes.",
-                                   type: .warning)
+                case .disconnected:
+                    self.noteSubscriptionsDropped()
                 case .connected:
                     // Recovered; clear the warning rather than leave it standing.
+                    self.socketDropTask?.cancel()
+                    self.socketDropTask = nil
                     if self.activeError?.isWarning == true { self.activeError = nil }
                 default:
                     break
@@ -1874,6 +1839,8 @@ class ShoppingListViewModel: ObservableObject {
     @Published private(set) var isRetryingConnection = false
 
     private var consecutiveLoadFailures = 0
+    /// Pending "the socket is still down" warning; cancelled when it comes back.
+    private var socketDropTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
 
     /// The crash-at-the-store case: we came up, couldn't reach anything, but the
@@ -1896,15 +1863,19 @@ class ShoppingListViewModel: ObservableObject {
     /// Offering paper mode is a big, disruptive claim about the user's world.
     /// Be sure before making it; staying quiet costs nothing, because the list
     /// on screen is still there either way.
-    private func handleServerUnreachable() {
+    private func handleServerUnreachable(_ error: Error? = nil) {
         consecutiveLoadFailures += 1
 
-        // No interface at all — airplane mode, no bars, wifi off. Nothing is
-        // ambiguous about this, so don't make them fail twice to hear it.
+        // The error says so, if we were given one. Counting to two was a way of
+        // guessing at what the error already knew, and it meant two unrelated
+        // server rejections in a row announced an outage that was not happening.
+        // The count survives only as the fallback for callers with no error to
+        // hand over.
+        let saidOffline = error.map { ServiceFailure.from($0).isOffline } ?? false
         let networkIsPlainlyGone = !NetworkStatus.shared.pathIsSatisfied
 
-        guard networkIsPlainlyGone || consecutiveLoadFailures >= 2 else {
-            logger.info("Load failed but the network looks fine — staying quiet")
+        guard saidOffline || networkIsPlainlyGone || consecutiveLoadFailures >= 2 else {
+            logger.info("Load failed, but not because of the network — staying quiet")
             return
         }
 
@@ -1980,14 +1951,23 @@ class ShoppingListViewModel: ObservableObject {
         error: Error,
         failureMessage: String
     ) async -> Bool {
-        let looksOffline = !NetworkStatus.shared.pathIsSatisfied || isOffline
+        // The error itself says which of the two this is. It used to be decided
+        // by asking `NetworkStatus` whether an interface existed — a question
+        // about the device, at a moment when what mattered was what happened to
+        // this request. A captive portal, a dropped socket or a timeout all look
+        // "online" to that check, so a write that never reached the server was
+        // reverted as though the server had refused it, and the user's change
+        // vanished with a message blaming them.
+        let failure = ServiceFailure.from(error)
 
-        guard looksOffline else {
-            // The server was reachable and said no. Reverting is correct.
+        guard failure.isOffline else {
+            // It reached the server and the server said no. Reverting is correct
+            // and queueing would be wrong: a rejected write does not get better
+            // by being sent again.
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             await loadShoppingList()
-            showToast(message: failureMessage, type: .error)
-            print("[OUTBOX] not queuing — server reachable, rejected: \(String(describing: error))")
+            showToast(message: failure.sentence("\(failureMessage)"), type: .error)
+            print("[OUTBOX] not queuing — server rejected: \(failure)")
             return false
         }
 
@@ -2144,13 +2124,13 @@ class ShoppingListViewModel: ObservableObject {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
         do {
-            switch try await apiMutate(request) {
-            case .success: return true
-            case .failure(let error):
-                print("[OUTBOX] mutation rejected: \(String(describing: error))")
-                return false
-            }
+            _ = try await apiMutate(request)
+            return true
         } catch {
+            // Logged, because an entry the server will never accept is what
+            // froze a real list for a day and a half — the attempt counter that
+            // eventually gives up is only legible next to the reason.
+            print("[OUTBOX] mutation rejected: \(String(describing: ServiceFailure.from(error)))")
             return false
         }
     }
@@ -2376,15 +2356,10 @@ class ShoppingListViewModel: ObservableObject {
         )
 
         do {
-            let response = try await apiQuery(request)
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   let itemJson = root["getGroceryItem"] {
-                    return parseGroceryItem(itemJson)
-                }
-            case .failure(let error):
-                print("fetchItem error: \(error)")
+            let json = try await apiQuery(request)
+            if case .object(let root) = json,
+               let itemJson = root["getGroceryItem"] {
+                return parseGroceryItem(itemJson)
             }
         } catch {
             print("fetchItem exception: \(error)")
@@ -2438,13 +2413,25 @@ class ShoppingListViewModel: ObservableObject {
         toastType = type
         showToast = true
 
-        // Errors stay longer
-        let duration: UInt64 = type == .error ? 4_000_000_000 : 3_000_000_000
+        // Held just past the fade `ToastView` runs itself, so the view is never
+        // yanked mid-animation. The two used to be set to the same three seconds
+        // and raced each other.
+        //
+        // Tokened because a second toast inside five seconds would otherwise be
+        // hidden early by the first one's timer — much more likely now the toast
+        // stays up longer.
+        toastGeneration &+= 1
+        let generation = toastGeneration
+        let seconds = ToastView.visibleDuration + ToastView.fadeDuration + 0.1
         Task {
-            try? await Task.sleep(nanoseconds: duration)
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard toastGeneration == generation else { return }
             showToast = false
         }
     }
+
+    /// Which toast the pending hide belongs to. See `showToast`.
+    private var toastGeneration: UInt64 = 0
 
     // MARK: - Store Management
 
@@ -2469,8 +2456,9 @@ class ShoppingListViewModel: ObservableObject {
                 productAisleMappings[store.id] = mappings
                 showToast(message: "Selected \(store.name)")
             } catch {
-                logger.error("Failed to load mappings for \(store.name): \(error)")
-                showToast(message: "Loaded \(store.name), but not its aisles. Items may show as unsorted — try again when you have signal.",
+                let failure = ServiceFailure.from(error)
+                logger.error("Failed to load mappings for \(store.name): \(failure)")
+                showToast(message: failure.sentence("Loaded \(store.name), but not its aisles. Items may show as unsorted"),
                           type: .warning)
             }
         }
@@ -2683,89 +2671,83 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let household) = root["updateHousehold"] {
-                    // The household knows a trip is running, so the finish has a
-                    // status to put back.
-                    Self.tripWasAnnounced = true
-                    // Update local state
-                    if case .string(let status) = household["shoppingStatus"] {
-                        shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
-                    }
-                    if case .string(let shopperId) = household["activeShopperId"] {
-                        activeShopperId = shopperId
-                    }
-                    if case .string(let storeId) = household["shoppingStoreId"] {
-                        shoppingStoreId = storeId
-                    }
-
-                    // Set selected store and start time
-                    selectedHouseholdStore = store
-                    shoppingStartedAt = Date()
-
-                    // Drop mappings pointing at aisles this store no longer has,
-                    // before working out what still needs inferring. Otherwise a
-                    // bad mapping counts as "mapped" and permanently blocks the
-                    // item from ever being re-inferred.
-                    if let pruned = try? await StoreService.shared.pruneOrphanedMappings(storeId: store.id), pruned > 0 {
-                        logger.info("Pruned \(pruned) orphaned mapping(s) for \(store.name)")
-                    }
-
-                    // Load mappings for the store
-                    if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
-                        productAisleMappings[store.id] = mappings
-
-                        // Infer aisles for custom active items with no existing mapping.
-                        // Only stores that actually navigate by aisle are worth the LLM spend:
-                        // a NO_AISLES store has nothing to infer, and an empty aisleLayout means
-                        // there are no aisles to infer *against*, so the guesses are pure noise
-                        // (and get persisted as phantom mappings).
-                        let mappedNames = Set(mappings.compactMap { $0.normalizedName })
-                        let unmappedCustomItems = items.filter { item in
-                            item.isCustom && item.status == .active && !mappedNames.contains(item.normalizedName)
-                        }
-                        if store.aisleLayout.isEmpty {
-                            logger.info("At-Store pre-check: skipped aisle inference (store has no aisle layout)")
-                        } else if !unmappedCustomItems.isEmpty {
-                            let batchInputs = unmappedCustomItems.map {
-                                AisleExtractionService.BatchInferenceInput(
-                                    id: $0.id,
-                                    productName: $0.name,
-                                    normalizedName: $0.normalizedName,
-                                    productId: nil
-                                )
-                            }
-                            if let results = try? await AisleExtractionService.shared.inferProductAisleBatch(
-                                storeId: store.id,
-                                items: batchInputs
-                            ) {
-                                let saved = try? await AisleExtractionService.shared.saveBatchInferenceResults(
-                                    items: batchInputs,
-                                    results: results,
-                                    storeId: store.id
-                                )
-                                logger.info("At-Store pre-check: inferred aisles for \(saved ?? 0) custom items")
-                                // Refresh mappings to include newly saved inferences
-                                if let refreshed = try? await StoreService.shared.fetchMappings(storeId: store.id) {
-                                    productAisleMappings[store.id] = refreshed
-                                }
-                            }
-                        }
-                    }
-
-                    // Nudge the shopper if nothing gets crossed off for a while.
-                    await ShopperReminderService.shared.requestPermissionIfNeeded()
-                    bumpShopperActivity()
-
-                    showToast(message: "Shopping at \(store.name)")
-                    logger.info("Entered shopping mode at store: \(store.name)")
+            let json = try await apiMutate(request)
+            if case .object(let root) = json,
+               case .object(let household) = root["updateHousehold"] {
+                // The household knows a trip is running, so the finish has a
+                // status to put back.
+                Self.tripWasAnnounced = true
+                // Update local state
+                if case .string(let status) = household["shoppingStatus"] {
+                    shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
                 }
-            case .failure(let error):
-                enteredShoppingModeOffline(store: store, error: error)
+                if case .string(let shopperId) = household["activeShopperId"] {
+                    activeShopperId = shopperId
+                }
+                if case .string(let storeId) = household["shoppingStoreId"] {
+                    shoppingStoreId = storeId
+                }
+
+                // Set selected store and start time
+                selectedHouseholdStore = store
+                shoppingStartedAt = Date()
+
+                // Drop mappings pointing at aisles this store no longer has,
+                // before working out what still needs inferring. Otherwise a
+                // bad mapping counts as "mapped" and permanently blocks the
+                // item from ever being re-inferred.
+                if let pruned = try? await StoreService.shared.pruneOrphanedMappings(storeId: store.id), pruned > 0 {
+                    logger.info("Pruned \(pruned) orphaned mapping(s) for \(store.name)")
+                }
+
+                // Load mappings for the store
+                if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
+                    productAisleMappings[store.id] = mappings
+
+                    // Infer aisles for custom active items with no existing mapping.
+                    // Only stores that actually navigate by aisle are worth the LLM spend:
+                    // a NO_AISLES store has nothing to infer, and an empty aisleLayout means
+                    // there are no aisles to infer *against*, so the guesses are pure noise
+                    // (and get persisted as phantom mappings).
+                    let mappedNames = Set(mappings.compactMap { $0.normalizedName })
+                    let unmappedCustomItems = items.filter { item in
+                        item.isCustom && item.status == .active && !mappedNames.contains(item.normalizedName)
+                    }
+                    if store.aisleLayout.isEmpty {
+                        logger.info("At-Store pre-check: skipped aisle inference (store has no aisle layout)")
+                    } else if !unmappedCustomItems.isEmpty {
+                        let batchInputs = unmappedCustomItems.map {
+                            AisleExtractionService.BatchInferenceInput(
+                                id: $0.id,
+                                productName: $0.name,
+                                normalizedName: $0.normalizedName,
+                                productId: nil
+                            )
+                        }
+                        if let results = try? await AisleExtractionService.shared.inferProductAisleBatch(
+                            storeId: store.id,
+                            items: batchInputs
+                        ) {
+                            let outcome = try? await AisleExtractionService.shared.saveBatchInferenceResults(
+                                items: batchInputs,
+                                results: results,
+                                storeId: store.id
+                            )
+                            logger.info("At-Store pre-check: placed \(outcome?.placed ?? 0), unplaced \(outcome?.unplaced ?? 0), failed \(outcome?.failed ?? 0)")
+                            // Refresh mappings to include newly saved inferences
+                            if let refreshed = try? await StoreService.shared.fetchMappings(storeId: store.id) {
+                                productAisleMappings[store.id] = refreshed
+                            }
+                        }
+                    }
+                }
+
+                // Nudge the shopper if nothing gets crossed off for a while.
+                await ShopperReminderService.shared.requestPermissionIfNeeded()
+                bumpShopperActivity()
+
+                showToast(message: "Shopping at \(store.name)")
+                logger.info("Entered shopping mode at store: \(store.name)")
             }
         } catch {
             enteredShoppingModeOffline(store: store, error: error)
@@ -2982,30 +2964,20 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success(let json):
-                guard case .object(let root) = json,
-                      case .object(let result) = root["finishShopping"] else {
-                    logger.error("finishShopping returned an unreadable response")
-                    return false
-                }
-                if case .boolean(true) = result["alreadyApplied"] {
-                    logger.info("finishShopping had already been applied — clearing the queue")
-                } else {
-                    logger.info("finishShopping applied")
-                }
-                PendingFinishStore.remove(tripId: finish.tripId)
-                noteServerReachable()
-                return true
-
-            case .failure(let error):
-                logger.error("finishShopping failed: \(error)")
-                announceQueuedFinish(announceQueue)
-                AmplifyService.shared.handleAuthError(error)
+            let json = try await apiMutate(request)
+            guard case .object(let root) = json,
+                  case .object(let result) = root["finishShopping"] else {
+                logger.error("finishShopping returned an unreadable response")
                 return false
             }
+            if case .boolean(true) = result["alreadyApplied"] {
+                logger.info("finishShopping had already been applied — clearing the queue")
+            } else {
+                logger.info("finishShopping applied")
+            }
+            PendingFinishStore.remove(tripId: finish.tripId)
+            noteServerReachable()
+            return true
         } catch {
             logger.error("finishShopping threw: \(error)")
             announceQueuedFinish(announceQueue)
@@ -3085,20 +3057,13 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiMutate(request)
-
-            switch response {
-            case .success:
-                shoppingStatus = .idle
-                activeShopperId = nil
-                shoppingStoreId = nil
-                shoppingStartedAt = nil
-                showToast(message: "Ended abandoned session from \(abandonedByName)", type: .success)
-                logger.info("Force-finished abandoned shopping session by \(abandonedByName); returned \(inCartItems.count) in-cart items to list")
-            case .failure(let error):
-                showToast(message: "Failed to end session", type: .error)
-                logger.error("Failed to force-finish shopping: \(error)")
-            }
+            _ = try await apiMutate(request)
+            shoppingStatus = .idle
+            activeShopperId = nil
+            shoppingStoreId = nil
+            shoppingStartedAt = nil
+            showToast(message: "Ended abandoned session from \(abandonedByName)", type: .success)
+            logger.info("Force-finished abandoned shopping session by \(abandonedByName); returned \(inCartItems.count) in-cart items to list")
         } catch {
             showToast(message: "Failed to end session", type: .error)
             logger.error("Failed to force-finish shopping: \(error)")
@@ -3213,19 +3178,15 @@ class ShoppingListViewModel: ObservableObject {
         )
 
         do {
-            switch try await apiMutate(request) {
-            case .success:
-                activeShopperId = me
-                shoppingStatus = .atStore
-                isAtStoreMode = true
-                logger.info("Took over the shopping trip")
-            case .failure(let error):
-                logger.error("Take over failed: \(String(describing: error))")
-                showToast(message: "Couldn't take over — check your signal and try again", type: .error)
-            }
+            _ = try await apiMutate(request)
+            activeShopperId = me
+            shoppingStatus = .atStore
+            isAtStoreMode = true
+            logger.info("Took over the shopping trip")
         } catch {
-            logger.error("Take over threw: \(error)")
-            showToast(message: "Couldn't take over — check your signal and try again", type: .error)
+            let failure = ServiceFailure.from(error)
+            logger.error("Take over failed: \(failure)")
+            showToast(message: failure.sentence("Couldn't take over"), type: .error)
         }
     }
 
@@ -3257,78 +3218,72 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await apiQuery(request)
-
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let household) = root["getHousehold"] {
-                    // Update local state
-                    if case .string(let status) = household["shoppingStatus"] {
-                        shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
-                    } else {
-                        shoppingStatus = .idle
-                    }
-
-                    if case .string(let shopperId) = household["activeShopperId"] {
-                        activeShopperId = shopperId
-                    } else {
-                        activeShopperId = nil
-                    }
-
-                    if case .string(let storeId) = household["shoppingStoreId"] {
-                        shoppingStoreId = storeId
-                    } else {
-                        shoppingStoreId = nil
-                    }
-
-                    // Session start time — needed on non-shopper devices for the
-                    // abandoned-session banner.
-                    if shoppingStatus != .idle {
-                        if case .string(let startedAtString) = household["shoppingStartedAt"] {
-                            let formatter = ISO8601DateFormatter()
-                            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                            shoppingStartedAt = formatter.date(from: startedAtString)
-                                ?? ISO8601DateFormatter().date(from: startedAtString)
-                                ?? shoppingStartedAt
-                        } else if shoppingStartedAt == nil {
-                            // Field not written (older app version) — fall back to first observation.
-                            shoppingStartedAt = Date()
-                        }
-                    } else {
-                        shoppingStartedAt = nil
-                    }
-
-                    logger.info("Fetched household shopping status: \(self.shoppingStatus.rawValue)")
-
-                    // If current user is the active shopper, restore shopping mode
-                    if shoppingStatus == .atStore,
-                       let shopperId = activeShopperId,
-                       shopperId == currentUserId {
-                        isAtStoreMode = true
-
-                        // Load the selected store
-                        if let storeId = shoppingStoreId,
-                           let store = householdStores.first(where: { $0.id == storeId }) {
-                            selectedHouseholdStore = store
-
-                            // Load mappings for the store
-                            if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
-                                productAisleMappings[store.id] = mappings
-                            }
-                        }
-
-                        // Restart the inactivity reminder — we lost any prior schedule
-                        // when the app was killed.
-                        await ShopperReminderService.shared.requestPermissionIfNeeded()
-                        bumpShopperActivity()
-
-                        logger.info("Restored shopping mode for current user")
-                        return true
-                    }
+            let json = try await apiQuery(request)
+            if case .object(let root) = json,
+               case .object(let household) = root["getHousehold"] {
+                // Update local state
+                if case .string(let status) = household["shoppingStatus"] {
+                    shoppingStatus = ShoppingStatus(rawValue: status) ?? .idle
+                } else {
+                    shoppingStatus = .idle
                 }
-            case .failure(let error):
-                logger.error("Failed to fetch household shopping status: \(error)")
+
+                if case .string(let shopperId) = household["activeShopperId"] {
+                    activeShopperId = shopperId
+                } else {
+                    activeShopperId = nil
+                }
+
+                if case .string(let storeId) = household["shoppingStoreId"] {
+                    shoppingStoreId = storeId
+                } else {
+                    shoppingStoreId = nil
+                }
+
+                // Session start time — needed on non-shopper devices for the
+                // abandoned-session banner.
+                if shoppingStatus != .idle {
+                    if case .string(let startedAtString) = household["shoppingStartedAt"] {
+                        let formatter = ISO8601DateFormatter()
+                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        shoppingStartedAt = formatter.date(from: startedAtString)
+                            ?? ISO8601DateFormatter().date(from: startedAtString)
+                            ?? shoppingStartedAt
+                    } else if shoppingStartedAt == nil {
+                        // Field not written (older app version) — fall back to first observation.
+                        shoppingStartedAt = Date()
+                    }
+                } else {
+                    shoppingStartedAt = nil
+                }
+
+                logger.info("Fetched household shopping status: \(self.shoppingStatus.rawValue)")
+
+                // If current user is the active shopper, restore shopping mode
+                if shoppingStatus == .atStore,
+                   let shopperId = activeShopperId,
+                   shopperId == currentUserId {
+                    isAtStoreMode = true
+
+                    // Load the selected store
+                    if let storeId = shoppingStoreId,
+                       let store = householdStores.first(where: { $0.id == storeId }) {
+                        selectedHouseholdStore = store
+
+                        // Load mappings for the store
+                        if let mappings = try? await StoreService.shared.fetchMappings(storeId: store.id) {
+                            productAisleMappings[store.id] = mappings
+                        }
+                    }
+
+                    // Restart the inactivity reminder — we lost any prior schedule
+                    // when the app was killed.
+                    await ShopperReminderService.shared.requestPermissionIfNeeded()
+                    bumpShopperActivity()
+
+                    logger.info("Restored shopping mode for current user")
+                    return true
+                }
             }
         } catch {
             logger.error("Failed to fetch household shopping status: \(error)")
@@ -3486,15 +3441,8 @@ class ShoppingListViewModel: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await apiMutate(request)
-
-        switch response {
-        case .success:
-            logger.info("Updated images for item: \(itemId)")
-        case .failure(let error):
-            logger.error("Failed to update images: \(error)")
-            throw error
-        }
+        _ = try await apiMutate(request)
+        logger.info("Updated images for item: \(itemId)")
     }
 
     // MARK: - Parsing Helpers

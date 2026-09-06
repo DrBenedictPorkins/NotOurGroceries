@@ -465,8 +465,9 @@ struct BatchAisleMappingSheet: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
 
         } catch {
+            let failure = ServiceFailure.from(error)
             await MainActor.run {
-                self.error = error.localizedDescription
+                self.error = failure.sentence
                 isProcessing = false
             }
             UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -490,15 +491,29 @@ struct BatchAisleMappingSheet: View {
             // `saveBatchInferenceResults` skips items it cannot write, one log
             // line each, so twenty-five could be inferred — and paid for out of
             // the allowance — with five saved and the sheet reporting done.
-            let saved = try await AisleExtractionService.shared.saveBatchInferenceResults(
+            let outcome = try await AisleExtractionService.shared.saveBatchInferenceResults(
                 items: inputs,
                 results: results,
                 storeId: store.id
             )
-            if saved < inputs.count {
+
+            // Three different things, and only one of them is worth an alarm.
+            //
+            // A write that threw is the only "try again". Items the model could
+            // not place are not a failure — they cost nothing, they were never
+            // charged, and the fix is to set them by hand rather than to retry
+            // something that will come back unplaced again. Saying "the rest
+            // didn't save" for those was wrong and read as a network problem.
+            if outcome.failed > 0 {
                 viewModel.showToast(
-                    message: "Placed \(saved) of \(inputs.count). The rest didn't save — try those again when you have signal.",
+                    message: "Placed \(outcome.placed). \(outcome.failed) didn't save. \(outcome.firstFailure?.advice ?? "Try again.")",
                     type: .warning)
+            } else if outcome.unplaced > 0 {
+                viewModel.showToast(
+                    message: outcome.unplaced == 1
+                        ? "Placed \(outcome.placed). One item didn't match an aisle — set it from the item itself."
+                        : "Placed \(outcome.placed). \(outcome.unplaced) items didn't match an aisle — set those from the item itself.",
+                    type: .info)
             }
 
             // Refresh mappings cache
@@ -513,9 +528,10 @@ struct BatchAisleMappingSheet: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
 
         } catch {
+            let failure = ServiceFailure.from(error)
             await MainActor.run {
                 isSaving = false
-                self.error = "Failed to save: \(error.localizedDescription)"
+                self.error = failure.sentence("Failed to save: \(failure.errorDescription ?? "Something went wrong")")
             }
         }
     }

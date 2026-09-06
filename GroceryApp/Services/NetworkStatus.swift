@@ -37,3 +37,29 @@ final class NetworkStatus: ObservableObject {
         monitor.start(queue: monitorQueue)
     }
 }
+
+/// How to end a failure message, when the cause is not actually known.
+///
+/// Almost every `catch` in this app used to finish with "check your signal" or
+/// "try again when you have signal". A `catch` catches everything — a validation
+/// error, a permission problem, a bug of ours — so that sentence was a guess
+/// dressed as a diagnosis, and it was wrong often enough that somebody standing
+/// outside on 5G was told to check their connection for a name-matching bug.
+///
+/// The only thing the app genuinely knows is whether there is a network
+/// interface at all. `pathIsSatisfied` says nothing about whether requests
+/// succeed — a captive portal looks fine — so it is used to rule offline **in**,
+/// never to rule it out: no interface is a fact worth stating, and everything
+/// else gets a plain "try again".
+enum FailureAdvice {
+    @MainActor
+    static var tryAgain: String {
+        NetworkStatus.shared.pathIsSatisfied ? "Try again." : "Try again when you have signal."
+    }
+
+    /// Lower-case, for the end of a clause: "…nothing was changed — try again."
+    @MainActor
+    static var tryAgainClause: String {
+        NetworkStatus.shared.pathIsSatisfied ? "try again" : "try again when you have signal"
+    }
+}

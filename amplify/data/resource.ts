@@ -57,6 +57,28 @@ export const joinHouseholdFunction = defineFunction({
   resourceGroupName: 'data',
 });
 
+// Everything the app needs to be usable, in one call. See the handler.
+export const handshakeFunction = defineFunction({
+  name: 'handshakeFunction',
+  entry: './handshakeFunction/handler.ts',
+  resourceGroupName: 'data',
+  timeoutSeconds: 30,
+});
+
+// One account, one device: claim it on sign-in, verify it on every launch.
+export const claimDeviceFunction = defineFunction({
+  name: 'claimDeviceFunction',
+  entry: './claimDeviceFunction/handler.ts',
+  resourceGroupName: 'data',
+});
+
+// Redeem a comp code: burn it, then lift the household's allowances.
+export const redeemCompCodeFunction = defineFunction({
+  name: 'redeemCompCodeFunction',
+  entry: './redeemCompCodeFunction/handler.ts',
+  resourceGroupName: 'data',
+});
+
 // End a shopping trip in one call instead of one per item.
 export const finishShoppingFunction = defineFunction({
   name: 'finishShoppingFunction',
@@ -134,6 +156,15 @@ const schema = a.schema({
       profileColor: a.string(),
       householdId: a.id(),
       household: a.belongsTo('Household', 'householdId'),
+      /// The one device this account is signed in on.
+      ///
+      /// Written only by `claimDeviceFunction` over IAM — the row is
+      /// `allow.owner()`, so leaving it client-writable would let a superseded
+      /// device simply reclaim itself. Newest sign-in wins; see that handler for
+      /// why one device rather than many.
+      activeDeviceId: a.string(),
+      activeDeviceName: a.string(),
+      activeDeviceClaimedAt: a.datetime(),
       /// The Cognito group that guards this row — the household's id repeated
       /// into a plain, non-key field.
       ///
@@ -235,6 +266,28 @@ const schema = a.schema({
     })
     .authorization((allow) => [
       allow.groupDefinedIn('groupName').to(['read']),
+    ]),
+
+  // One row per minted comp code. The cap on comped households *is* the number
+  // of rows: mint a hundred and a hundred-and-first cannot be redeemed, because
+  // there is nothing to redeem. No counter, so no race.
+  //
+  // Nobody can read this through the API. `admins` is a Cognito group with no
+  // members and never will have any — it exists to make the deny explicit,
+  // because a model readable by authenticated users is a model where anybody
+  // lists all hundred codes and spends them. The Lambda reaches the table
+  // directly over IAM, exactly as `allowance.ts` does.
+  CompCode: a
+    .model({
+      code: a.string().required(),
+      redeemedByHouseholdId: a.id(),
+      redeemedAt: a.datetime(),
+      /// Free text for whoever minted it — which batch, who it went to.
+      note: a.string(),
+    })
+    .identifier(['code'])
+    .authorization((allow) => [
+      allow.group('admins'),
     ]),
 
   // ========================================
@@ -558,6 +611,50 @@ const schema = a.schema({
     }))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(householdMembershipFunction)),
+
+  // One call that populates the whole app: profile, household, members, items,
+  // stores, allowances, the product catalogue, and whether this device still
+  // holds the account. Returns JSON because it is a bag of existing model
+  // shapes, not a new type — repeating every field here would mean editing this
+  // mutation every time any model gains one.
+  handshake: a
+    .query()
+    .arguments({
+      deviceId: a.string(),
+    })
+    .returns(a.json())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(handshakeFunction)),
+
+  // Claim this device for the account, or check we still hold it.
+  claimDevice: a
+    .mutation()
+    .arguments({
+      action: a.string().required(),   // "claim" | "verify"
+      deviceId: a.string().required(),
+      deviceName: a.string(),
+    })
+    .returns(a.customType({
+      stillOurs: a.boolean().required(),
+      /// What replaced us, for the message. Null while we still hold it.
+      activeDeviceName: a.string(),
+    }))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(claimDeviceFunction)),
+
+  // Type a code, get comped. The whole of the first-hundred onboarding.
+  redeemCompCode: a
+    .mutation()
+    .arguments({
+      code: a.string().required(),
+    })
+    .returns(a.customType({
+      // COMPED | ALREADY_ENTITLED | SPENT | INVALID
+      status: a.string().required(),
+      message: a.string().required(),
+    }))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(redeemCompCodeFunction)),
 
   // Put a finished shopping trip away in one call.
   //

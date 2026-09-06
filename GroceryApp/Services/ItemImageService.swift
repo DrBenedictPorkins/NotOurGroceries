@@ -61,28 +61,29 @@ enum ItemImageService {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success(let json):
-            guard case .object(let root) = json,
-                  case .object(let data) = root["itemImage"],
-                  case .string(let key) = data["s3Key"] else {
-                throw ImageError.server("Couldn't get access to that photo.")
-            }
-            var url: URL?
-            if case .string(let raw) = data["url"] { url = URL(string: raw) }
-            var expires = 0
-            if case .number(let n) = data["expiresIn"] { expires = Int(n) }
-            return SignedAccess(url: url, s3Key: key, expiresIn: expires)
-
-        case .failure(let error):
+        let json: JSONValue
+        do {
+            json = try await API.mutate(request)
+        } catch let failure as ServiceFailure {
             // The handler's own words — "That photo belongs to another
-            // household" is worth showing; Amplify's wrapper is not.
+            // household" is worth showing. A transport failure has no words of
+            // its own, so it keeps the fallback.
             throw ImageError.server(
-                await AmplifyService.shared.serverMessage(from: error, fallback: "Couldn't reach that photo.")
+                failure.isOffline ? "Couldn't reach that photo."
+                                  : (failure.errorDescription ?? "Couldn't reach that photo.")
             )
         }
+
+        guard case .object(let root) = json,
+              case .object(let data) = root["itemImage"],
+              case .string(let key) = data["s3Key"] else {
+            throw ImageError.server("Couldn't get access to that photo.")
+        }
+        var url: URL?
+        if case .string(let raw) = data["url"] { url = URL(string: raw) }
+        var expires = 0
+        if case .number(let n) = data["expiresIn"] { expires = Int(n) }
+        return SignedAccess(url: url, s3Key: key, expiresIn: expires)
     }
 
     // MARK: - Operations
@@ -102,7 +103,14 @@ enum ItemImageService {
 
         let (_, response) = try await URLSession.shared.upload(for: request, from: data)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw ImageError.transfer("The photo didn't upload. Check your connection and try again.")
+            // A direct PUT to S3, so there is no Amplify error to classify — the
+            // status is what we have. No response object at all means the upload
+            // never completed a round trip, which is the offline case; anything
+            // else answered, so it is not.
+            let failure: ServiceFailure = (response as? HTTPURLResponse) == nil
+                ? .offline
+                : .server("Upload rejected.")
+            throw ImageError.transfer(failure.sentence("The photo didn't upload"))
         }
         return access.s3Key
     }

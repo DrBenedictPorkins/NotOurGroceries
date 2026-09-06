@@ -103,7 +103,21 @@ class AmplifyService: ObservableObject {
                     do {
                         _ = try cognitoSession.getCognitoTokens().get()
                     } catch {
-                        print("Auth tokens expired or invalid: \(error)")
+                        // Offline, this throws because the *refresh* could not
+                        // reach Cognito — not because the tokens are bad. The
+                        // outer catch below has always been careful about that
+                        // distinction; this branch was not, and signed the user
+                        // out, destroying credentials that were perfectly valid.
+                        // Airplane mode was enough to do it. Reported 2026-09-06.
+                        let failure = ServiceFailure.from(error)
+                        if failure.isOffline {
+                            print("Couldn't refresh tokens offline — keeping the session")
+                            sessionCheckFailedOffline = true
+                            isAuthenticated = false
+                            logWarning("auth.tokenRefreshOffline", "kept the existing session")
+                            return
+                        }
+                        print("Auth tokens expired or invalid: \(failure)")
                         isAuthenticated = false
                         try? await signOut()
                         return
@@ -195,19 +209,15 @@ class AmplifyService: ObservableObject {
         if isAuthenticated { leaveOffGrid() }
     }
 
+    /// Was this the network, or the credentials?
+    ///
+    /// This used to lower-case the interpolated description of the error and go
+    /// looking for the substring "network". It was wrong both ways — a genuine
+    /// outage whose message did not happen to contain the word was treated as a
+    /// sign-out, and an unrelated failure that did contain it kept a dead
+    /// session alive. `ServiceFailure` answers from the error's type.
     private static func looksLikeNetworkFailure(_ error: Error) -> Bool {
-        if let authError = error as? AuthError {
-            switch authError {
-            case .service(_, _, let underlying):
-                return underlying is URLError || "\(underlying as Any)".localizedCaseInsensitiveContains("network")
-            default:
-                break
-            }
-        }
-        if error is URLError { return true }
-        let text = "\(error)".lowercased()
-        return text.contains("network") || text.contains("offline")
-            || text.contains("connection") || text.contains("timed out")
+        ServiceFailure.from(error).isOffline
     }
 
     private func logWarning(_ event: String, _ detail: String) {
@@ -278,6 +288,10 @@ class AmplifyService: ObservableObject {
 
         if result.isSignedIn {
             currentUser = try await Amplify.Auth.getCurrentUser()
+            // Take the account for this device before anything else reads it.
+            // Newest sign-in wins; the previous device stands down on its next
+            // launch or foreground. See `DeviceRegistry` for why one device.
+            await DeviceRegistry.shared.claim()
             await fetchOrCreateUserProfile()
             // A fresh sign-in, as opposed to a restored session: the allowance
             // card shows once regardless of how much is used, so a new household
@@ -391,64 +405,55 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.query(request: request)
-
-            switch response {
-            case .success(let json):
-                if case .object(let root) = json,
-                   case .object(let userData) = root["getUser"] {
-                    // User exists - cache them regardless of householdId
-                    if case .string(let displayName) = userData["displayName"] {
-                        var profileColor: String? = nil
-                        if case .string(let color) = userData["profileColor"] {
-                            profileColor = color
-                        }
-                        UserCache.shared.cacheUser(
-                            id: user.userId,
-                            displayName: displayName,
-                            profileColor: profileColor
-                        )
+            let json = try await API.query(request)
+            if case .object(let root) = json,
+               case .object(let userData) = root["getUser"] {
+                // User exists - cache them regardless of householdId
+                if case .string(let displayName) = userData["displayName"] {
+                    var profileColor: String? = nil
+                    if case .string(let color) = userData["profileColor"] {
+                        profileColor = color
                     }
-                    // Repair the rows written by the old bug, on sign-in.
-                    // Every account created before this stored its sub in the
-                    // email column, so the household screen showed a UUID where
-                    // a person's address belongs. Nobody is going to file that as
-                    // a bug; it just looks broken.
-                    if case .string(let storedEmail) = userData["email"],
-                       !storedEmail.contains("@") {
-                        await repairStoredEmail(for: user.userId)
-                    }
-
-                    // The row came back, so whatever it says about householdId
-                    // is the truth — including saying nothing.
-                    //
-                    // This used to fall back to the cached id when the field was
-                    // absent, which is right when the *query* failed and wrong
-                    // when it succeeded. A member removed from their household
-                    // signed in, had the household they had just been removed
-                    // from restored from UserDefaults, watched the old list
-                    // appear for a moment while every query came back
-                    // Unauthorized, and was then signed out by handleAuthError.
-                    // They could not get in at all.
-                    if case .string(let householdId) = userData["householdId"], !householdId.isEmpty {
-                        self.currentHouseholdId = householdId
-                    } else {
-                        self.currentHouseholdId = nil
-                        forgetLocalHouseholdId()
-                    }
-                } else if case .object(let root) = json,
-                          case .null = root["getUser"] {
-                    // User doesn't exist in DynamoDB, create them
-                    await createUserProfile()
-                    loadLocalHouseholdId()
-                } else {
-                    // Fallback to locally stored householdId
-                    loadLocalHouseholdId()
+                    UserCache.shared.cacheUser(
+                        id: user.userId,
+                        displayName: displayName,
+                        profileColor: profileColor
+                    )
                 }
-            case .failure(let error):
-                print("Failed to fetch user: \(error)")
-                // Fallback to locally stored householdId — do NOT sign out here;
-                // a fresh login should never be invalidated by a failing profile fetch.
+                // Repair the rows written by the old bug, on sign-in.
+                // Every account created before this stored its sub in the
+                // email column, so the household screen showed a UUID where
+                // a person's address belongs. Nobody is going to file that as
+                // a bug; it just looks broken.
+                if case .string(let storedEmail) = userData["email"],
+                   !storedEmail.contains("@") {
+                    await repairStoredEmail(for: user.userId)
+                }
+
+                // The row came back, so whatever it says about householdId
+                // is the truth — including saying nothing.
+                //
+                // This used to fall back to the cached id when the field was
+                // absent, which is right when the *query* failed and wrong
+                // when it succeeded. A member removed from their household
+                // signed in, had the household they had just been removed
+                // from restored from UserDefaults, watched the old list
+                // appear for a moment while every query came back
+                // Unauthorized, and was then signed out by handleAuthError.
+                // They could not get in at all.
+                if case .string(let householdId) = userData["householdId"], !householdId.isEmpty {
+                    self.currentHouseholdId = householdId
+                } else {
+                    self.currentHouseholdId = nil
+                    forgetLocalHouseholdId()
+                }
+            } else if case .object(let root) = json,
+                      case .null = root["getUser"] {
+                // User doesn't exist in DynamoDB, create them
+                await createUserProfile()
+                loadLocalHouseholdId()
+            } else {
+                // Fallback to locally stored householdId
                 loadLocalHouseholdId()
             }
         } catch {
@@ -494,9 +499,7 @@ class AmplifyService: ObservableObject {
         )
 
         do {
-            if case .failure(let error) = try await Amplify.API.mutate(request: request) {
-                print("Could not repair stored email: \(error)")
-            }
+            _ = try await API.mutate(request)
         } catch {
             // Best effort. A failure here leaves the row as it was, and the next
             // sign-in tries again.
@@ -538,17 +541,12 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
-
-            if case .failure(let error) = response {
-                print("Failed to create user profile: \(error)")
-            } else {
-                print("Created user profile for \(email)")
-                // Add current user to cache
-                UserCache.shared.cacheUser(id: user.userId, displayName: displayName)
-            }
+            _ = try await API.mutate(request)
+            print("Created user profile for \(email)")
+            // Add current user to cache
+            UserCache.shared.cacheUser(id: user.userId, displayName: displayName)
         } catch {
-            print("Error creating user profile: \(error)")
+            print("Error creating user profile: \(ServiceFailure.from(error))")
         }
     }
 
@@ -599,8 +597,9 @@ class AmplifyService: ObservableObject {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        guard let response = try? await Amplify.API.query(request: request),
-              case .success(let json) = response,
+        // Nil means "could not find out", which callers treat differently from
+        // "no household" — see `refreshHouseholdMembership`.
+        guard let json = try? await API.query(request),
               case .object(let root) = json,
               case .object(let userData) = root["getUser"] else { return nil }
 
@@ -616,9 +615,15 @@ class AmplifyService: ObservableObject {
     /// Overload for errors that aren't GraphQLResponseError — transport failures
     /// and anything else thrown out of the SDK. String-sniffing, because those
     /// types don't expose a structured auth signal.
+    /// Is this error the credentials, rather than the connection?
+    ///
+    /// This used to be `String(describing: error).contains("token")`, and
+    /// `handleAuthError` **signs the user out** when it returns true. Almost any
+    /// transport failure mentioning a token matched, so a bad connection could
+    /// destroy working credentials. It is the same string-matching mistake as
+    /// the rest of this pass, with the most expensive consequence in the app.
     func isAuthError(_ error: Error) -> Bool {
-        let message = String(describing: error)
-        return message.contains("Unauthorized") || message.contains("Not Authorized") || message.contains("token") || message.contains("Token")
+        ServiceFailure.from(error) == .unauthorized
     }
 
     func handleAuthError(_ error: Error) {
@@ -687,19 +692,20 @@ class AmplifyService: ObservableObject {
     }
 
     /// Checks if a GraphQLResponseError is auth-related.
+    /// Same question for a GraphQL envelope, same reason it matters: the caller
+    /// signs the user out on a true. AppSync's own "Unauthorized" is a real
+    /// protocol string and `ServiceFailure` matches it in one place; "token"
+    /// appearing anywhere in a transport error is not, and used to be enough to
+    /// destroy a working session.
     func isAuthError(_ error: GraphQLResponseError<JSONValue>) -> Bool {
-        let message: String
         switch error {
-        case .error(let errors):
-            message = errors.map { $0.message }.joined(separator: " ")
-        case .partial(_, let errors):
-            message = errors.map { $0.message }.joined(separator: " ")
+        case .error(let errors), .partial(_, let errors):
+            return ServiceFailure.from(graphQLErrors: errors) == .unauthorized
         case .unknown(let msg, _, _):
-            message = msg
+            return msg.contains("Unauthorized") || msg.contains("Not Authorized")
         case .transformationError(_, let underlyingError):
-            message = underlyingError.localizedDescription
+            return ServiceFailure.from(underlyingError) == .unauthorized
         }
-        return message.contains("Unauthorized") || message.contains("Not Authorized") || message.contains("token") || message.contains("Token")
     }
 
     // MARK: - Household
@@ -722,20 +728,17 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.query(request: request)
-
-        switch response {
-        case .success(let json):
-            if case .object(let root) = json,
-               case .object(let listResult) = root["listHouseholdByName"],
-               case .array(let items) = listResult["items"] {
-                return items.isEmpty
-            }
-            return true
-        case .failure(let error):
-            print("Error checking household name: \(error)")
-            return true // Assume available if query fails
+        // Propagates now, where it used to `return true` — "assume available if
+        // the query fails". That assumption sent the create straight at a name
+        // that might already be taken, so the failure surfaced later and
+        // somewhere less obvious. If we cannot check, say so.
+        let json = try await API.query(request)
+        if case .object(let root) = json,
+           case .object(let listResult) = root["listHouseholdByName"],
+           case .array(let items) = listResult["items"] {
+            return items.isEmpty
         }
+        return true
     }
 
     /// Superseded by `createHouseholdRemotely`, which is the only path the app
@@ -778,22 +781,16 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success(let json):
-            if case .object(let root) = json,
-               case .object(let household) = root["createHousehold"],
-               case .string(let householdId) = household["id"] {
-                self.currentHouseholdId = householdId
-                // Update user record with householdId
-                await updateUserHouseholdId(householdId)
-                return householdId
-            }
-            throw AmplifyError.unknown("Failed to get household ID")
-        case .failure(let error):
-            throw error
+        let json = try await API.mutate(request)
+        if case .object(let root) = json,
+           case .object(let household) = root["createHousehold"],
+           case .string(let householdId) = household["id"] {
+            self.currentHouseholdId = householdId
+            // Update user record with householdId
+            await updateUserHouseholdId(householdId)
+            return householdId
         }
+        throw AmplifyError.unknown("Failed to get household ID")
     }
 
     /// Superseded by `joinHouseholdWithCode`, which is the only path that can
@@ -820,24 +817,18 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.query(request: request)
-
-        switch response {
-        case .success(let json):
-            if case .object(let root) = json,
-               case .object(let listResult) = root["listHouseholdByInviteCode"],
-               case .array(let items) = listResult["items"],
-               let firstItem = items.first,
-               case .object(let household) = firstItem,
-               case .string(let householdId) = household["id"] {
-                self.currentHouseholdId = householdId
-                // Update user record with householdId
-                await updateUserHouseholdId(householdId)
-            } else {
-                throw AmplifyError.unknown("Invalid invite code")
-            }
-        case .failure(let error):
-            throw error
+        let json = try await API.query(request)
+        if case .object(let root) = json,
+           case .object(let listResult) = root["listHouseholdByInviteCode"],
+           case .array(let items) = listResult["items"],
+           let firstItem = items.first,
+           case .object(let household) = firstItem,
+           case .string(let householdId) = household["id"] {
+            self.currentHouseholdId = householdId
+            // Update user record with householdId
+            await updateUserHouseholdId(householdId)
+        } else {
+            throw AmplifyError.unknown("Invalid invite code")
         }
     }
 
@@ -871,16 +862,10 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: updateRequest)
-
-            if case .failure(let error) = response {
-                print("Update failed, trying to create user: \(error)")
-                // User doesn't exist, create them with householdId
-                await createUserWithHousehold(householdId)
-            }
+            _ = try await API.mutate(updateRequest)
         } catch {
-            print("Error updating user householdId: \(error)")
-            // Try creating instead
+            print("Update failed, trying to create user: \(ServiceFailure.from(error))")
+            // The row does not exist yet; make it with the household on board.
             await createUserWithHousehold(householdId)
         }
     }
@@ -928,15 +913,10 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
             )
 
-            let response = try await Amplify.API.mutate(request: request)
-
-            if case .failure(let error) = response {
-                print("Failed to create user with household: \(error)")
-            } else {
-                print("Created user \(email) with household \(householdId)")
-            }
+            _ = try await API.mutate(request)
+            print("Created user \(email) with household \(householdId)")
         } catch {
-            print("Error creating user with household: \(error)")
+            print("Error creating user with household: \(ServiceFailure.from(error))")
         }
     }
 
@@ -1000,84 +980,78 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.query(request: request)
+        let json = try await API.query(request)
+        if case .object(let root) = json,
+           case .object(let household) = root["getHousehold"],
+           case .string(let id) = household["id"],
+           case .string(let name) = household["name"],
+           case .string(let inviteCode) = household["inviteCode"] {
 
-        switch response {
-        case .success(let json):
-            if case .object(let root) = json,
-               case .object(let household) = root["getHousehold"],
-               case .string(let id) = household["id"],
-               case .string(let name) = household["name"],
-               case .string(let inviteCode) = household["inviteCode"] {
+            var expiresAt: Date? = nil
+            if case .string(let expiresAtString) = household["inviteCodeExpiresAt"] {
+                expiresAt = Self.parseAWSDateTime(expiresAtString)
+            }
 
-                var expiresAt: Date? = nil
-                if case .string(let expiresAtString) = household["inviteCodeExpiresAt"] {
-                    expiresAt = Self.parseAWSDateTime(expiresAtString)
-                }
+            var members: [HouseholdMember] = []
+            if case .object(let membersObj) = household["members"],
+               case .array(let items) = membersObj["items"] {
+                for item in items {
+                    if case .object(let memberData) = item,
+                       case .string(let memberId) = memberData["id"],
+                       case .string(let email) = memberData["email"],
+                       case .string(let displayName) = memberData["displayName"] {
 
-                var members: [HouseholdMember] = []
-                if case .object(let membersObj) = household["members"],
-                   case .array(let items) = membersObj["items"] {
-                    for item in items {
-                        if case .object(let memberData) = item,
-                           case .string(let memberId) = memberData["id"],
-                           case .string(let email) = memberData["email"],
-                           case .string(let displayName) = memberData["displayName"] {
-
-                            var avatarUrl: String? = nil
-                            if case .string(let url) = memberData["avatarUrl"] {
-                                avatarUrl = url
-                            }
-
-                            var profileColor: String? = nil
-                            if case .string(let color) = memberData["profileColor"] {
-                                profileColor = color
-                            }
-
-                            var joinedAt: Date? = nil
-                            if case .string(let createdAtString) = memberData["createdAt"] {
-                                joinedAt = Self.parseAWSDateTime(createdAtString)
-                            }
-
-                            // Cache each household member with their profile colour
-                            UserCache.shared.cacheUser(
-                                id: memberId,
-                                displayName: displayName,
-                                avatarUrl: avatarUrl,
-                                profileColor: profileColor
-                            )
-
-                            members.append(HouseholdMember(
-                                id: memberId,
-                                email: email,
-                                displayName: displayName,
-                                avatarUrl: avatarUrl,
-                                profileColor: profileColor,
-                                joinedAt: joinedAt
-                            ))
+                        var avatarUrl: String? = nil
+                        if case .string(let url) = memberData["avatarUrl"] {
+                            avatarUrl = url
                         }
+
+                        var profileColor: String? = nil
+                        if case .string(let color) = memberData["profileColor"] {
+                            profileColor = color
+                        }
+
+                        var joinedAt: Date? = nil
+                        if case .string(let createdAtString) = memberData["createdAt"] {
+                            joinedAt = Self.parseAWSDateTime(createdAtString)
+                        }
+
+                        // Cache each household member with their profile colour
+                        UserCache.shared.cacheUser(
+                            id: memberId,
+                            displayName: displayName,
+                            avatarUrl: avatarUrl,
+                            profileColor: profileColor
+                        )
+
+                        members.append(HouseholdMember(
+                            id: memberId,
+                            email: email,
+                            displayName: displayName,
+                            avatarUrl: avatarUrl,
+                            profileColor: profileColor,
+                            joinedAt: joinedAt
+                        ))
                     }
                 }
-
-                let ownerId: String? = {
-                    if case .string(let value) = household["ownerId"], !value.isEmpty { return value }
-                    return nil
-                }()
-
-                return HouseholdDetails(
-                    id: id,
-                    name: name,
-                    inviteCode: inviteCode,
-                    inviteCodeExpiresAt: expiresAt,
-                    memberCount: members.count,
-                    members: members,
-                    ownerId: ownerId
-                )
             }
-            return nil
-        case .failure(let error):
-            throw error
+
+            let ownerId: String? = {
+                if case .string(let value) = household["ownerId"], !value.isEmpty { return value }
+                return nil
+            }()
+
+            return HouseholdDetails(
+                id: id,
+                name: name,
+                inviteCode: inviteCode,
+                inviteCodeExpiresAt: expiresAt,
+                memberCount: members.count,
+                members: members,
+                ownerId: ownerId
+            )
         }
+        return nil
     }
 
     struct InviteCodeResult {
@@ -1106,33 +1080,27 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        let json = try await API.mutate(request)
+        print("[DEBUG] regenerateInviteCode response: \(json)")
 
-        switch response {
-        case .success(let json):
-            print("[DEBUG] regenerateInviteCode response: \(json)")
-
-            // Try direct object access first (custom type returns directly)
-            if case .object(let result) = json,
-               case .string(let inviteCode) = result["inviteCode"],
-               case .string(let expiresAtString) = result["expiresAt"],
-               let expiresAt = Self.parseAWSDateTime(expiresAtString) {
-                return InviteCodeResult(inviteCode: inviteCode, expiresAt: expiresAt)
-            }
-
-            // Fallback: try nested under mutation name
-            if case .object(let root) = json,
-               case .object(let result) = root["regenerateInviteCode"],
-               case .string(let inviteCode) = result["inviteCode"],
-               case .string(let expiresAtString) = result["expiresAt"],
-               let expiresAt = Self.parseAWSDateTime(expiresAtString) {
-                return InviteCodeResult(inviteCode: inviteCode, expiresAt: expiresAt)
-            }
-
-            throw AmplifyError.unknown("Failed to parse invite code response: \(json)")
-        case .failure(let error):
-            throw error
+        // Try direct object access first (custom type returns directly)
+        if case .object(let result) = json,
+           case .string(let inviteCode) = result["inviteCode"],
+           case .string(let expiresAtString) = result["expiresAt"],
+           let expiresAt = Self.parseAWSDateTime(expiresAtString) {
+            return InviteCodeResult(inviteCode: inviteCode, expiresAt: expiresAt)
         }
+
+        // Fallback: try nested under mutation name
+        if case .object(let root) = json,
+           case .object(let result) = root["regenerateInviteCode"],
+           case .string(let inviteCode) = result["inviteCode"],
+           case .string(let expiresAtString) = result["expiresAt"],
+           let expiresAt = Self.parseAWSDateTime(expiresAtString) {
+            return InviteCodeResult(inviteCode: inviteCode, expiresAt: expiresAt)
+        }
+
+        throw AmplifyError.unknown("Failed to parse invite code response: \(json)")
     }
 
     struct JoinHouseholdResult {
@@ -1159,57 +1127,63 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success(let json):
-            // Helper to parse result
-            func parseResult(_ result: [String: JSONValue]) -> JoinHouseholdResult? {
-                guard case .string(let householdId) = result["householdId"],
-                      case .string(let householdName) = result["householdName"] else {
-                    return nil
-                }
-
-                var previousId: String? = nil
-                if case .string(let prevId) = result["previousHouseholdId"] {
-                    previousId = prevId
-                }
-
-                return JoinHouseholdResult(
-                    householdId: householdId,
-                    householdName: householdName,
-                    previousHouseholdId: previousId
-                )
+        // The Lambda's own refusals are the useful part here — a code that has
+        // expired, been spent, or never existed. Those arrive as `.refused` or
+        // `.server` and are already written for a person; anything else gets the
+        // generic sentence rather than raw Amplify text.
+        let json: JSONValue
+        do {
+            json = try await API.mutate(request)
+        } catch let failure as ServiceFailure {
+            switch failure {
+            case .refused(let why), .server(let why):
+                throw AmplifyError.unknown(why)
+            default:
+                throw AmplifyError.unknown(failure.sentence("Couldn't join that household"))
             }
-
-            // Try direct object access first (custom type returns directly)
-            if case .object(let result) = json,
-               let parsed = parseResult(result) {
-                // The Lambda just granted the group claim; the token in memory
-                // was issued before it, so refresh before anything queries.
-                await refreshSessionForNewClaims()
-                self.currentHouseholdId = parsed.householdId
-                NotificationCenter.default.post(name: .householdChanged, object: nil)
-                return parsed
-            }
-
-            // Fallback: try nested under mutation name
-            if case .object(let root) = json,
-               case .object(let result) = root["joinHousehold"],
-               let parsed = parseResult(result) {
-                await refreshSessionForNewClaims()
-                self.currentHouseholdId = parsed.householdId
-                NotificationCenter.default.post(name: .householdChanged, object: nil)
-                return parsed
-            }
-
-            throw AmplifyError.unknown("Failed to join household")
-        case .failure(let error):
-            throw AmplifyError.unknown(serverMessage(
-                from: error,
-                fallback: "Couldn't join that household. Check the code and try again."
-            ))
         }
+
+        // Helper to parse result
+        func parseResult(_ result: [String: JSONValue]) -> JoinHouseholdResult? {
+            guard case .string(let householdId) = result["householdId"],
+                  case .string(let householdName) = result["householdName"] else {
+                return nil
+            }
+
+            var previousId: String? = nil
+            if case .string(let prevId) = result["previousHouseholdId"] {
+                previousId = prevId
+            }
+
+            return JoinHouseholdResult(
+                householdId: householdId,
+                householdName: householdName,
+                previousHouseholdId: previousId
+            )
+        }
+
+        // Try direct object access first (custom type returns directly)
+        if case .object(let result) = json,
+           let parsed = parseResult(result) {
+            // The Lambda just granted the group claim; the token in memory
+            // was issued before it, so refresh before anything queries.
+            await refreshSessionForNewClaims()
+            self.currentHouseholdId = parsed.householdId
+            NotificationCenter.default.post(name: .householdChanged, object: nil)
+            return parsed
+        }
+
+        // Fallback: try nested under mutation name
+        if case .object(let root) = json,
+           case .object(let result) = root["joinHousehold"],
+           let parsed = parseResult(result) {
+            await refreshSessionForNewClaims()
+            self.currentHouseholdId = parsed.householdId
+            NotificationCenter.default.post(name: .householdChanged, object: nil)
+            return parsed
+        }
+
+        throw AmplifyError.unknown("Failed to join household")
     }
 
     /// What came back from a membership change.
@@ -1328,8 +1302,8 @@ class AmplifyService: ObservableObject {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        switch try await Amplify.API.mutate(request: request) {
-        case .success(let json):
+        let json = try await API.mutate(request)
+        do {
             guard case .object(let root) = json,
                   case .object(let payload) = root["manageHouseholdMembership"] else {
                 throw AmplifyError.unknown("Unexpected response")
@@ -1343,8 +1317,6 @@ class AmplifyService: ObservableObject {
             let code: String? = { if case .string(let v) = payload["inviteCode"] { return v }; return nil }()
             return MembershipResult(householdId: id, householdDeleted: deleted,
                                     remainingMembers: remaining, inviteCode: code)
-        case .failure(let error):
-            throw error
         }
     }
 
@@ -1382,23 +1354,17 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
-
-        switch response {
-        case .success:
-            // Update the user cache with the new colour
-            let displayName = UserCache.shared.displayName(for: user.userId)
-            let avatarUrl = UserCache.shared.avatarUrl(for: user.userId)
-            UserCache.shared.cacheUser(
-                id: user.userId,
-                displayName: displayName,
-                avatarUrl: avatarUrl,
-                profileColor: color
-            )
-            print("Updated profile colour: \(color)")
-        case .failure(let error):
-            throw error
-        }
+        _ = try await API.mutate(request)
+        // Update the user cache with the new colour
+        let displayName = UserCache.shared.displayName(for: user.userId)
+        let avatarUrl = UserCache.shared.avatarUrl(for: user.userId)
+        UserCache.shared.cacheUser(
+            id: user.userId,
+            displayName: displayName,
+            avatarUrl: avatarUrl,
+            profileColor: color
+        )
+        print("Updated profile colour: \(color)")
     }
 
     func fetchCurrentUserProfile() async throws -> String {
@@ -1422,21 +1388,15 @@ class AmplifyService: ObservableObject {
                 authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.query(request: request)
-
-        switch response {
-        case .success(let json):
-            if case .object(let root) = json,
-               case .object(let userData) = root["getUser"] {
-                if case .string(let profileColor) = userData["profileColor"] {
-                    return profileColor
-                }
-                return "cyan"
+        let json = try await API.query(request)
+        if case .object(let root) = json,
+           case .object(let userData) = root["getUser"] {
+            if case .string(let profileColor) = userData["profileColor"] {
+                return profileColor
             }
             return "cyan"
-        case .failure(let error):
-            throw error
         }
+        return "cyan"
     }
 }
 

@@ -246,7 +246,7 @@ async function readHousehold(householdId: string): Promise<Record<string, any> |
  * throwing: a malformed extra item must not cost somebody the rest of their
  * finished trip.
  */
-function parseCreated(created: unknown): Record<string, any>[] {
+export function parseCreated(created: unknown): Record<string, any>[] {
   if (!created) return [];
   let value: unknown = created;
   if (typeof value === 'string') {

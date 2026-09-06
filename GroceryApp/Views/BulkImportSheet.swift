@@ -870,13 +870,18 @@ struct BulkImportSheet: View {
                 }
                 await AllowanceService.shared.refresh()
             } catch {
-                let exhausted = AllowanceService.isExhausted(error)
+                // `.refused` is only ever the allowance saying no — that prefix
+                // is a protocol between our Lambda and this app — so nothing
+                // here has to read the text of the error to tell them apart.
+                let failure = ServiceFailure.from(error)
+                var exhausted = false
+                if case .refused = failure { exhausted = true }
                 if exhausted { await AllowanceService.shared.refresh() }
                 await MainActor.run {
                     if exhausted {
                         withAnimation(.easeIn(duration: 0.2)) { refusal = AllowanceRefusal(kind: .imports) }
                     } else {
-                        errorMessage = "Failed to parse. Please try again."
+                        errorMessage = failure.sentence("Failed to parse")
                     }
                     phase = .input
                 }
@@ -933,7 +938,7 @@ struct BulkImportSheet: View {
                 if viewModel.allowanceRefusal != nil {
                     // Its card is already on screen and says the list is full.
                 } else if added == 0 {
-                    viewModel.showToast(message: "Nothing was added. Check your signal and try again.",
+                    viewModel.showToast(message: "Nothing was added. Try again.",
                                         type: .error)
                 } else if added < total {
                     viewModel.showToast(message: "Added \(added) of \(total) — the rest didn't save",
@@ -963,19 +968,26 @@ struct BulkImportSheet: View {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        let response = try await API.mutateRecoveringPartials(request)
 
         switch response {
         case .success(let json):
             return extractIngredients(from: json)
         case .failure(let error):
+            // The Lambda answers with a JSON string, so a reply that arrived
+            // intact can still miss the shape we asked for. Both of these carry
+            // the ingredients; only a real failure falls through to a throw, and
+            // it throws a ServiceFailure so the catch knows what happened.
             if case GraphQLResponseError<JSONValue>.partial(let json, _) = error {
                 return extractIngredients(from: json)
             }
             if case GraphQLResponseError<JSONValue>.transformationError(let raw, _) = error {
                 return try extractIngredientsFromRaw(raw)
             }
-            throw error
+            if case GraphQLResponseError<JSONValue>.error(let errors) = error {
+                throw ServiceFailure.from(graphQLErrors: errors)
+            }
+            throw ServiceFailure.from(error)
         }
     }
 
@@ -1001,19 +1013,26 @@ struct BulkImportSheet: View {
             authMode: AWSAuthorizationType.amazonCognitoUserPools
         )
 
-        let response = try await Amplify.API.mutate(request: request)
+        let response = try await API.mutateRecoveringPartials(request)
 
         switch response {
         case .success(let json):
             return extractIngredients(from: json)
         case .failure(let error):
+            // The Lambda answers with a JSON string, so a reply that arrived
+            // intact can still miss the shape we asked for. Both of these carry
+            // the ingredients; only a real failure falls through to a throw, and
+            // it throws a ServiceFailure so the catch knows what happened.
             if case GraphQLResponseError<JSONValue>.partial(let json, _) = error {
                 return extractIngredients(from: json)
             }
             if case GraphQLResponseError<JSONValue>.transformationError(let raw, _) = error {
                 return try extractIngredientsFromRaw(raw)
             }
-            throw error
+            if case GraphQLResponseError<JSONValue>.error(let errors) = error {
+                throw ServiceFailure.from(graphQLErrors: errors)
+            }
+            throw ServiceFailure.from(error)
         }
     }
 
